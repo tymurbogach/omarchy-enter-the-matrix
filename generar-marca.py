@@ -13,7 +13,7 @@
                         el fondo de lluvia con una ventana de terminal y la
                         paleta debajo.
 
-Depende de rsvg-convert e ImageMagick, y de backgrounds/1-lluvia-densa.png
+Depende de rsvg-convert e ImageMagick, y de backgrounds/0-lluvia-viva.png
 (lo genera generar-fondos.py).
 """
 
@@ -214,9 +214,9 @@ def main():
     subprocess.run(["magick", pu, "-strip", "-dither", "None", "-colors", "256", pu], check=True)
     print(f"  preview-unlock.png  {os.path.getsize(pu) // 1024} KB")
 
-    fondo = os.path.join(AQUI, "backgrounds", "1-lluvia-densa.png")
+    fondo = os.path.join(AQUI, "backgrounds", "0-lluvia-viva.png")
     if not os.path.exists(fondo):
-        print("  ! falta backgrounds/1-lluvia-densa.png: corre antes generar-fondos.py",
+        print("  ! falta backgrounds/0-lluvia-viva.png: corre antes generar-fondos.py",
               file=sys.stderr)
         return 1
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:

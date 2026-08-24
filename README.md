@@ -41,7 +41,7 @@ omarchy plymouth set matrix
 |---|---|
 | `colors.toml` | La paleta. Semántica, no `color0..15`. |
 | `shell.{bar,menu,launcher,notifications}.toml` | Overrides de sección de la shell: dan relieve a barra y tarjetas, que si no pintan todas del mismo negro. |
-| `backgrounds/` | Cuatro fondos a 3840×2400. |
+| `backgrounds/` | El fotograma del fondo vivo, a 3840×2400. Sirve de miniatura en el carrusel y de marcador: al elegirlo se enciende la lluvia animada. |
 | `unlock.png`, `preview-unlock.png` | Marca del splash de Plymouth. |
 | `lluvia/` | La lluvia animada: shader, atlas de glifos y los QML de los dos plugins. |
 | `generar-fondos.py`, `generar-marca.py` | Regeneran los PNG. Ninguno es un binario intocable. |

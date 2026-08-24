@@ -132,11 +132,13 @@ def construir(semilla, densidad, escala, salida, espejo=True):
     print(f"  {salida}  {os.path.getsize(salida) // 1024} KB")
 
 
-# semilla, densidad, escala de glifo
+# semilla, densidad, escala de glifo.
+# Solo queda el fotograma del fondo vivo: es la miniatura que sale en el
+# carrusel y el marcador que enciende el shader de lluvia (ver lluvia/). Los
+# tres fondos estaticos que habia aqui se quitaron el 2026-08-24; con --out se
+# siguen sacando sueltos.
 PRESETS = {
-    "1-lluvia-densa": (7, 0.85, 1.0),
-    "2-lluvia-suave": (23, 0.42, 1.15),
-    "3-cascada":      (61, 0.70, 1.45),
+    "0-lluvia-viva": (3, 0.55, 1.25),
 }
 
 
