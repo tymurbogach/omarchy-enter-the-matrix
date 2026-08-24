@@ -148,7 +148,13 @@ instalar_plugin() {
 
   cp "$AQUI/$qml" "$AQUI/MatrixRain.qml" "$AQUI/matrix.frag.qsb" \
      "$AQUI/glifos.png" "$dir/"
-  echo "  $qml + shader -> $dir"
+
+  # Siempre, no solo al clonar. Que un plugin este ACTIVO se guarda en
+  # ~/.config/omarchy/shell.json, y `omarchy refresh shell` lo resetea a los
+  # valores de fabrica: los clones quedan desactivados y vuelven el lock y el
+  # fondo de serie, con la imagen quieta. Volver a correr este script lo arregla.
+  omarchy plugin enable "$id" >/dev/null 2>&1 || true
+  echo "  $qml + shader -> $dir  (activado)"
 }
 
 instalar_screensaver

@@ -41,6 +41,14 @@ donde parece que toca: `default/hypr/envs.lua` vuelve a anteponer
 así que pisa cualquier cosa que haya puesto uwsm. `autostart.lua` se carga
 después de esos defaults.
 
+> **`omarchy refresh shell` apaga la lluvia.** Ese comando resetea
+> `~/.config/omarchy/shell.json`, que es donde se guarda qué plugins están
+> activos, así que los clones quedan desactivados y vuelven el bloqueo y el fondo
+> de serie. No se rompe nada: se recupera volviendo a correr `instalar.sh`, o con
+> `omarchy plugin enable $USER.lock && omarchy plugin enable $USER.background`.
+> Como el fondo estático es un fotograma del propio shader, el síntoma parece una
+> lluvia congelada y no un plugin apagado.
+
 Para deshacerlo:
 
 ```bash
