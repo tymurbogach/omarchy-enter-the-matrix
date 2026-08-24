@@ -5,9 +5,8 @@
 
   · unlock.png          marca del splash de arranque de Plymouth (con alfa;
                         Plymouth la pinta sobre `background` del colors.toml).
-                        Es una marca propia -- wordmark en la fuente del
-                        sistema con el bloque de cursor del terminal --, no el
-                        logotipo de la pelicula.
+                        Una linea a medio teclear y el cursor: ni logotipo de
+                        la pelicula ni wordmark. Ambiente, no marca.
   · preview-unlock.png  como se ve ese splash, para el selector de Plymouth.
   · preview.png         tarjeta del tema para el carrusel de `omarchy theme`:
                         el fondo de lluvia con una ventana de terminal y la
@@ -89,30 +88,43 @@ FOSFORO = f'''
       <feGaussianBlur stdDeviation="6" result="b"/>
       <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
-    <linearGradient id="regla" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0"   stop-color="{ACCENT}" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="{ACCENT}" stop-opacity="0.55"/>
-      <stop offset="1"   stop-color="{ACCENT}" stop-opacity="0"/>
-    </linearGradient>'''
+'''
 
 
 def marca(w=1108, h=523, fondo=None):
-    """El wordmark. `fondo` en None deja alfa (lo que Plymouth necesita)."""
-    # El wordmark medido: tinta en x 265..782 con text-anchor middle en 522.
-    # El cursor va justo detras, a la altura de mayuscula (240..316).
+    """La marca del splash. `fondo` en None deja alfa (lo que Plymouth necesita).
+
+    Sin logotipo y sin wordmark: una linea a medio teclear y el bloque de cursor
+    del terminal, y ya. Antes esto era "MATRIX" en 104 px con "WAKE UP" debajo,
+    que convertia el arranque en un cartel de la pelicula en vez de dar el
+    ambiente, que es lo que se busca.
+    """
     base = f'<rect width="{w}" height="{h}" fill="{fondo}"/>' if fondo else ""
+
+    # Katakana de media anchura, los mismos de ttfx. Van encendiendose hacia la
+    # derecha, como si se estuvieran escribiendo, y el cursor cierra la linea.
+    glifos = "ｦｱｳｴｵｶｷｹｺ"
+    tam = 46
+    paso = 30
+    ancho_linea = len(glifos) * paso + 22 + 24
+    x0 = (1108 - ancho_linea) / 2
+    y = 276
+
+    letras = []
+    for i, ch in enumerate(glifos):
+        t = i / (len(glifos) - 1)
+        op = 0.16 + 0.64 * (t ** 1.5)
+        letras.append(f'<text x="{x0 + i * paso}" y="{y}" font-family="{CJK}" '
+                      f'font-size="{tam}" fill="{ACCENT}" opacity="{op:.2f}">{ch}</text>')
+
+    cursor_x = x0 + len(glifos) * paso + 22
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 1108 523">
   <defs>{FOSFORO}</defs>
   {base}
-  <g>{lluvia(1108, 523, 11, 46, 26, 0.32)}</g>
   <g filter="url(#fosforo)">
-    <text x="522" y="316" text-anchor="middle" font-family="{MONO}"
-          font-weight="700" font-size="104" letter-spacing="30" fill="{ACCENT}">MATRIX</text>
-    <rect x="808" y="240" width="34" height="76" fill="{BRIGHT}"/>
+    {"".join(letras)}
+    <rect x="{cursor_x}" y="{y - 40}" width="24" height="52" fill="{BRIGHT}"/>
   </g>
-  <rect x="220" y="380" width="668" height="2" fill="url(#regla)"/>
-  <text x="554" y="424" text-anchor="middle" font-family="{MONO}" font-size="23"
-        letter-spacing="11" fill="#3D7A4E">WAKE UP</text>
 </svg>'''
 
 
