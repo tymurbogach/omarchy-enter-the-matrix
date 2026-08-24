@@ -56,7 +56,7 @@ void main() {
     // reguero distintas hacen que las columnas vecinas no vayan a la vez.
     float speed = 5.0 + hash11(cellId.x * 1.31 + 0.7) * 13.0;
     float phase = hash11(cellId.x * 7.13 + 4.7) * 400.0;
-    float tail = 16.0 + hash11(cellId.x * 2.91 + 1.7) * 22.0;
+    float tail = 22.0 + hash11(cellId.x * 2.91 + 1.7) * 26.0;
 
     float rowsTotal = iResolution.y / cellH + tail;
     float headRow = mod(iTime * speed + phase, rowsTotal);
@@ -67,9 +67,10 @@ void main() {
     float t = clamp(above / tail, 0.0, 1.0);
 
     // ttfx no apaga el reguero hasta desaparecer: cada caracter lleva un verde
-    // al azar del degradado y se queda. El suelo de 0.30 conserva ese cuerpo y
-    // deja que se siga viendo caer.
-    float bright = mix(1.0, 0.30, pow(t, 0.75)) * vis;
+    // al azar del degradado y se queda. El suelo conserva ese cuerpo y deja que
+    // se siga viendo caer. Medido contra una captura del screensaver real: con
+    // 0.30 el campo salia a 1.4 de brillo medio contra los 5.2 del original.
+    float bright = mix(1.0, 0.62, pow(t, 0.75)) * vis;
 
     // El glifo se resortea cada 250 ms, desfasado por celda para que no
     // parpadeen todos a la vez.
