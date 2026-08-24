@@ -15,19 +15,33 @@ Eso deja el tema en `~/.config/omarchy/themes/matrix` y lo aplica.
 
 ### Lluvia animada (opcional)
 
-El lock y el fondo del escritorio pueden llover de verdad, no ser una imagen fija:
+Salvapantallas, bloqueo y fondo de escritorio lloviendo, no imágenes fijas:
 
 ```bash
 ~/.config/omarchy/themes/matrix/lluvia/instalar.sh
 ```
 
-Después, elige `0-lluvia-viva.png` en el carrusel de fondos para el escritorio;
-el bloqueo llueve siempre.
+Las tres funcionan distinto y ninguna se configura, así que el script toca las
+tres por separado:
 
-Léete el aviso que imprime: para esto hay que clonar los plugins `lock` y
-`background` de Omarchy, y un plugin clonado **queda congelado** — deja de
-recibir los arreglos que Omarchy meta en esos dos. Se deshace con
-`omarchy plugin remove $USER.lock` (y `$USER.background`).
+| | |
+|---|---|
+| **Salvapantallas** | Es `ttfx` dentro de un terminal, y `omarchy-launch-screensaver` lo llama por nombre. El script deriva un clon del que tengas instalado cambiando `--random-effect` por `matrix --rain-time 86400`, y antepone `~/.local/bin` en el PATH. **Necesita reiniciar sesión.** |
+| **Bloqueo** | Llueve siempre, con el fondo que sea. Compruébalo sin bloquearte con `omarchy-shell lock preview`. |
+| **Fondo** | Elige `0-lluvia-viva.png` en el carrusel. Con cargador llueve siempre; con batería, solo mientras no haya ventanas en el espacio de trabajo. |
+
+El clon del salvapantallas se **deriva** del tuyo, no viene empaquetado: así
+hereda los arreglos de tu versión de Omarchy. Los plugins no se puede: van
+enteros, y un plugin clonado **queda congelado** — deja de recibir lo que
+Omarchy arregle en `lock` o `background`.
+
+Para deshacerlo:
+
+```bash
+omarchy plugin remove $USER.lock
+omarchy plugin remove $USER.background
+rm ~/.local/bin/omarchy-screensaver
+```
 
 ### Splash de arranque (opcional)
 
@@ -43,7 +57,7 @@ omarchy plymouth set matrix
 | `shell.{bar,menu,launcher,notifications}.toml` | Overrides de sección de la shell: dan relieve a barra y tarjetas, que si no pintan todas del mismo negro. |
 | `backgrounds/` | El fotograma del fondo vivo, a 3840×2400. Sirve de miniatura en el carrusel y de marcador: al elegirlo se enciende la lluvia animada. |
 | `unlock.png`, `preview-unlock.png` | Marca del splash de Plymouth. |
-| `lluvia/` | La lluvia animada: shader, atlas de glifos y los QML de los dos plugins. |
+| `lluvia/` | La lluvia animada: shader, atlas de glifos, los QML de los dos plugins y el instalador. |
 | `generar-fondos.py`, `generar-marca.py` | Regeneran los PNG. Ninguno es un binario intocable. |
 
 ### La paleta
