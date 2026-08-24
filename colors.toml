@@ -1,0 +1,42 @@
+mode = "dark"
+
+# --- superficies: el fondo es el vacio; las tarjetas suben un peldano ------
+background         = "#030805"
+darker_background  = "#000200"
+dark_background    = "#010402"
+lighter_background = "#0A1A0F"
+
+# --- texto ----------------------------------------------------------------
+foreground         = "#A8F5BC"
+light_foreground   = "#A8F5BC"
+bright_foreground  = "#DFFFE9"
+dark_foreground    = "#2E5C3C"
+muted              = "#1B3A25"
+
+accent               = "#00FF41"
+selection            = "#0E3A1D"
+selection_background = "#00FF41"
+selection_foreground = "#020402"
+
+# --- bordes: el degradado del reguero, de apagado a cabeza ----------------
+hyprland_active_border   = "rgba(00FF41ff)"
+hyprland_inactive_border = "rgba(11301Caa)"
+active_border_color      = "#00FF41"
+active_tab_background    = "#0F9E63"
+
+# --- escalera ANSI: separacion por luminosidad + hue dentro del verde -----
+red     = "#F0263F"
+yellow  = "#C6FF57"
+orange  = "#8FE03A"
+green   = "#00FF41"
+cyan    = "#7BFFD4"
+blue    = "#12A96A"
+magenta = "#35D68F"
+brown   = "#3D5E1C"
+
+bright_red     = "#FF5C74"
+bright_yellow  = "#E2FF8F"
+bright_green   = "#6BFF92"
+bright_cyan    = "#B8FFE8"
+bright_blue    = "#2BD68C"
+bright_magenta = "#66F0B4"

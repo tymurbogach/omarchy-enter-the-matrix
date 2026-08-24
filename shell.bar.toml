@@ -1,0 +1,10 @@
+[bar]
+# La barra baja al vacio absoluto: mas oscura que las ventanas, para que
+# lea como el borde de la pantalla y no como una superficie mas.
+background       = "#000200"
+background-alpha = 1.0
+text             = "#A8F5BC"
+active           = "#F0263F"
+scale-with-font  = true
+size-horizontal  = 26
+size-vertical    = 28
