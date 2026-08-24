@@ -19,8 +19,7 @@ Item {
   id: root
 
   property bool running: true
-  // Fotogramas por segundo. No se usa FrameAnimation a proposito: iria al
-  // refresco del monitor (144 Hz en el externo) y esto es un fondo.
+  // Fotogramas por segundo a los que avanza el reloj del shader.
   property int fps: 30
   // Alto de celda en px logicos. 32 es el paso de fila del screensaver real
   // (64 px nativos en un panel a escala 2); el shader saca el ancho de aqui.
@@ -47,7 +46,9 @@ Item {
 
     // Los nombres tienen que coincidir con los del bloque uniform del shader.
     property real iTime: root.elapsed
-    property vector2d iResolution: Qt.vector2d(width, height)
+    // `size` y no `vector2d`: es el tipo con el que Qt mapea un vec2 en un
+    // ShaderEffect sin sorpresas.
+    property size iResolution: Qt.size(width, height)
     property color colBg: root.bgColor
     property color colHead: root.headColor
     property color colRainA: root.rainA
@@ -56,10 +57,25 @@ Item {
     property variant atlas: atlasImage
   }
 
-  Timer {
+  // FrameAnimation y no Timer. Con un Timer el reloj avanzaba (comprobado con
+  // logs: elapsed subia) pero el ShaderEffect no volvia a repintar, asi que la
+  // lluvia salia dibujada y congelada. FrameAnimation va enganchado al bucle de
+  // render, que es justo lo que hace falta para que el fotograma nuevo salga.
+  //
+  // Como corre al refresco del monitor (144 Hz en el externo) y esto es un
+  // fondo, se acumula el tiempo pero solo se publica en `elapsed` a `fps`: el
+  // shader ve 30 pasos por segundo y no 144.
+  FrameAnimation {
+    id: reloj
     running: root.running
-    interval: Math.max(8, Math.round(1000 / root.fps))
-    repeat: true
-    onTriggered: root.elapsed += interval / 1000
+    property real acumulado: 0
+    onTriggered: {
+      acumulado += frameTime
+      var paso = 1 / Math.max(1, root.fps)
+      if (acumulado >= paso) {
+        root.elapsed += acumulado
+        acumulado = 0
+      }
+    }
   }
 }
