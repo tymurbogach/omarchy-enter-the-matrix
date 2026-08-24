@@ -7,8 +7,9 @@
 # tocarlas una a una:
 #
 #   · salvapantallas -- es ttfx dentro de un terminal. omarchy-launch-screensaver
-#     llama a `omarchy-screensaver` por NOMBRE, asi que basta con poner un clon
-#     con el efecto fijo antes en el PATH.
+#     llama a `omarchy-screensaver` por NOMBRE, asi que hay que poner un clon con
+#     el efecto fijo antes en el PATH, y eso va en hypr/autostart.lua (ver abajo
+#     por que uwsm/env.d no vale).
 #   · bloqueo y fondo -- son plugins de Quickshell que pintan una imagen fija.
 #     No hay forma de meterles una animacion por configuracion: hay que clonar
 #     los plugins y sustituirles el QML.
@@ -88,28 +89,47 @@ instalar_screensaver() {
   echo "→ salvapantallas fijado en matrix: $destino"
 }
 
-# omarchy-launch-screensaver resuelve el binario por PATH, y Omarchy deja
-# ~/.local/bin AL FINAL a proposito para que ganen los del sistema. Sin revertir
-# eso, el clon no se llega a usar nunca.
+# omarchy-launch-screensaver resuelve el binario por NOMBRE, asi que el clon
+# solo se usa si ~/.local/bin gana en el PATH. Y eso NO se arregla en
+# ~/.config/uwsm/env.d/: default/hypr/envs.lua vuelve a anteponer
+# $OMARCHY_PATH/bin en cada arranque de Hyprland y en cada `hyprctl reload`,
+# pisando lo que pusiera uwsm. hypr/autostart.lua se carga DESPUES de esos
+# defaults (hyprland.lua lo hace en require("hypr.autostart"), tras
+# require("default.hypr.omarchy")), asi que es el unico sitio donde aguanta.
+MARCA="tema-matrix:path-local-bin"
+
 prioridad_path() {
-  local f="$HOME/.config/uwsm/env.d/50-local-bin-priority.sh"
-  if [[ -f $f ]]; then
-    grep -q 'HOME/.local/bin' "$f" \
-      && echo "  · prioridad de PATH ya puesta" \
-      || echo "  ! $f existe pero no antepone ~/.local/bin; revisalo a mano" >&2
+  local f="$HOME/.config/hypr/autostart.lua"
+
+  if [[ -f $f ]] && grep -q "$MARCA" "$f"; then
+    echo "  · prioridad de PATH ya puesta"
     return
   fi
-  mkdir -p "$(dirname "$f")"
-  cat >"$f" <<'ENV'
-# Changes require a restart to take effect.
+  # Puesta a mano antes de que existiera este script: se reconoce igual.
+  if [[ -f $f ]] && grep -q 'hl.env("PATH"' "$f" && grep -q '\.local/bin' "$f"; then
+    echo "  · prioridad de PATH ya puesta (a mano)"
+    return
+  fi
 
-# Omarchy deja ~/.local/bin al FINAL del PATH a proposito, para que en una
-# instalacion de produccion ganen los binarios del sistema. Este override lo
-# revierte, que es lo que hace que el clon de omarchy-screensaver (fijo en
-# matrix) se use en vez del de fabrica.
-export PATH="$HOME/.local/bin:$PATH"
-ENV
-  echo "→ prioridad de PATH: $f  (necesita reiniciar sesion)"
+  mkdir -p "$(dirname "$f")"
+  cat >>"$f" <<LUA
+
+-- $MARCA
+-- default/hypr/envs.lua fuerza \$OMARCHY_PATH/bin al frente del PATH en cada
+-- arranque de Hyprland y en cada \`hyprctl reload\`, pisando cualquier orden que
+-- pusiera ~/.config/uwsm/env.d/. Este fichero se carga despues de esos defaults,
+-- asi que aqui si aguanta. Sin esto el clon de omarchy-screensaver (matrix fijo)
+-- no llega a usarse nunca.
+local home = os.getenv("HOME")
+local local_bin = home .. "/.local/bin"
+local kept = {}
+for entry in (os.getenv("PATH") or ""):gmatch("[^:]+") do
+  if entry ~= local_bin then table.insert(kept, entry) end
+end
+table.insert(kept, 1, local_bin)
+hl.env("PATH", table.concat(kept, ":"))
+LUA
+  echo "→ prioridad de PATH: $f  (necesita 'hyprctl reload' + 'omarchy restart shell')"
 }
 
 # ─── Bloqueo y fondo ────────────────────────────────────────────────────────
@@ -143,8 +163,8 @@ cat <<'FIN'
 Listo. Las tres pantallas:
 
   · Salvapantallas — deja de sortear efectos y llueve siempre.
-    Necesita REINICIAR SESION para que el PATH tome efecto.
-    Probarlo ya:  omarchy-launch-screensaver force
+    Para que el PATH tome efecto:  hyprctl reload && omarchy restart shell
+    Probarlo:                      omarchy-launch-screensaver force
 
   · Bloqueo — llueve siempre, con el fondo que sea.
     Compruebalo SIN bloquearte:  omarchy-shell lock preview

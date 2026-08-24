@@ -26,7 +26,7 @@ tres por separado:
 
 | | |
 |---|---|
-| **Salvapantallas** | Es `ttfx` dentro de un terminal, y `omarchy-launch-screensaver` lo llama por nombre. El script deriva un clon del que tengas instalado cambiando `--random-effect` por `matrix --rain-time 86400`, y antepone `~/.local/bin` en el PATH. **Necesita reiniciar sesión.** |
+| **Salvapantallas** | Es `ttfx` dentro de un terminal, y `omarchy-launch-screensaver` lo llama por nombre. El script deriva un clon del que tengas instalado cambiando `--random-effect` por `matrix --rain-time 86400`, y antepone `~/.local/bin` en el PATH desde `hypr/autostart.lua`. Después: `hyprctl reload && omarchy restart shell`. |
 | **Bloqueo** | Llueve siempre, con el fondo que sea. Compruébalo sin bloquearte con `omarchy-shell lock preview`. |
 | **Fondo** | Elige `0-lluvia-viva.png` en el carrusel. Con cargador llueve siempre; con batería, solo mientras no haya ventanas en el espacio de trabajo. |
 
@@ -34,6 +34,12 @@ El clon del salvapantallas se **deriva** del tuyo, no viene empaquetado: así
 hereda los arreglos de tu versión de Omarchy. Los plugins no se puede: van
 enteros, y un plugin clonado **queda congelado** — deja de recibir lo que
 Omarchy arregle en `lock` o `background`.
+
+La prioridad de PATH va en `hypr/autostart.lua` y no en `uwsm/env.d/`, aunque sea
+donde parece que toca: `default/hypr/envs.lua` vuelve a anteponer
+`$OMARCHY_PATH/bin` en cada arranque de Hyprland **y en cada `hyprctl reload`**,
+así que pisa cualquier cosa que haya puesto uwsm. `autostart.lua` se carga
+después de esos defaults.
 
 Para deshacerlo:
 
