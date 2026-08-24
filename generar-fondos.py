@@ -66,10 +66,10 @@ def reguero(draw, cx, cabeza, largo, size, escala_y, atenuar=1.0):
         if i == 0:
             color = mezcla((0, 0, 0), CABEZA, atenuar)
         else:
-            # mix(1.0, 0.62, t**0.75) del shader: la estela se apaga pero no
+            # mix(1.0, 0.30, t**0.75) del shader: la estela se apaga pero no
             # desaparece, que es como se comporta ttfx.
             t = i / max(largo - 1, 1)
-            brillo = 1.0 - 0.38 * (t ** 0.75)
+            brillo = 1.0 - 0.70 * (t ** 0.75)
             color = mezcla((0, 0, 0),
                            mezcla(LLUVIA_A, LLUVIA_B, random.random()),
                            brillo * atenuar)
@@ -102,7 +102,7 @@ def construir(semilla, densidad, escala, salida, minimo=False):
             largo = random.randint(10, 24)
         else:
             cabeza = random.randint(0, filas + 12)
-            largo = random.randint(22, 48)
+            largo = random.randint(16, 38)
         reguero(draw, cx, cabeza, largo, size, escala_y,
                 atenuar=0.85 if minimo else 1.0)
 

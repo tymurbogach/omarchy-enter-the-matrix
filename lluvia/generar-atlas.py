@@ -5,8 +5,8 @@ Los simbolos son exactamente los de `ttfx matrix --rain-symbols`, el efecto que
 corre en el screensaver de Omarchy: katakana de MEDIA anchura mas unos signos
 ASCII. Van blancos sobre transparente; el shader los tine.
 
-Rejilla de 8x7 celdas de 60x128 px: la misma relacion que la celda del shader
-(alta y estrecha, como la del terminal).
+Rejilla de 8x7 celdas de 48x64 px. Esa relacion imita la del terminal, donde la
+fila es bastante mas alta que la columna.
 """
 import os
 import subprocess
@@ -21,14 +21,9 @@ SIMBOLOS = [
 ]
 
 COLS, FILAS = 8, 7
-# La celda del atlas tiene que tener la MISMA relacion que la celda que dibuja
-# el shader (cellW = cellH * 0.47). Estaba a 48x64 (0.75) y el shader la metia
-# en 30x64: los glifos salian aplastados de ancho, y por tanto mas finos y mas
-# apagados que en el screensaver de verdad. 60x128 es 0.469, que si cuadra; el
-# doble de resolucion es solo para que no pixele al escalar.
-CW, CH = 60, 128
+CW, CH = 48, 64
 FUENTE = "Noto-Sans-CJK-JP"
-CUERPO = 84
+CUERPO = 44
 
 
 def celda(simbolo):
