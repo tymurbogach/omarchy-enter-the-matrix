@@ -39,6 +39,7 @@ omarchy-toggle screensaver-off off
 # password and rebuilds the initramfs, which is why it is asked for last.
 current_plymouth=$(plymouth-set-default-theme 2>/dev/null) ||
   current_plymouth=$(sed -n 's/^Theme=//p' /etc/plymouth/plymouthd.conf 2>/dev/null)
+
 # Two separate questions, and they used to be conflated. Handing the splash back
 # is only needed when OURS is the live one. Deleting the folder is needed
 # whenever the folder exists -- and it exists after any `boot off`, which is

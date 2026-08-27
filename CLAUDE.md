@@ -127,6 +127,57 @@ The two derived pieces are the two that can lock someone out.
 
 ---
 
+## Rule 5 — Everything is a layer. Off must mean gone.
+
+The pack is a **layer over Omarchy**, not a fork of it. Four things follow, and
+none of them is negotiable.
+
+**Every piece switches on its own.** `wallpaper`, `screensaver`, `lock`, `boot` —
+each one off, on and back with no side effect on the other three, and with no
+step in the middle that says "now re-apply the theme". A piece that only works
+while the others are on is not a layer, it is a fork.
+
+**Picking another theme stands everything down.** Nothing rains, nothing is
+ticked, no plugin is left enabled. `matrix.json` is kept, so coming back to
+matrix restores exactly what was there. `boot` is the one documented exception:
+Plymouth belongs to the system, not to the theme.
+
+**Off must remove, not merely deactivate.** If a piece wrote something, its `off`
+takes it back — including anything outside `$HOME`. It is not enough for
+`uninstall.sh` to clean up: someone who never uninstalls, and only turns a piece
+off, must still end up with a clean machine.
+
+> Written down because it was broken, and in the one place hardest to notice:
+> `boot off` called `omarchy-plymouth-reset` and left
+> `/usr/share/plymouth/themes/omarchy-matrix/` on disk forever, while
+> `uninstall.sh` deleted it only when it happened to be the active theme. Turning
+> the piece off was the exact case both missed.
+
+**Nothing of Omarchy's may be left disabled.** The lock is the sharp edge:
+handing it back always goes through `omarchy plugin remove`, never
+`plugin disable`. See Rule 4.
+
+---
+
+## Where this is going
+
+Today the pack is a theme plus a block spliced into the user's menu under
+**Style** — one level deeper than it should be, and it only knows about matrix.
+
+The direction is a single **bar widget**: `kinds: ["bar-widget", "service"]` with
+a `panel` entry point, the way Omarchy's own built-ins do it. One item on the
+bar owns the four switches, and the pack stops writing into
+`omarchy-menu.jsonc` at all — which is the most invasive thing it currently does
+to a file that is not its own.
+
+Beyond that, the four pieces are not really matrix-specific: they are
+*wallpaper, screensaver, lock and boot as a set*, and matrix is one provider of
+that set. New work should keep the seam visible — a provider contributes a
+shader and its assets, the machinery around it stays generic — rather than
+hard-coding one more `matrix` string.
+
+---
+
 ## How to work on this repo
 
 There are two clones with different jobs:
@@ -203,9 +254,18 @@ Omarchy's own screensaver does not do — its loop only watches the keyboard.
 immediately. Without a short grace period it dismisses itself in the frame it
 appears.
 
+**`omarchy plugin remove` renames, it does not delete.** The folder comes back as
+`.<id>.bak.<timestamp>` unless it contains a `.git`, in which case it is deleted
+outright (`omarchy-plugin-remove:113`). Our lock clone has no `.git` and is
+derived, so every `lock off` used to leave a full copy behind — nine of them had
+piled up here. Ours are identified by the `MatrixRain.qml` inside; a lock clone
+somebody made for their own reasons has the same name shape and must survive.
+
 ---
 
-## Before you ship
+## Before you ship — the clean-room test
+
+The cheap checks first:
 
 ```bash
 bash -n install.sh uninstall.sh bin/omarchy-matrix hooks/*
@@ -213,6 +273,33 @@ python3 -m py_compile bin/*.py *.py rain/*.py
 omarchy-plugin-validate .                  # must pass, or nobody can install it
 ```
 
-Then install from a clean clone and confirm the four pieces really work — the
-menu row renders, the rain animates, `omarchy-shell lock status` still reports
-`passwordPam` and `fingerprint`.
+Then the one that actually decides whether this is publishable: **install the
+pack the way a stranger does, on a machine that has never seen it.** Reading the
+diff is not this test. Neither is `./install.sh` from the working copy — that
+path runs with `~/.local/bin` already warm, the hooks already in place and a
+`matrix.json` full of yesterday's answers.
+
+Six phases, in order. Each is verified as the user sees it (Rule 2), and a
+failure in any one of them is a failure to ship.
+
+1. **Strip the machine.** `./uninstall.sh` first, then hunt the residue by hand:
+   plugin backups matching `~/.config/omarchy/plugins/.*.bak.*`, stale binaries
+   in `~/.local/bin`, `/usr/share/plymouth/themes/omarchy-matrix/`, the marker
+   block inside `omarchy-menu.jsonc`, `~/.config/omarchy/matrix.json`, the theme
+   directory, and the `~/.local/state/omarchy/toggles/screensaver-off` flag.
+   Prove it is gone before going on: `omarchy-matrix` must be *command not
+   found*. Leave the user's own hooks alone — `theme-set.d` holds more than ours.
+2. **Install from the published URL**, never from the working copy, following the
+   README literally and doing nothing it does not say. What the README omits, the
+   stranger does not know.
+3. **Verify the four pieces are on and on screen** — not merely configured.
+4. **Toggle each piece off and back on, one at a time**, checking each time that
+   the other three did not move.
+5. **Switch to another theme and back.** Away: nothing rains, nothing is ticked,
+   Omarchy's own lock and screensaver answer again, and nothing of Omarchy's is
+   left disabled. Back: exactly what was on before is on again.
+6. **Uninstall, and compare the machine against phase 1.** Anything still there
+   is a bug, not a detail.
+
+Whatever this turns up belongs in the repo — as a fix, or as a written-down
+limitation. Rediscovering it on someone else's machine costs far more.

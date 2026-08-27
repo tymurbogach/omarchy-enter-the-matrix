@@ -41,6 +41,23 @@ Omarchy code, that is the signal to keep looking for the extension point.
 enabled. Test with `omarchy-shell lock preview`, never by locking. On an
 encrypted disk Plymouth is also the passphrase prompt.
 
+**Everything is a layer. Off must mean gone.** Each of the four pieces —
+wallpaper, screensaver, lock, boot — switches on its own, with no side effect on
+the other three. Picking another theme stands them all down. And `off` must
+*remove* what a piece wrote, including outside `$HOME`: it is not enough for
+`uninstall.sh` to clean up, because most people never uninstall.
+
+**Before publishing, run the clean-room test.** Strip the machine, install from
+the published URL the way a stranger does, verify the four pieces on screen,
+toggle each one alone, switch theme away and back, uninstall and compare against
+the stripped state. `bash -n` and `omarchy-plugin-validate` are the cheap part,
+not the test. The six phases are in `CLAUDE.md`.
+
+**Where this is heading:** one bar widget (`kinds: ["bar-widget", "service"]`
+plus a `panel`) owning the four switches, instead of a block spliced into the
+user's `omarchy-menu.jsonc` under Style — and the machinery kept generic, with
+matrix as one provider of the set rather than a hard-coded string.
+
 **English, and commit messages that explain the why.** The repo is public. `git
 diff` already says what changed.
 
@@ -51,3 +68,5 @@ bash -n install.sh uninstall.sh bin/omarchy-matrix hooks/*
 python3 -m py_compile bin/*.py *.py rain/*.py
 omarchy-plugin-validate .
 ```
+
+And then the clean-room test above, which is the one that decides it.

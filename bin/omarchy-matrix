@@ -123,7 +123,7 @@ prune_backups() {
 # The pack's only footprint outside $HOME. `omarchy plymouth reset` puts
 # Omarchy's theme back but leaves ours sitting in /usr/share/plymouth/themes, so
 # off has to take it back too -- someone who never runs uninstall.sh would carry
-# it forever otherwise.
+# it forever otherwise (Rule 5: off must mean gone).
 #
 # Always AFTER the reset, never before: pulling the directory out from under a
 # theme that is still the default is how a machine boots to a black screen.
