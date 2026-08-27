@@ -82,10 +82,17 @@ menu, fragment = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 text = menu.read_text()
 block = fragment.read_text().rstrip("\n") + "\n"
 
-text = re.sub(r"[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
+# Take the newline install.sh puts BEFORE the block, not just the block: without
+# the leading \n? every install/uninstall cycle left one more blank line behind.
+# Nine had stacked up in a file that is not ours to litter.
+text = re.sub(r"\n?[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
               "", text, flags=re.S)
 
+# And collect what the older versions already left there. Blank lines directly
+# after the opening brace mean nothing in JSONC and every one of them is ours.
 opening = text.index("{")
+text = text[:opening + 1] + re.sub(r"^\n(?:[ \t]*\n)+", "\n", text[opening + 1:])
+
 menu.write_text(text[:opening + 1] + "\n" + block + text[opening + 1:])
 PY
 

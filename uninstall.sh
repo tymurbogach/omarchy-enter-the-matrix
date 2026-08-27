@@ -86,8 +86,18 @@ if [[ -f $MENU ]]; then
   python3 - "$MENU" <<'PY'
 import sys, pathlib, re
 f = pathlib.Path(sys.argv[1])
-f.write_text(re.sub(r"[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
-                    "", f.read_text(), flags=re.S))
+text = f.read_text()
+# Take the newline install.sh puts BEFORE the block, not just the block: without
+# the leading \n? every install/uninstall cycle left one more blank line behind.
+# Nine had stacked up in a file that is not ours to litter.
+text = re.sub(r"\n?[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
+              "", text, flags=re.S)
+
+# And collect what the older versions already left there. Blank lines directly
+# after the opening brace mean nothing in JSONC and every one of them is ours.
+opening = text.index("{")
+text = text[:opening + 1] + re.sub(r"^\n(?:[ \t]*\n)+", "\n", text[opening + 1:])
+f.write_text(text)
 PY
 fi
 
