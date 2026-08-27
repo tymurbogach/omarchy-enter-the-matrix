@@ -39,13 +39,25 @@ omarchy-toggle screensaver-off off
 # password and rebuilds the initramfs, which is why it is asked for last.
 current_plymouth=$(plymouth-set-default-theme 2>/dev/null) ||
   current_plymouth=$(sed -n 's/^Theme=//p' /etc/plymouth/plymouthd.conf 2>/dev/null)
+# Two separate questions, and they used to be conflated. Handing the splash back
+# is only needed when OURS is the live one. Deleting the folder is needed
+# whenever the folder exists -- and it exists after any `boot off`, which is
+# precisely the case the old `if` skipped, leaving the theme on disk forever.
 if [[ ${current_plymouth:-} == "$PLYMOUTH_THEME" ]]; then
   echo "· handing the boot splash back (needs your password, rebuilds the initramfs)"
-  if omarchy-plymouth-reset; then
-    sudo rm -rf "/usr/share/plymouth/themes/$PLYMOUTH_THEME"
-  else
+  omarchy-plymouth-reset ||
     echo "  skipped — undo it later with: omarchy plymouth reset" >&2
-  fi
+fi
+
+# Asked again, AFTER the reset. Never before it: removing the folder of a theme
+# that is still the default is how a machine boots to a black screen. Asked into
+# a variable rather than through a pipe, because `set -o pipefail` plus grep's
+# early exit can turn "still ours" into a zero and invert the test.
+live_plymouth=$(plymouth-set-default-theme 2>/dev/null) || live_plymouth=""
+if [[ -d "/usr/share/plymouth/themes/$PLYMOUTH_THEME" && ${live_plymouth:-} != "$PLYMOUTH_THEME" ]]; then
+  echo "· removing the boot theme from /usr/share/plymouth (needs your password)"
+  sudo rm -rf "/usr/share/plymouth/themes/$PLYMOUTH_THEME" ||
+    echo "  skipped — remove it later with: sudo rm -rf /usr/share/plymouth/themes/$PLYMOUTH_THEME" >&2
 fi
 
 echo "· removing hooks, menu entries and the CLI"

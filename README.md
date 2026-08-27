@@ -131,6 +131,11 @@ background, nor the bar:
 The last two are the derived pieces, and neither overwrites the original:
 `omarchy.lock` and Plymouth's `omarchy` theme stay where they were.
 
+"Only while it is on" is meant literally, including for the one path outside
+your home directory: `omarchy-matrix boot off` hands the splash back **and**
+removes that directory. Turning a piece off leaves nothing behind, whether or
+not you ever run `uninstall.sh`.
+
 `./uninstall.sh` removes all of it, boot splash included, and leaves the theme
 working like any other.
 

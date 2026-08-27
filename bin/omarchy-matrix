@@ -96,6 +96,19 @@ lock_clone_id() {
   return 1
 }
 
+# The pack's only footprint outside $HOME. `omarchy plymouth reset` puts
+# Omarchy's theme back but leaves ours sitting in /usr/share/plymouth/themes, so
+# off has to take it back too -- someone who never runs uninstall.sh would carry
+# it forever otherwise.
+#
+# Always AFTER the reset, never before: pulling the directory out from under a
+# theme that is still the default is how a machine boots to a black screen.
+remove_plymouth_theme() {
+  local dir="/usr/share/plymouth/themes/$PLYMOUTH_THEME"
+  [[ -d $dir ]] || return 0
+  sudo rm -rf "$dir"
+}
+
 plugin_enabled() {
   omarchy-plugin-list --json 2>/dev/null |
     jq -e --arg id "$1" 'any(.[]; .id == $id and .enabled)' >/dev/null 2>&1
@@ -208,7 +221,14 @@ apply_boot() {
   if [[ $(read_setting boot) == "true" ]]; then
     "$(dirname "${BASH_SOURCE[0]}")/derive-plymouth.py" || return 1
   else
-    omarchy-plymouth-reset
+    # Only reset when OUR theme is the one installed. Resetting unconditionally
+    # rebuilt the initramfs for nothing, and worse, it dragged somebody who had
+    # picked `spinner` back to Omarchy's -- overriding a choice the pack never
+    # made. The directory goes either way.
+    if boot_applied; then
+      omarchy-plymouth-reset || return 1
+    fi
+    remove_plymouth_theme
   fi
 }
 
