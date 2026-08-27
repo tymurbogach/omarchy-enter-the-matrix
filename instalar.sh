@@ -50,6 +50,7 @@ echo "· omarchy-matrix en $BIN_DIR"
 mkdir -p "$BIN_DIR"
 install -m 755 "$AQUI/bin/omarchy-matrix" "$BIN_DIR/omarchy-matrix"
 install -m 755 "$AQUI/bin/derivar-lock.py" "$BIN_DIR/derivar-lock.py"
+install -m 755 "$AQUI/bin/derivar-plymouth.py" "$BIN_DIR/derivar-plymouth.py"
 
 # --- los hooks --------------------------------------------------------------
 # theme-set: enciende el pack al elegir matrix y lo aparta al elegir otro tema.

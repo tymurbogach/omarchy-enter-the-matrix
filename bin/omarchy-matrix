@@ -184,11 +184,15 @@ aplicar_lock() {
 }
 
 aplicar_boot() {
-  # La imagen de arranque, antes del login. Ya es nativa de Omarchy; aqui solo
-  # se expone como una pieza mas. Pide sudo, asi que nunca se hace sola desde un
-  # hook: solo cuando la pides tu.
+  # La imagen de arranque, antes del login. Pide sudo y reconstruye el initramfs,
+  # asi que nunca se hace sola: solo cuando la pides tu.
+  #
+  # No vale `omarchy plymouth set-by-theme`: eso solo deja poner colores y un PNG
+  # estatico, y aqui la frase se teclea. derivar-plymouth.py parte del
+  # omarchy.script de la maquina y le anade la animacion, dejando intacto el tema
+  # de Omarchy en su carpeta. Volver es `omarchy plymouth reset`.
   if [[ $(leer boot) == "true" ]]; then
-    omarchy-plymouth-set-by-theme "$THEME_SLUG"
+    "$(dirname "${BASH_SOURCE[0]}")/derivar-plymouth.py" || return 1
   else
     omarchy-plymouth-reset
   fi

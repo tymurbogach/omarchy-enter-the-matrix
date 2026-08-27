@@ -34,7 +34,7 @@ omarchy-toggle screensaver-off off
 
 echo "· quitando hooks, menu y CLI"
 rm -f "$HOOKS/theme-set.d/matrix" "$HOOKS/post-update.d/matrix"
-rm -f "$BIN_DIR/omarchy-matrix" "$BIN_DIR/derivar-lock.py"
+rm -f "$BIN_DIR/omarchy-matrix" "$BIN_DIR/derivar-lock.py" "$BIN_DIR/derivar-plymouth.py"
 rm -f "$HOME/.config/omarchy/matrix.json"
 
 if [[ -f $MENU ]]; then

@@ -94,36 +94,29 @@ FOSFORO = f'''
 def marca(w=1108, h=523, fondo=None):
     """La marca del splash. `fondo` en None deja alfa (lo que Plymouth necesita).
 
-    Sin logotipo y sin wordmark: una linea a medio teclear y el bloque de cursor
-    del terminal, y ya. Antes esto era "MATRIX" en 104 px con "WAKE UP" debajo,
-    que convertia el arranque en un cartel de la pelicula en vez de dar el
-    ambiente, que es lo que se busca.
+    La linea del principio de la pelicula, escrita en el terminal, con su bloque
+    de cursor detras. Sigue sin haber logotipo ni wordmark: es una frase que se
+    lee, no un cartel. Antes esto era "MATRIX" en 104 px con "WAKE UP" debajo, y
+    eso si convertia el arranque en un poster.
+
+    El cursor va DENTRO del <text>, como un caracter mas, y toda la linea se
+    centra con text-anchor="middle". Asi no hay que adivinar el avance de la
+    fuente para colocarlo: en una monoespaciada, el bloque ocupa exactamente una
+    celda y el centrado sale solo.
     """
     base = f'<rect width="{w}" height="{h}" fill="{fondo}"/>' if fondo else ""
 
-    # Katakana de media anchura, los mismos de ttfx. Van encendiendose hacia la
-    # derecha, como si se estuvieran escribiendo, y el cursor cierra la linea.
-    glifos = "ｦｱｳｴｵｶｷｹｺ"
-    tam = 46
-    paso = 30
-    ancho_linea = len(glifos) * paso + 22 + 24
-    x0 = (1108 - ancho_linea) / 2
+    frase = "Wake up, Neo..."
+    tam = 72
     y = 276
 
-    letras = []
-    for i, ch in enumerate(glifos):
-        t = i / (len(glifos) - 1)
-        op = 0.16 + 0.64 * (t ** 1.5)
-        letras.append(f'<text x="{x0 + i * paso}" y="{y}" font-family="{CJK}" '
-                      f'font-size="{tam}" fill="{ACCENT}" opacity="{op:.2f}">{ch}</text>')
-
-    cursor_x = x0 + len(glifos) * paso + 22
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 1108 523">
   <defs>{FOSFORO}</defs>
   {base}
   <g filter="url(#fosforo)">
-    {"".join(letras)}
-    <rect x="{cursor_x}" y="{y - 40}" width="24" height="52" fill="{BRIGHT}"/>
+    <text x="554" y="{y}" text-anchor="middle" xml:space="preserve"
+          font-family="{MONO}" font-size="{tam}" fill="{ACCENT}"
+          letter-spacing="1">{frase} <tspan fill="{BRIGHT}">\u2588</tspan></text>
   </g>
 </svg>'''
 
