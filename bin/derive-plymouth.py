@@ -302,15 +302,37 @@ def main():
             print(f"  staged at {out} (not installed)")
             return
 
-        subprocess.run(["sudo", "mkdir", "-p", str(TARGET)], check=True)
-        subprocess.run(["sudo", "cp", "-a", "--no-preserve=mode,ownership",
-                        f"{staging}/.", f"{TARGET}/"], check=True)
-        subprocess.run(["sudo", "plymouth-set-default-theme", THEME], check=True)
+        # The four privileged steps. sudo may have nowhere to ask for a
+        # password -- from a hook, from an agent, from an editor's shell -- or
+        # the answer may simply be no. A Python traceback is a terrible way to
+        # say "you did not authenticate": it reads as a broken pack rather than
+        # an unauthorised one, and install.sh prints it in the middle of an
+        # otherwise successful run.
+        already_installed = TARGET.is_dir()
+        try:
+            subprocess.run(["sudo", "mkdir", "-p", str(TARGET)], check=True)
+            subprocess.run(["sudo", "cp", "-a", "--no-preserve=mode,ownership",
+                            f"{staging}/.", f"{TARGET}/"], check=True)
+            subprocess.run(["sudo", "plymouth-set-default-theme", THEME], check=True)
 
-        if shutil.which("limine-mkinitcpio"):
-            subprocess.run(["sudo", "limine-mkinitcpio"], check=True)
-        else:
-            subprocess.run(["sudo", "mkinitcpio", "-P"], check=True)
+            if shutil.which("limine-mkinitcpio"):
+                subprocess.run(["sudo", "limine-mkinitcpio"], check=True)
+            else:
+                subprocess.run(["sudo", "mkinitcpio", "-P"], check=True)
+        except subprocess.CalledProcessError as failure:
+            # Failing between the copy and the initramfs would leave a directory
+            # that is not yet a theme. Only what THIS run created is taken back:
+            # re-deriving over a splash that already worked must not delete it.
+            if not already_installed:
+                subprocess.run(["sudo", "-n", "rm", "-rf", str(TARGET)],
+                               check=False, capture_output=True)
+            die(f"`{' '.join(failure.cmd[:3])}` failed, so the boot splash was "
+                f"not installed.\n"
+                f"  Nothing was left half written, and the rest of the pack is "
+                f"unaffected.\n"
+                f"  This step writes outside your home directory and needs a "
+                f"real terminal to ask\n"
+                f"  for your password. From one, run: omarchy-matrix boot on")
         print("  installed and set as default. To go back: omarchy plymouth reset")
     finally:
         shutil.rmtree(staging, ignore_errors=True)

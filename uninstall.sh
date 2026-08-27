@@ -81,6 +81,8 @@ rm -f "$HOME/.config/omarchy/matrix.json"
 # Left by a much older version of the pack, which cloned omarchy-screensaver into
 # ~/.local/bin instead of drawing the screensaver itself.
 rm -f "$BIN_DIR"/omarchy-screensaver "$BIN_DIR"/omarchy-screensaver.bak.*
+# Where derive-plymouth.py --stage-only leaves a build for inspection.
+rm -rf "$HOME/.cache/omarchy-matrix"
 
 if [[ -f $MENU ]]; then
   python3 - "$MENU" <<'PY'

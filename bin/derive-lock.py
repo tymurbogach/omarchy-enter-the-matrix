@@ -119,7 +119,14 @@ def main():
     target, plugin_id = existing_clone()
 
     if target is None:
-        subprocess.run(["omarchy-plugin-clone", "omarchy.lock"], check=True)
+        # Same reasoning as derive-plymouth: a traceback here reads as a broken
+        # pack. This one cannot lock anybody out -- no clone means Omarchy's own
+        # lock is still the enabled one -- but say so plainly.
+        try:
+            subprocess.run(["omarchy-plugin-clone", "omarchy.lock"], check=True)
+        except (OSError, subprocess.CalledProcessError) as failure:
+            die(f"could not clone Omarchy's lock ({failure}).\n"
+                f"  Your native lock is untouched and still enabled.")
         target, plugin_id = existing_clone()
         if target is None:
             die("the lock clone did not appear after creating it")
