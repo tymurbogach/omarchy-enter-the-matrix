@@ -6,4 +6,9 @@
   "style.matrix.lock": {"icon":"󰌾","label":"Lluvia al bloquear","description":"Deriva el lock de Omarchy y le pone la lluvia detras","checked":"omarchy-matrix status --is lock","action":"omarchy-matrix lock toggle"},
   "style.matrix.boot": {"icon":"󰜉","label":"Arranque Matrix","description":"La imagen de antes del login (Plymouth). Pide contrasena.","checked":"omarchy-matrix status --is boot","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix boot toggle'"},
   "style.matrix.doctor": {"icon":"󰗠","label":"Revisar el pack","description":"Vuelve a afirmarlo todo tras un omarchy refresh shell","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix doctor'"},
+  // Se reusa el id de Omarchy para pisar su accion: la suya es
+  // `omarchy-launch-screensaver force`, y ese force salta el flag
+  // screensaver-off, asi que pedirlo desde el menu sacaba el suyo con efectos al
+  // azar. Con la pieza apagada, omarchy-matrix cae al de Omarchy igualmente.
+  "system.screensaver": {"action":"omarchy-matrix screensaver show"},
   // <<< omarchy-matrix

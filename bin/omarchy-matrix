@@ -245,6 +245,7 @@ Uso: omarchy-matrix <comando>
   on | off                            Enciende o apaga el pack entero
   wallpaper|screensaver|lock|boot on|off|toggle
                                       Pieza a pieza
+  screensaver show                    Sacarlo ahora, sin esperar al idle
   status [--is <pieza>] [--json]      Que esta encendido
   doctor                              Vuelve a afirmarlo todo
   suspend                             Aparta el pack sin olvidar tus ajustes
@@ -269,6 +270,19 @@ suspend) cmd_suspend ;;
 wallpaper | screensaver | lock | boot)
   accion="${1:-toggle}"
   case "$accion" in
+  show)
+    # Lo llama la entrada de menu de Omarchy (SUPER -> System -> Screensaver),
+    # que de fabrica corre `omarchy-launch-screensaver force` y ese `force` se
+    # salta el flag screensaver-off a proposito. Sin esto, pedirlo desde el menu
+    # sacaba el de Omarchy con efectos al azar aunque la pieza estuviera en ✓.
+    [[ $comando == "screensaver" ]] || fail "'show' solo vale para screensaver"
+    if [[ $(leer screensaver) == "true" ]]; then
+      omarchy-shell matrix screensaver start >/dev/null
+    else
+      omarchy-launch-screensaver force
+    fi
+    exit 0
+    ;;
   on) escribir "$comando" true ;;
   off) escribir "$comando" false ;;
   toggle) [[ $(leer "$comando") == "true" ]] && escribir "$comando" false || escribir "$comando" true ;;
