@@ -102,7 +102,7 @@ la barra:
 
 | | |
 |---|---|
-| `colors.toml` | La paleta. Semántica, no `color0..15`. |
+| `colors.toml` | La paleta. Semántica, no `color0..15`. Incluye los colores del borde de Hyprland, que van por plantilla. |
 | `shell.{bar,menu,launcher,notifications}.toml` | Overrides de sección de la shell: dan relieve a barra y tarjetas, que si no pintan todas del mismo negro. |
 | `backgrounds/` | Los fondos, a 3840×2400. `0-lluvia-viva` es un fotograma del propio shader: sirve de miniatura, de marcador y de respaldo. |
 | `unlock.png`, `preview-unlock.png` | Marca del splash de Plymouth. |
@@ -110,6 +110,26 @@ la barra:
 | `bin/`, `hooks/`, `extensions/` | El CLI, la auto-reparación y las entradas de menú. |
 | `lluvia/` | Las fuentes del shader: `matrix.frag` y el generador del atlas. |
 | `generar-fondos.py`, `generar-marca.py` | Regeneran los PNG. Ninguno es un binario intocable. |
+
+### Sobre los bordes
+
+El tema fija el **color** del borde (`hyprland_active_border`, verde plano) pero no
+su grosor ni el redondeo: `omarchy theme install` **rechaza cualquier `.lua`** de
+un tema clonado de git, porque Lua corre código dentro del compositor. Es una
+decisión de Omarchy, no un fallo. Los bordes quedan con el grosor de fábrica.
+
+Si quieres el marco fino, es tu `~/.config/hypr/looknfeel.lua`:
+
+```lua
+hl.config({
+  general = { border_size = 1 },
+  decoration = {
+    rounding = 2,
+    shadow = { enabled = true, range = 14, color = "rgba(00FF4130)",
+               color_inactive = "rgba(00000000)" },
+  },
+})
+```
 
 ### La paleta
 
