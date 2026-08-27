@@ -263,6 +263,12 @@ Editing `Service.qml` can skip the detour by copying it straight into
 shell`**: hot reloads can leave two instances alive, the old one still answering
 IPC while the new one paints, and the symptom is maddening.
 
+## Contributing
+
+`CLAUDE.md` holds the working agreement for this repo: the rules, the two-clone
+workflow, and a list of traps that each cost real debugging time. Read it before
+changing anything — several of them are invisible from the code.
+
 ## Credits
 
 The rain shader started from [`matrix.frag` in
