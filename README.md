@@ -21,6 +21,11 @@ does not fit inside an Omarchy theme:
 ~/.config/omarchy/themes/matrix/install.sh
 ```
 
+That script is the only supported way in. `omarchy plugin add <this repo>` looks
+like it should work — the manifest is at the root — but it installs the whole
+repository as the plugin and skips the CLI, the hooks and the menu, which is
+most of the pack.
+
 The desktop rain is one more background in the carousel, `0-live-rain`.
 `omarchy-matrix wallpaper on` selects it for you. Mind that `omarchy theme set`
 rotates to the theme's next background, so re-applying the theme takes you off

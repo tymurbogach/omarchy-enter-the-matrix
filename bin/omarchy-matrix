@@ -160,7 +160,10 @@ sync_plugin() {
   fi
   plugin_known "$PLUGIN_ID" || {
     echo "omarchy-matrix: the $PLUGIN_ID plugin is not installed" >&2
-    echo "  install it with: omarchy plugin add https://github.com/tymurbogach/omarchy-matrix --enable --yes" >&2
+    # NOT `omarchy plugin add <repo-url>`: that would install the whole repo as
+    # the plugin, bypassing the CLI, the hooks and the menu. install.sh copies in
+    # the five files the plugin actually needs. It is the only supported path.
+    echo "  install it with: ~/.config/omarchy/themes/matrix/install.sh" >&2
     return 1
   }
 
