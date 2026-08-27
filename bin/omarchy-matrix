@@ -1,0 +1,260 @@
+#!/bin/bash
+
+# El interruptor del pack Matrix. Cada pieza se enciende y se apaga por separado.
+#
+#   omarchy-matrix on | off
+#   omarchy-matrix wallpaper|screensaver|lock|boot on|off|toggle
+#   omarchy-matrix status [--is <pieza>] [--json]
+#   omarchy-matrix doctor
+#
+# El estado vive en ~/.config/omarchy/matrix.json, que es un archivo nuestro.
+# Deliberadamente NO va en shell.json: `omarchy refresh shell` reescribe ese
+# archivo entero y se llevaria los ajustes por delante.
+
+set -euo pipefail
+
+PLUGIN_ID="matrix.rain"
+THEME_SLUG="matrix"
+CONFIG="$HOME/.config/omarchy/matrix.json"
+PLUGINS_DIR="$HOME/.config/omarchy/plugins"
+PIEZAS=(wallpaper screensaver lock boot)
+
+fail() {
+  echo "omarchy-matrix: $*" >&2
+  exit 1
+}
+
+# --- estado -----------------------------------------------------------------
+
+leer() {
+  local pieza="$1"
+  [[ -f $CONFIG ]] || { echo "true"; return; }
+  # `// true` no vale aqui: jq trata false como ausente y `boot: false` volveria
+  # como true. Hay que preguntar por la clave, no por su valor.
+  jq -r --arg k "$pieza" 'if has($k) then .[$k] else true end | tostring' "$CONFIG" 2>/dev/null || echo "true"
+}
+
+escribir() {
+  local pieza="$1" valor="$2" tmp
+  mkdir -p "$(dirname "$CONFIG")"
+  [[ -f $CONFIG ]] || echo '{}' >"$CONFIG"
+  tmp=$(mktemp "$CONFIG.XXXXXX")
+  jq --arg k "$pieza" --argjson v "$valor" '.[$k] = $v' "$CONFIG" >"$tmp" 2>/dev/null ||
+    { rm -f "$tmp"; fail "no se pudo escribir $CONFIG"; }
+  mv "$tmp" "$CONFIG"
+}
+
+# El id del clon del lock lo pone `omarchy plugin clone`: <usuario>.lock. Se
+# descubre en vez de darlo por hecho, porque en otra maquina el usuario es otro.
+lock_clone_id() {
+  local id
+  for id in "$PLUGINS_DIR"/*.lock; do
+    [[ -d $id ]] || continue
+    jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$id/manifest.json" >/dev/null 2>&1 || continue
+    jq -r '.id' "$id/manifest.json"
+    return 0
+  done
+  return 1
+}
+
+plugin_habilitado() {
+  omarchy-plugin-list --json 2>/dev/null |
+    jq -e --arg id "$1" 'any(.[]; .id == $id and .enabled)' >/dev/null 2>&1
+}
+
+plugin_existe() {
+  omarchy-plugin-list --json 2>/dev/null |
+    jq -e --arg id "$1" 'any(.[]; .id == $id)' >/dev/null 2>&1
+}
+
+avisar_shell() {
+  omarchy-shell matrix refresh >/dev/null 2>&1 || true
+}
+
+# --- piezas -----------------------------------------------------------------
+
+# El plugin hace falta si alguna de sus dos capas esta encendida.
+sincronizar_plugin() {
+  local quiere="false"
+  [[ $(leer wallpaper) == "true" || $(leer screensaver) == "true" ]] && quiere="true"
+
+  if ! plugin_existe "$PLUGIN_ID"; then
+    omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+    sleep 0.3
+  fi
+  plugin_existe "$PLUGIN_ID" || {
+    echo "omarchy-matrix: el plugin $PLUGIN_ID no esta instalado" >&2
+    echo "  instalalo con: omarchy plugin add https://github.com/tymurbogach/omarchy-matrix --enable --yes" >&2
+    return 1
+  }
+
+  if [[ $quiere == "true" ]]; then
+    plugin_habilitado "$PLUGIN_ID" || omarchy-plugin-enable "$PLUGIN_ID" >/dev/null
+  else
+    ! plugin_habilitado "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
+  fi
+}
+
+aplicar_wallpaper() { sincronizar_plugin && avisar_shell; }
+
+# Con el flag puesto, omarchy-launch-screensaver sale solo y no abre la terminal
+# con ttfx: el salvapantallas pasa a dibujarlo nuestro plugin, que es el mismo
+# shader que el fondo y que el lock.
+sincronizar_screensaver() {
+  if [[ $(leer screensaver) == "true" ]]; then
+    omarchy-toggle screensaver-off on
+  else
+    omarchy-toggle screensaver-off off
+  fi
+}
+
+aplicar_screensaver() {
+  sincronizar_screensaver
+  sincronizar_plugin && avisar_shell
+}
+
+aplicar_lock() {
+  local id
+  if [[ $(leer lock) == "true" ]]; then
+    "$(dirname "${BASH_SOURCE[0]}")/derivar-lock.py" || return 1
+  else
+    if id=$(lock_clone_id); then
+      omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
+        omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+      echo "Lock devuelto al de Omarchy"
+    fi
+  fi
+}
+
+aplicar_boot() {
+  # La imagen de arranque, antes del login. Ya es nativa de Omarchy; aqui solo
+  # se expone como una pieza mas. Pide sudo, asi que nunca se hace sola desde un
+  # hook: solo cuando la pides tu.
+  if [[ $(leer boot) == "true" ]]; then
+    omarchy-plymouth-set-by-theme "$THEME_SLUG"
+  else
+    omarchy-plymouth-reset
+  fi
+}
+
+aplicar() {
+  case "$1" in
+  wallpaper) aplicar_wallpaper ;;
+  screensaver) aplicar_screensaver ;;
+  lock) aplicar_lock ;;
+  boot) aplicar_boot ;;
+  esac
+}
+
+# --- comandos ---------------------------------------------------------------
+
+cmd_status() {
+  local formato="texto" consulta="" pieza
+  while (($# > 0)); do
+    case "$1" in
+    --json) formato="json"; shift ;;
+    --is) consulta="${2:-}"; shift 2 ;;
+    *) fail "opcion desconocida: $1" ;;
+    esac
+  done
+
+  if [[ -n $consulta ]]; then
+    [[ " ${PIEZAS[*]} " == *" $consulta "* ]] || fail "pieza desconocida: $consulta"
+    [[ $(leer "$consulta") == "true" ]]
+    return
+  fi
+
+  if [[ $formato == "json" ]]; then
+    jq -n --argjson w "$(leer wallpaper)" --argjson s "$(leer screensaver)" \
+      --argjson l "$(leer lock)" --argjson b "$(leer boot)" \
+      '{wallpaper: $w, screensaver: $s, lock: $l, boot: $b}'
+    return
+  fi
+
+  for pieza in "${PIEZAS[@]}"; do
+    if [[ $(leer "$pieza") == "true" ]]; then
+      printf '  \033[32m✓\033[0m %s\n' "$pieza"
+    else
+      printf '    %s\n' "$pieza"
+    fi
+  done
+  plugin_habilitado "$PLUGIN_ID" ||
+    printf '\n  el plugin %s no esta activo — arreglalo con: omarchy-matrix doctor\n' "$PLUGIN_ID"
+}
+
+cmd_doctor() {
+  # Se vuelve a afirmar todo. Es lo que hay que ejecutar despues de un
+  # `omarchy refresh shell`, que reescribe shell.json y deja el plugin apagado.
+  local pieza fallos=0
+  echo "Revisando el pack Matrix..."
+  sincronizar_screensaver
+  sincronizar_plugin || fallos=1
+  [[ $(leer lock) != "true" ]] || aplicar_lock || fallos=1
+  avisar_shell
+  # `boot` se deja fuera aposta: pide sudo y esto corre desde hooks.
+  cmd_status
+  return $fallos
+}
+
+# Cuando el tema activo deja de ser matrix, el pack se aparta sin tocar
+# matrix.json: al volver a matrix se enciende exactamente lo que tenias.
+#
+# El lock se deja como este a proposito. Apagar el clon dejaria a Omarchy sin
+# ningun lock habilitado (el suyo quedo en disabledPlugins al clonar) y el equipo
+# sin poder bloquearse. Para volver al lock de Omarchy: omarchy-matrix lock off.
+cmd_suspend() {
+  ! plugin_habilitado "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
+  omarchy-toggle screensaver-off off
+}
+
+cmd_todo() {
+  local valor="$1" pieza
+  for pieza in wallpaper screensaver lock; do
+    escribir "$pieza" "$valor"
+  done
+  aplicar_screensaver
+  aplicar_lock
+  cmd_status
+}
+
+uso() {
+  cat <<'USO'
+Uso: omarchy-matrix <comando>
+
+  on | off                            Enciende o apaga el pack entero
+  wallpaper|screensaver|lock|boot on|off|toggle
+                                      Pieza a pieza
+  status [--is <pieza>] [--json]      Que esta encendido
+  doctor                              Vuelve a afirmarlo todo
+  suspend                             Aparta el pack sin olvidar tus ajustes
+
+Piezas:
+  wallpaper    La lluvia como fondo de escritorio (elige el fondo 0-lluvia-viva)
+  screensaver  La lluvia al quedarte quieto, en vez de la terminal de Omarchy
+  lock         La lluvia detras del campo de contrasena al bloquear
+  boot         La imagen de arranque (Plymouth), antes del login. Pide sudo.
+USO
+}
+
+comando="${1:-status}"
+shift || true
+
+case "$comando" in
+on) cmd_todo true ;;
+off) cmd_todo false ;;
+status) cmd_status "$@" ;;
+doctor) cmd_doctor ;;
+suspend) cmd_suspend ;;
+wallpaper | screensaver | lock | boot)
+  accion="${1:-toggle}"
+  case "$accion" in
+  on) escribir "$comando" true ;;
+  off) escribir "$comando" false ;;
+  toggle) [[ $(leer "$comando") == "true" ]] && escribir "$comando" false || escribir "$comando" true ;;
+  *) fail "accion desconocida: $accion (usa on, off o toggle)" ;;
+  esac
+  aplicar "$comando"
+  ;;
+-h | --help | help) uso ;;
+*) uso; exit 1 ;;
+esac
