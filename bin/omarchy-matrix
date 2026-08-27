@@ -215,6 +215,27 @@ apply_screensaver() {
   sync_plugin && nudge_shell
 }
 
+# Swapping the lock plugin has a window -- a second or two -- in which neither
+# handler answers. The journal shows why: while both are momentarily loaded,
+# Quickshell rejects one with "another handler is registered for target lock",
+# and until the survivor finishes registering, `omarchy-shell lock status` says
+# "Target not found.".
+#
+# Nothing has ever locked inside that window here. But Rule 4 is "never leave
+# the machine unable to lock", and "it self-heals in about a second" is not the
+# same statement. So wait for the target to come back, and if it does not, say
+# what to do about it rather than returning success.
+wait_for_lock() {
+  local i
+  for i in $(seq 20); do
+    omarchy-shell lock status 2>/dev/null | jq -e '.passwordPam' >/dev/null 2>&1 && return 0
+    sleep 0.25
+  done
+  echo "omarchy-matrix: the lock is not answering after the swap." >&2
+  echo "  Run 'omarchy restart shell' before locking the screen." >&2
+  return 1
+}
+
 # Handing Omarchy's lock back ALWAYS goes through `plugin remove`, which is what
 # re-enables it (cloneSourceRestores). Merely disabling the clone would leave
 # the session with no lock enabled at all, because cloning put Omarchy's own
@@ -234,8 +255,11 @@ apply_lock() {
     if lock_clone_id >/dev/null; then
       remove_lock_clone
       echo "Handed the lock back to Omarchy"
+    else
+      return 0 # nothing was swapped, nothing to wait for
     fi
   fi
+  wait_for_lock
 }
 
 apply_boot() {
@@ -345,7 +369,13 @@ cmd_doctor() {
 cmd_suspend() {
   ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
   omarchy-toggle screensaver-off off
-  remove_lock_clone
+  if lock_clone_id >/dev/null; then
+    remove_lock_clone
+    # Standing down runs from the theme-set hook, where nobody is watching the
+    # output -- which is exactly when being left without a lock would go
+    # unnoticed. Wait for Omarchy's to answer before saying the job is done.
+    wait_for_lock
+  fi
 }
 
 cmd_all() {
