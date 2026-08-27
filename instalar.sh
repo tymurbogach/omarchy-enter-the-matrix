@@ -136,6 +136,10 @@ sleep 0.5
 
 echo
 "$BIN_DIR/omarchy-matrix" doctor
+# Una vez, para que una instalacion nueva acabe viendo la lluvia. `doctor` no lo
+# hace: se llama desde el hook de theme-set y forzar el fondo en cada cambio de
+# tema seria pelearse con la rotacion de Omarchy.
+"$BIN_DIR/omarchy-matrix" wallpaper on >/dev/null
 
 cat <<'FIN'
 
@@ -145,8 +149,9 @@ Listo.
   omarchy-matrix status           que esta encendido
   SUPER -> Style -> Matrix        los interruptores, con ✓
 
-Para ver la lluvia en el escritorio, elige el fondo 0-lluvia-viva:
-  omarchy theme bg next
+Ojo: `omarchy theme set` rota al siguiente fondo del tema, asi que reaplicar el
+tema te saca de la lluvia. Para volver:
+  omarchy-matrix wallpaper on
 
 El arranque Matrix (la imagen de antes del login) va aparte porque pide
 contrasena:

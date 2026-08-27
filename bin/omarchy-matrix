@@ -95,7 +95,28 @@ sincronizar_plugin() {
   fi
 }
 
-aplicar_wallpaper() { sincronizar_plugin && avisar_shell; }
+# La lluvia de escritorio se elige como un fondo mas del carrusel, asi que
+# encender la pieza sin poner ese fondo no se veria: la pieza quedaria en ✓ y la
+# pantalla igual. Encenderla lo selecciona; apagarla sale de el, porque quedarse
+# en el fotograma estatico se ve exactamente igual que una lluvia congelada.
+#
+# Ojo con `omarchy theme set`: rota al SIGUIENTE fondo del tema, asi que reaplicar
+# el tema te saca de 0-lluvia-viva. Por eso el hook de theme-set no lo fuerza --
+# seria pelearse con Omarchy-- y en su lugar lo hace este interruptor.
+FONDO_VIVO="$HOME/.local/state/omarchy/current/theme/backgrounds/0-lluvia-viva.png"
+
+fondo_actual_es_vivo() {
+  [[ $(readlink -f "$HOME/.local/state/omarchy/current/background" 2>/dev/null) == *0-lluvia-viva.png ]]
+}
+
+aplicar_wallpaper() {
+  if [[ $(leer wallpaper) == "true" ]]; then
+    [[ ! -f $FONDO_VIVO ]] || fondo_actual_es_vivo || omarchy-theme-bg-set "$FONDO_VIVO" >/dev/null
+  elif fondo_actual_es_vivo; then
+    omarchy-theme-bg-next >/dev/null
+  fi
+  sincronizar_plugin && avisar_shell
+}
 
 # Con el flag puesto, omarchy-launch-screensaver sale solo y no abre la terminal
 # con ttfx: el salvapantallas pasa a dibujarlo nuestro plugin, que es el mismo
