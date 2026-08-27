@@ -1,11 +1,12 @@
 #!/bin/bash
-# Hook de omarchy-matrix. Se instala en ~/.config/omarchy/hooks/theme-set.d/matrix
-# y Omarchy lo llama al final de cada `omarchy theme set`, con el slug en $1.
+# omarchy-matrix hook. Installed at ~/.config/omarchy/hooks/theme-set.d/matrix,
+# where Omarchy calls it at the end of every `omarchy theme set`, with the slug
+# as $1.
 #
-# Aqui es donde el pack se enciende "al seleccionar el tema": eliges matrix y
-# vuelve, eliges otro y se aparta. Tambien es la red que recoge el caso de
-# `omarchy refresh shell`, que reescribe shell.json entero y deja el plugin
-# apagado: volver a aplicar el tema lo devuelve.
+# This is what makes the pack come on "just by picking the theme": choose matrix
+# and it returns, choose another and it stands down. It is also the net that
+# catches `omarchy refresh shell`, which rewrites shell.json wholesale and leaves
+# the plugin disabled -- re-applying the theme is the way back.
 
 command -v omarchy-matrix >/dev/null 2>&1 || exit 0
 

@@ -1,11 +1,16 @@
-  // >>> omarchy-matrix — no edites entre estas dos marcas: instalar.sh las reescribe
-  // y desinstalar.sh borra el bloque entero. Todo lo de fuera se respeta.
+  // >>> omarchy-matrix — do not edit between these two markers: install.sh
+  // rewrites them and uninstall.sh deletes the whole block. Anything outside is
+  // left alone.
   //
-  // En ingles y en una palabra: el menu de Omarchy esta en ingles y la columna es
-  // estrecha, asi que una etiqueta larga no cabe. Cada fila es un INTERRUPTOR:
-  // la accion es `toggle` y `checked` pinta el ✓ cuando esa pieza esta encendida.
-  "style.matrix": {"icon":"󰘨","label":"Matrix","aliases":["matrix","rain","lluvia"],"description":"Toggle each piece of the Matrix pack","when":"command -v omarchy-matrix >/dev/null"},
-  "style.matrix.wallpaper": {"icon":"󰸉","label":"Background","description":"Animated rain on the desktop. Selects the 0-lluvia-viva background.","checked":"omarchy-matrix status --is wallpaper","action":"omarchy-matrix wallpaper toggle"},
+  // One word per label: Omarchy's menu column is narrow and a long one does not
+  // fit. Every row is a SWITCH — the action is `toggle` and `checked` draws the
+  // ✓ when that piece is on.
+  //
+  // `checked` asks omarchy-matrix rather than reading the settings file: a piece
+  // can be switched on and still not be in effect, because the pack stands down
+  // when you pick another theme.
+  "style.matrix": {"icon":"󰘨","label":"Matrix","aliases":["matrix","rain"],"description":"Toggle each piece of the Matrix pack","when":"command -v omarchy-matrix >/dev/null"},
+  "style.matrix.wallpaper": {"icon":"󰸉","label":"Background","description":"Animated rain on the desktop. Selects the 0-live-rain background.","checked":"omarchy-matrix status --is wallpaper","action":"omarchy-matrix wallpaper toggle"},
   "style.matrix.screensaver": {"icon":"󱄄","label":"Screensaver","description":"Rain when idle, instead of Omarchy's terminal screensaver","checked":"omarchy-matrix status --is screensaver","action":"omarchy-matrix screensaver toggle"},
   "style.matrix.lock": {"icon":"󰌾","label":"Lock","description":"Rain behind the password field. Derives a clone of Omarchy's lock.","checked":"omarchy-matrix status --is lock","action":"omarchy-matrix lock toggle"},
   "style.matrix.boot": {"icon":"󰜉","label":"Boot Splash","description":"The screen before login (Plymouth). Asks for your password.","checked":"omarchy-matrix status --is boot","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix boot toggle'"},

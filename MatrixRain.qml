@@ -1,31 +1,31 @@
 import QtQuick
 
-// Lluvia digital, en la GPU.
+// Digital rain, on the GPU.
 //
-// Es un unico ShaderEffect a pantalla completa: el trabajo lo hace
-// matrix.frag.qsb y aqui solo se le pasan el reloj, el tamano y los colores.
-// La version anterior de esto dibujaba en un Canvas desde QML y no daba el
-// pego: repintar celda a celda obliga a elegir entre pocos caracteres o
-// quemar CPU, y la estela nunca quedaba bien.
+// It is a single full-screen ShaderEffect: matrix.frag.qsb does the work and
+// all that happens here is handing it the clock, the size and the colours.
+// An earlier version drew into a QML Canvas and never convinced: repainting
+// cell by cell forces a choice between too few characters and burning CPU, and
+// the trail never looked right.
 //
-// El shader viene de bjarneo/quickshell (MIT), con los glifos cambiados por el
-// atlas de katakana reales de ttfx. Ver matrix.frag.
+// The shader comes from bjarneo/quickshell (MIT), with its procedural glyphs
+// swapped for an atlas of the real katakana ttfx uses. See rain/matrix.frag.
 //
-// running=false para el Timer: sin cambios de propiedad el ShaderEffect no
-// vuelve a renderizar, asi que la GPU queda a cero y la ultima imagen se
-// congela en pantalla.
+// running=false stops the clock: with no property changing, the ShaderEffect
+// does not render again, so the GPU drops to zero and the last frame stays
+// frozen on screen.
 
 Item {
   id: root
 
   property bool running: true
-  // Fotogramas por segundo a los que avanza el reloj del shader.
+  // Frames per second at which the shader's clock advances.
   property int fps: 30
-  // Alto de celda en px logicos. 32 es el paso de fila del screensaver real
-  // (64 px nativos en un panel a escala 2); el shader saca el ancho de aqui.
+  // Cell height in logical px. 32 is the row pitch of the real screensaver
+  // (64 native px on a panel at scale 2); the shader derives the width from it.
   property real cellHeight: 32
 
-  // Los de `ttfx matrix`: --highlight-color y --rain-color-gradient.
+  // Straight from `ttfx matrix`: --highlight-color and --rain-color-gradient.
   property color bgColor: "#000000"
   property color headColor: "#dbffdb"
   property color rainA: "#92be92"
@@ -35,7 +35,7 @@ Item {
 
   Image {
     id: atlasImage
-    source: Qt.resolvedUrl("glifos.png")
+    source: Qt.resolvedUrl("glyphs.png")
     visible: false
     smooth: true
   }
@@ -44,10 +44,10 @@ Item {
     anchors.fill: parent
     fragmentShader: Qt.resolvedUrl("matrix.frag.qsb")
 
-    // Los nombres tienen que coincidir con los del bloque uniform del shader.
+    // The names have to match those in the shader's uniform block.
     property real iTime: root.elapsed
-    // `size` y no `vector2d`: es el tipo con el que Qt mapea un vec2 en un
-    // ShaderEffect sin sorpresas.
+    // `size` and not `vector2d`: that is the type Qt maps a vec2 to inside a
+    // ShaderEffect without surprises.
     property size iResolution: Qt.size(width, height)
     property color colBg: root.bgColor
     property color colHead: root.headColor
@@ -57,24 +57,24 @@ Item {
     property variant atlas: atlasImage
   }
 
-  // FrameAnimation y no Timer. Con un Timer el reloj avanzaba (comprobado con
-  // logs: elapsed subia) pero el ShaderEffect no volvia a repintar, asi que la
-  // lluvia salia dibujada y congelada. FrameAnimation va enganchado al bucle de
-  // render, que es justo lo que hace falta para que el fotograma nuevo salga.
+  // FrameAnimation and not Timer. With a Timer the clock did advance (proved
+  // with logs: elapsed kept rising) but the ShaderEffect never repainted, so
+  // the rain came out drawn and frozen. FrameAnimation is wired into the render
+  // loop, which is exactly what it takes for a new frame to appear.
   //
-  // Como corre al refresco del monitor (144 Hz en el externo) y esto es un
-  // fondo, se acumula el tiempo pero solo se publica en `elapsed` a `fps`: el
-  // shader ve 30 pasos por segundo y no 144.
+  // Since it runs at the monitor's refresh rate (144 Hz on the external screen)
+  // and this is a background, time is accumulated but only published to
+  // `elapsed` at `fps`: the shader sees 30 steps per second, not 144.
   FrameAnimation {
-    id: reloj
+    id: clock
     running: root.running
-    property real acumulado: 0
+    property real accumulated: 0
     onTriggered: {
-      acumulado += frameTime
-      var paso = 1 / Math.max(1, root.fps)
-      if (acumulado >= paso) {
-        root.elapsed += acumulado
-        acumulado = 0
+      accumulated += frameTime
+      var step = 1 / Math.max(1, root.fps)
+      if (accumulated >= step) {
+        root.elapsed += accumulated
+        accumulated = 0
       }
     }
   }

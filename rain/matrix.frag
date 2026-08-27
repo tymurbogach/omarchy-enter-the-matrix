@@ -1,17 +1,17 @@
 #version 440
 
-// Lluvia digital del tema matrix.
+// Digital rain for the matrix theme.
 //
-// Partiendo del shader `matrix.frag` de bjarneo/quickshell (MIT,
-// https://github.com/bjarneo/quickshell): de ahi vienen la estructura de
-// celdas, el desfase por columna hasheado del id y las lineas de barrido.
+// Started from bjarneo/quickshell's `matrix.frag` (MIT,
+// https://github.com/bjarneo/quickshell): the cell structure, the per-column
+// offset hashed from the id and the scanlines all come from there.
 //
-// Cambiado respecto al original: aquel dibujaba bloques de 3x5 pixeles
-// procedurales. Aqui se muestrea un atlas con los katakana de media anchura
-// reales, que son exactamente los de `ttfx matrix --rain-symbols` -- el efecto
-// del screensaver de Omarchy. Los colores tambien son los suyos
-// (--highlight-color y --rain-color-gradient), y la cabeza va ABAJO, que es
-// donde ttfx la pone ("color for the bottom of the rain column").
+// Changed from the original: that one drew procedural 3x5 pixel blocks. Here an
+// atlas of the real halfwidth katakana is sampled instead -- exactly the ones
+// `ttfx matrix --rain-symbols` uses, the effect behind Omarchy's screensaver.
+// The colours are its own too (--highlight-color and --rain-color-gradient),
+// and the head goes at the BOTTOM, which is where ttfx puts it ("color for the
+// bottom of the rain column").
 
 layout(location = 0) in vec2 qt_TexCoord0;
 layout(location = 0) out vec4 fragColor;
@@ -45,15 +45,15 @@ float hash12(vec2 p) {
 void main() {
     vec2 frag = qt_TexCoord0 * iResolution;
 
-    // La celda del terminal es mucho mas alta que ancha; 0.47 es la relacion
-    // medida sobre una captura del screensaver real (29x64 px nativos).
+    // A terminal cell is far taller than it is wide; 0.47 is the ratio measured
+    // off a screenshot of the real screensaver (29x64 native px).
     float cellW = cellH * 0.47;
     vec2 cell = vec2(cellW, cellH);
     vec2 cellId = floor(frag / cell);
     vec2 cellUV = fract(frag / cell);
 
-    // Rasgos por columna, hasheados del id: velocidad, desfase y longitud de
-    // reguero distintas hacen que las columnas vecinas no vayan a la vez.
+    // Per-column traits, hashed from the id: different speed, offset and streak
+    // length are what stop neighbouring columns falling in step.
     float speed = 5.0 + hash11(cellId.x * 1.31 + 0.7) * 13.0;
     float phase = hash11(cellId.x * 7.13 + 4.7) * 400.0;
     float tail = 16.0 + hash11(cellId.x * 2.91 + 1.7) * 22.0;
@@ -61,31 +61,31 @@ void main() {
     float rowsTotal = iResolution.y / cellH + tail;
     float headRow = mod(iTime * speed + phase, rowsTotal);
 
-    // Positivo = por encima de la cabeza, que es donde va el reguero.
+    // Positive = above the head, which is where the trail goes.
     float above = headRow - cellId.y;
     float vis = step(0.0, above) * step(above, tail);
     float t = clamp(above / tail, 0.0, 1.0);
 
-    // ttfx no apaga el reguero hasta desaparecer: cada caracter lleva un verde
-    // al azar del degradado y se queda. El suelo de 0.30 conserva ese cuerpo y
-    // deja que se siga viendo caer.
+    // ttfx never fades the trail to nothing: each character takes a random
+    // green from the gradient and stays. The floor of 0.30 keeps that body while
+    // still letting the fall read.
     float bright = mix(1.0, 0.30, pow(t, 0.75)) * vis;
 
-    // El glifo se resortea cada 250 ms, desfasado por celda para que no
-    // parpadeen todos a la vez.
+    // The glyph is redrawn every 250 ms, offset per cell so they do not all
+    // flicker at once.
     float tick = floor(iTime * 4.0 + hash12(cellId * 1.7) * 8.0);
     float gi = floor(hash12(vec2(cellId.x * 3.1 + cellId.y * 7.7, tick)) * GLYPHS);
     vec2 slot = vec2(mod(gi, ATLAS_COLS), floor(gi / ATLAS_COLS));
     float a = texture(atlas, (slot + cellUV) / vec2(ATLAS_COLS, ATLAS_ROWS)).a;
 
-    // Color del caracter: un punto al azar del degradado, fijo por celda.
+    // Character colour: a random point on the gradient, fixed per cell.
     vec3 rain = mix(colRainA.rgb, colRainB.rgb, hash12(cellId + 3.7));
     float isHead = step(above, 0.5) * vis;
     vec3 glyph = mix(rain, colHead.rgb, isHead);
 
     vec3 col = colBg.rgb + glyph * a * bright;
 
-    // Barrido suave, para que lea como salida de un CRT.
+    // A gentle scanline, so it reads like the output of a CRT.
     col *= 0.93 + 0.07 * sin(frag.y * 3.14159);
 
     fragColor = vec4(col, 1.0) * qt_Opacity;

@@ -1,35 +1,35 @@
-# Matrix — pack para Omarchy 4
+# Matrix — a pack for Omarchy 4
 
-Verde fósforo sobre negro. Un tema normal de Omarchy y, encima, la misma lluvia
-digital en el escritorio, en el salvapantallas y al bloquear.
+Phosphor green on black. A normal Omarchy theme and, on top of it, the same
+digital rain on the desktop, as the screensaver, and behind the lock.
 
-![vista previa](preview.png)
+![preview](preview.png)
 
-## Instalar
+## Install
 
-**El tema.** Colores, fondos y splash de arranque. No depende de nada más:
+**The theme.** Colours, backgrounds and the boot mark. Depends on nothing else:
 
 ```bash
 omarchy theme install https://github.com/tymurbogach/omarchy-matrix
 omarchy theme set matrix
 ```
 
-**La lluvia.** Es un plugin de la shell y va aparte, porque una animación no
-cabe dentro de un tema de Omarchy:
+**The rain.** It is a shell plugin and installs separately, because an animation
+does not fit inside an Omarchy theme:
 
 ```bash
-~/.config/omarchy/themes/matrix/instalar.sh
+~/.config/omarchy/themes/matrix/install.sh
 ```
 
-La lluvia de escritorio es un fondo más del carrusel, `0-lluvia-viva`.
-`omarchy-matrix wallpaper on` lo selecciona por ti. Ojo: `omarchy theme set` rota
-al siguiente fondo del tema, así que reaplicar el tema te saca de la lluvia —
-vuelve con ese mismo comando o desde el menú.
+The desktop rain is one more background in the carousel, `0-live-rain`.
+`omarchy-matrix wallpaper on` selects it for you. Mind that `omarchy theme set`
+rotates to the theme's next background, so re-applying the theme takes you off
+the rain — come back with that same command, or from the menu.
 
-## Las piezas
+## The pieces
 
-Cada una se enciende y se apaga por separado, desde el menú
-(**SUPER → Style → Matrix**, con ✓) o desde la línea de comandos:
+Each one switches on and off separately, from the menu
+(**SUPER → Style → Matrix**, with ✓) or from the command line:
 
 ```bash
 omarchy-matrix status
@@ -37,50 +37,50 @@ omarchy-matrix wallpaper off
 omarchy-matrix boot on
 ```
 
-| Pieza | Qué es | Cómo está hecha |
+| Piece | What it is | How it is done |
 |---|---|---|
-| `wallpaper` | La lluvia de fondo de escritorio | Capa propia del plugin en `WlrLayer.Bottom`: por encima del fondo, por debajo de toda ventana, con `mask: Region {}` para que los clics lleguen al escritorio. **El fondo de Omarchy no se toca.** Se ve al tener elegido el fondo `0-lluvia-viva`. Con cargador llueve siempre; con batería, solo mientras no haya ventanas en el espacio activo. |
-| `screensaver` | La lluvia al quedarte quieto, igual que el de Omarchy: esconde el puntero, el ratón no lo cierra y sale con cualquier tecla | La misma capa en `WlrLayer.Overlay`, con el tiempo de `idle.screensaver` de tu `shell.json`. Pone el flag nativo `screensaver-off` para que Omarchy no abra además su salvapantallas en terminal. |
-| `lock` | La lluvia al bloquear | Lo único que sustituye un plugin de Omarchy. Ver abajo. |
-| `boot` | La pantalla de antes del login, tecleando las cuatro frases de la película | El otro derivado. Ver abajo. Pide contraseña y reconstruye el initramfs, así que nunca se aplica solo. |
+| `wallpaper` | Rain on the desktop | A layer of the plugin's own at `WlrLayer.Bottom`: above the wallpaper, below every window, with `mask: Region {}` so clicks reach the desktop. **Omarchy's background is not touched.** Shows while the `0-live-rain` background is selected. On mains it always rains; on battery, only while no window is on the active workspace. |
+| `screensaver` | Rain when you go idle, behaving like Omarchy's own: hides the pointer, the mouse does not dismiss it, any key does | The same layer at `WlrLayer.Overlay`, using the `idle.screensaver` timing from your `shell.json`. It sets the native `screensaver-off` flag so Omarchy does not also open its terminal screensaver. |
+| `lock` | Rain behind the password field | One of the two derived pieces. See below. |
+| `boot` | The screen before login, typing out the four lines from the film | The other derived piece. See below. Needs a password and rebuilds the initramfs, so it never applies on its own. |
 
-Los tres primeros son **el mismo shader**, instanciado tres veces. Eso es a
-propósito: antes el salvapantallas era `ttfx` dentro de un terminal —otro
-programa dibujando otra lluvia— y no había manera de que los tres cuadrasen.
+The first three are **the same shader**, instantiated three times. That is the
+whole point: the screensaver used to be `ttfx` inside a terminal — a different
+program drawing a different rain — and there was no way to make all three match.
 
-Los dos últimos son lo mismo por otro lado: `lock` y `boot` son las dos piezas
-que Omarchy no deja configurar, y las dos se resuelven **derivando** su código en
-vez de empaquetar una copia.
+The last two are the same problem solved the same way: `lock` and `boot` are the
+two pieces Omarchy gives no way to configure, and both are handled by
+**deriving** its code rather than shipping a copy.
 
-## El lock
+## The lock
 
-Una `WlSessionLock` es exclusiva por protocolo: nada puede dibujar dentro de su
-superficie salvo ella misma. Así que para llover ahí hay que sustituir el plugin
-del bloqueo, y no hay otra.
+A `WlSessionLock` is exclusive by protocol: nothing may draw inside its surface
+but itself. So raining there means replacing the lock plugin, and there is no
+way around that.
 
-Lo que **no** se hace es publicar una copia congelada. Dentro de ese plugin están
-los flujos de PAM y de huella, y la última copia que quieres es una vieja.
-`bin/derivar-lock.py` parte siempre del `LockView.qml` de **tu** Omarchy y le
-aplica un cambio mínimo: quita el wallpaper desenfocado y pone la lluvia. Las
-otras ~200 líneas son las tuyas. Un hook `post-update.d` lo vuelve a derivar
-después de cada `omarchy update`, así que los arreglos de Omarchy siguen
-llegando.
+What is **not** done is publishing a frozen copy. That plugin carries the PAM
+and fingerprint flows, and an old copy is the last one you want.
+`bin/derive-lock.py` always starts from **your** Omarchy's `LockView.qml` and
+applies one minimal change: it drops the blurred wallpaper and puts the rain
+there. The other ~200 lines are yours. A `post-update.d` hook derives it again
+after every `omarchy update`, so Omarchy's fixes keep arriving.
 
-Si el bloque a sustituir no aparece exactamente una vez, el script **aborta y te
-lo dice** en vez de dejarlo a medias.
+If the block to replace does not appear exactly once, the script **aborts and
+tells you** rather than leaving things half done.
 
-Pruébalo sin bloquearte: `omarchy-shell lock preview`. Para volver al de
-Omarchy: `omarchy-matrix lock off`.
+Try it without locking yourself out: `omarchy-shell lock preview`. To go back to
+Omarchy's: `omarchy-matrix lock off`.
 
-## El arranque
+## The boot splash
 
-El splash de Omarchy es también un tema de script (`omarchy.script`,
-`ModuleName=script`), y lo que `omarchy plymouth set-by-theme` deja cambiar son
-tres cosas: color de fondo, color de texto y **un PNG estático**. Por esa puerta
-no entra una animación.
+Omarchy's splash is a script theme too (`omarchy.script`, `ModuleName=script`),
+and what `omarchy plymouth set-by-theme` lets a theme change is three things:
+background colour, text colour and **one still PNG**. No animation fits through
+that door.
 
-`bin/derivar-plymouth.py` parte del `omarchy.script` de tu máquina y le sustituye
-el logo estático por las cuatro frases del principio de la película, tecleadas:
+`bin/derive-plymouth.py` starts from your machine's `omarchy.script` and
+replaces the static logo with the four lines from the start of the film, typed
+out:
 
 ```
 Wake up, Neo...
@@ -89,97 +89,111 @@ Follow the white rabbit.
 Knock, knock, Neo.
 ```
 
-El diálogo de contraseña, la barra de progreso y los mensajes de arranque son los
-de Omarchy, intactos. Se instala como tema **aparte** en
-`/usr/share/plymouth/themes/omarchy-matrix/`, sin tocar el suyo: volver es
-`omarchy plymouth reset`. El hook `post-update.d` lo vuelve a derivar tras cada
-`omarchy update`.
+The password dialog, the progress bar and the boot messages are Omarchy's,
+untouched. It installs as a **separate** theme at
+`/usr/share/plymouth/themes/omarchy-matrix/`, never overwriting its own: going
+back is `omarchy plymouth reset`. The `post-update.d` hook derives it again
+after every `omarchy update`.
 
-Tres detalles que explican el diseño:
+Three details that explain the design:
 
-- **La tabla de pasos se genera en Python** y llega al `.script` con cada texto ya
-  literal, así que el script no necesita `SubString`, `Length` ni concatenar
-  cadenas — código que no se puede probar sin arrancar la máquina.
-- **El cuerpo de la letra se calcula al derivar**, desde el ancho *nativo* del
-  panel. Plymouth dibuja a resolución nativa, no a la lógica: un cuerpo pensado
-  para 1080p sale diminuto en una pantalla de 3072 px.
-- **`logo.png` se sigue cargando aunque invisible.** Su caja es la que usa
-  `omarchy.script` para colocar el campo de contraseña, y no queremos moverlo.
+- **The step table is generated in Python** and reaches the `.script` with every
+  text already literal, so the script needs no `SubString`, no `Length` and no
+  string concatenation — code you cannot test without booting the machine.
+- **The point size is worked out at derive time**, from the panel's *native*
+  width. Plymouth draws at native resolution, not the logical one: a size chosen
+  for 1080p comes out tiny on a 3072 px screen.
+- **`logo.png` is still loaded, just invisible.** Its box is what
+  `omarchy.script` uses to place the password field, and we do not want to move
+  it.
 
-> **Si tu disco está cifrado**, Plymouth es además quien te pide la frase de
-> paso. Por eso el parche es aditivo y no toca ningún callback de contraseña. Si
-> algo fuera mal: `omarchy plymouth reset` desde el sistema, o `plymouth.enable=0`
-> en la línea del kernel desde el gestor de arranque.
+> **If your disk is encrypted**, Plymouth is also what asks for your passphrase.
+> That is why the patch is additive and touches none of the password callbacks.
+> If anything goes wrong: `omarchy plymouth reset` from a running system, or
+> `plymouth.enable=0` on the kernel line from your boot loader.
 
-## Qué se toca de tu sistema
+## What it touches on your system
 
-Todo lo que instala el pack son archivos suyos o archivos que Omarchy deja para
-extender. **Nada** de `/usr/share/omarchy/`, ni `hyprland.lua`, ni el fondo, ni
-la barra:
+Everything the pack installs is either its own file or a file Omarchy leaves for
+extending. **Nothing** under `/usr/share/omarchy/`, nor `hyprland.lua`, nor the
+background, nor the bar:
 
 ```
-~/.config/omarchy/plugins/matrix.rain/     el plugin
-~/.config/omarchy/matrix.json              qué piezas están encendidas
+~/.config/omarchy/plugins/matrix.rain/     the plugin
+~/.config/omarchy/matrix.json              which pieces are on
 ~/.config/omarchy/hooks/{theme-set,post-update}.d/matrix
-~/.config/omarchy/extensions/omarchy-menu.jsonc   (bloque entre marcas)
-~/.local/bin/{omarchy-matrix,derivar-lock.py,derivar-plymouth.py}
-~/.config/omarchy/plugins/<usuario>.lock   solo si `lock` está encendido
-/usr/share/plymouth/themes/omarchy-matrix/ solo si `boot` está encendido
+~/.config/omarchy/extensions/omarchy-menu.jsonc   (block between markers)
+~/.local/bin/{omarchy-matrix,derive-lock.py,derive-plymouth.py}
+~/.config/omarchy/plugins/<username>.lock  only while `lock` is on
+/usr/share/plymouth/themes/omarchy-matrix/ only while `boot` is on
 ```
 
-Los dos últimos son los derivados, y ninguno pisa al original: el
-`omarchy.lock` y el tema `omarchy` de Plymouth se quedan donde estaban.
+The last two are the derived pieces, and neither overwrites the original:
+`omarchy.lock` and Plymouth's `omarchy` theme stay where they were.
 
-`./desinstalar.sh` lo quita todo y deja el tema funcionando como cualquier otro.
+`./uninstall.sh` removes all of it, boot splash included, and leaves the theme
+working like any other.
 
-> **`omarchy refresh shell` apaga la lluvia.** Ese comando reescribe
-> `shell.json` entero, y ahí es donde Omarchy guarda qué plugins están activos.
-> No hay hook posterior al que engancharse. Se recupera con `omarchy-matrix
-> doctor`, o volviendo a aplicar el tema — el hook de `theme-set` lo hace solo.
+> **With "stay awake" on, the screensaver never comes up.** The pack respects
+> the same switch Omarchy's idle service does
+> (`~/.local/state/omarchy/indicators/stay-awake`): with it set there is no
+> screensaver, neither ours nor theirs.
 
-## Automático
+> **Careful with Omarchy's own toggle.** The `screensaver` piece uses the native
+> `screensaver-off` flag, so `omarchy toggle screensaver` (SUPER → Toggle →
+> Screensaver) turns it off underneath and `matrix.json` still says yes.
+> `omarchy-matrix doctor` puts them back in agreement.
 
-| Cuándo | Qué pasa |
+> **`omarchy refresh shell` turns the rain off.** That command rewrites
+> `shell.json` wholesale, and that is where Omarchy records which plugins are
+> enabled. There is no hook to attach to afterwards. Recover with
+> `omarchy-matrix doctor`, or by re-applying the theme — the `theme-set` hook
+> does it for you.
+
+## Automatic
+
+| When | What happens |
 |---|---|
-| `omarchy theme set matrix` | Se enciende lo que tuvieras encendido |
-| `omarchy theme set <otro>` | El pack se aparta sin olvidar tus ajustes |
-| `omarchy update` | Se vuelve a derivar el lock del recién actualizado |
+| `omarchy theme set matrix` | Whatever you had on comes back |
+| `omarchy theme set <other>` | The pack stands down, keeping your settings |
+| `omarchy update` | The lock and the boot splash are derived again from the updated sources |
 
-Apartarse quiere decir: el plugin se desactiva, vuelve el salvapantallas de
-Omarchy y **se borra el clon del lock** — con `omarchy plugin remove`, que es
-quien reactiva el de Omarchy; desactivarlo a secas te dejaría sin ningún lock
-habilitado. Tus ajustes no se tocan: al volver a matrix vuelve exactamente lo que
-tenías.
+Standing down means: the plugin is disabled, Omarchy's screensaver returns, and
+**the lock clone is deleted** — with `omarchy plugin remove`, which is what
+re-enables Omarchy's own; merely disabling it would leave you with no lock
+enabled at all. Your settings are untouched: going back to matrix restores
+exactly what you had.
 
-`boot` es la excepción y no se aparta: el splash de Plymouth es del sistema, no
-del tema.
+`boot` is the exception and does not stand down: the Plymouth splash belongs to
+the system, not to the theme. Its ✓ asks the system which theme is really
+installed, so it never lies either.
 
-Mientras el pack está apartado, el menú **no marca nada** y `omarchy-matrix
-status` dice por qué. El ✓ significa "esto está pasando ahora", no "lo tienes
-configurado".
+While the pack is stood down, the menu **ticks nothing** and `omarchy-matrix
+status` says why. The ✓ means "this is happening now", not "you have it
+configured".
 
-## Qué lleva dentro
+## What is inside
 
 | | |
 |---|---|
-| `colors.toml` | La paleta. Semántica, no `color0..15`. Incluye los colores del borde de Hyprland, que van por plantilla. |
-| `shell.{bar,menu,launcher,notifications}.toml` | Overrides de sección de la shell: dan relieve a barra y tarjetas, que si no pintan todas del mismo negro. |
-| `backgrounds/` | Los fondos, a 3840×2400. `0-lluvia-viva` es un fotograma del propio shader: sirve de miniatura, de marcador y de respaldo. |
-| `unlock.png`, `preview-unlock.png` | La marca estática del arranque, para quien instale el tema sin el pack. Con el pack, `logo.png` queda invisible y las frases se teclean. |
-| `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glifos.png` | El plugin. |
-| `bin/` | `omarchy-matrix` (el CLI de los interruptores) y los dos derivadores, `derivar-lock.py` y `derivar-plymouth.py`. |
-| `hooks/`, `extensions/` | La auto-reparación al cambiar de tema o actualizar, y las entradas de menú. |
-| `lluvia/` | Las fuentes del shader: `matrix.frag` y el generador del atlas. |
-| `generar-fondos.py`, `generar-marca.py` | Regeneran los PNG. Ninguno es un binario intocable. |
+| `colors.toml` | The palette. Semantic, not `color0..15`. Includes the Hyprland border colours, which go through the template. |
+| `shell.{bar,menu,launcher,notifications}.toml` | Shell section overrides: they give the bar and the cards some relief, which otherwise all paint the same black. |
+| `backgrounds/` | The backgrounds, at 3840×2400. `0-live-rain` is a still frame of the shader itself: it doubles as thumbnail, as marker and as fallback. |
+| `unlock.png`, `preview-unlock.png` | The static boot mark, for anyone installing the theme without the pack. With the pack, `logo.png` goes invisible and the lines are typed instead. |
+| `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glyphs.png` | The plugin. |
+| `bin/` | `omarchy-matrix` (the switch CLI) and the two derivers, `derive-lock.py` and `derive-plymouth.py`. |
+| `hooks/`, `extensions/` | The self-repair on theme change and update, and the menu entries. |
+| `rain/` | The shader sources: `matrix.frag` and the atlas generator. |
+| `generate-backgrounds.py`, `generate-brand.py` | Regenerate the PNGs. Neither is an untouchable binary. |
 
-### Sobre los bordes
+### About the borders
 
-El tema fija el **color** del borde (`hyprland_active_border`, verde plano) pero no
-su grosor ni el redondeo: `omarchy theme install` **rechaza cualquier `.lua`** de
-un tema clonado de git, porque Lua corre código dentro del compositor. Es una
-decisión de Omarchy, no un fallo. Los bordes quedan con el grosor de fábrica.
+The theme sets the border **colour** (`hyprland_active_border`, flat green) but
+not its thickness or the rounding: `omarchy theme install` **rejects any `.lua`**
+from a theme that came from git, because Lua runs code inside the compositor.
+That is Omarchy's decision, not a bug. Borders keep the stock thickness.
 
-Si quieres el marco fino, es tu `~/.config/hypr/looknfeel.lua`:
+If you want the thin frame, it belongs in your `~/.config/hypr/looknfeel.lua`:
 
 ```lua
 hl.config({
@@ -192,45 +206,71 @@ hl.config({
 })
 ```
 
-### La paleta
+### The palette
 
-Todo es verde salvo el rojo, que se reserva para errores. Lo que la separa de
-un tema verde cualquiera es que cada slot ANSI ocupa un **peldaño distinto de
-luminosidad**, así que en `nvim` o `bat` los roles sintácticos se distinguen en
-vez de fundirse en una mancha. Contraste mínimo contra el fondo: 4.86.
+Everything is green except the red, which is reserved for errors. What sets it
+apart from any other green theme is that each ANSI slot sits on a **different
+rung of luminance**, so in `nvim` or `bat` the syntactic roles stay apart instead
+of blurring into one smear. Minimum contrast against the background: 4.86.
 
 | | | |
 |---|---|---|
-| `yellow` | `#C6FF57` | lima · 17.1 |
-| `cyan` | `#7BFFD4` | menta · 16.4 |
-| `green` | `#00FF41` | el héroe · 14.8 |
+| `yellow` | `#C6FF57` | lime · 17.1 |
+| `cyan` | `#7BFFD4` | mint · 16.4 |
+| `green` | `#00FF41` | the hero · 14.8 |
 | `orange` | `#8FE03A` | · 12.4 |
 | `magenta` | `#35D68F` | jade · 10.7 |
-| `blue` | `#12A96A` | esmeralda · 6.6 |
-| `red` | `#F0263F` | errores · 4.9 |
+| `blue` | `#12A96A` | emerald · 6.6 |
+| `red` | `#F0263F` | errors · 4.9 |
 
-### Regenerar
+### Regenerating
 
 ```bash
-./generar-fondos.py                 # los fondos
-./generar-fondos.py --out /tmp/x.png --seed 42 --density 0.7
-./generar-marca.py                  # unlock, preview-unlock y preview
-./lluvia/generar-atlas.py           # el atlas de glifos del shader
-qsb --glsl 100es,120,150 --hlsl 50 --msl 12 \
-    -o matrix.frag.qsb lluvia/matrix.frag    # recompilar el shader
+./generate-backgrounds.py               # the backgrounds
+./generate-backgrounds.py --out /tmp/x.png --seed 42 --density 0.7
+./generate-brand.py                     # unlock, preview-unlock and preview
+./rain/generate-atlas.py                # the shader's glyph atlas
+
+# recompile the shader (qsb is not on PATH; qt6-shadertools puts it here)
+/usr/lib/qt6/bin/qsb --glsl 300es,330 --hlsl 50 --msl 12 \
+    -o matrix.frag.qsb rain/matrix.frag
 ```
 
-Hace falta ImageMagick, `rsvg-convert`, Python 3, la fuente Noto Sans CJK JP y
-`qt6-shadertools` para `qsb`.
+Those `qsb` targets are the ones the shipped `matrix.frag.qsb` was built with —
+GLSL 300 es and 330, HLSL 50, MSL 12. Using different ones silently produces a
+different set of shader variants.
 
-## Créditos
+Needs ImageMagick, `rsvg-convert`, Python 3, the Noto Sans CJK JP font and
+`qt6-shadertools` for `qsb`.
 
-El shader de lluvia parte de [`matrix.frag` de
-bjarneo/quickshell](https://github.com/bjarneo/quickshell) (MIT). Cambia los
-bloques procedurales del original por un atlas con los katakana de media
-anchura reales — que son exactamente los de `ttfx matrix`, el efecto del
-screensaver de Omarchy — y usa sus mismos colores.
+## Working on the pack
 
-## Licencia
+`~/.config/omarchy/themes/matrix` is what `omarchy theme install` puts there and
+it gets regenerated, so editing in it loses the change. Keep a working copy
+elsewhere:
+
+```bash
+git clone https://github.com/tymurbogach/omarchy-matrix ~/dev/omarchy-matrix
+# edit, commit and push there, then:
+cd ~/.config/omarchy/themes/matrix && git pull && ./install.sh
+```
+
+That is a detour, but it is exactly the path anyone installing the pack takes,
+so mistakes surface on your machine rather than on theirs.
+
+Editing `Service.qml` can skip the detour by copying it straight into
+`~/.config/omarchy/plugins/matrix.rain/`, but **finish with `omarchy restart
+shell`**: hot reloads can leave two instances alive, the old one still answering
+IPC while the new one paints, and the symptom is maddening.
+
+## Credits
+
+The rain shader started from [`matrix.frag` in
+bjarneo/quickshell](https://github.com/bjarneo/quickshell) (MIT). It swaps the
+original's procedural blocks for an atlas of the real halfwidth katakana — the
+very ones `ttfx matrix` uses, the effect behind Omarchy's screensaver — and
+keeps its colours.
+
+## Licence
 
 MIT.

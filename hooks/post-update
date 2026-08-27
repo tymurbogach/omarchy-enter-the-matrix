@@ -1,27 +1,27 @@
 #!/bin/bash
-# Hook de omarchy-matrix. Se instala en ~/.config/omarchy/hooks/post-update.d/matrix
-# y Omarchy lo llama durante `omarchy update`, ya con los paquetes nuevos puestos.
+# omarchy-matrix hook. Installed at ~/.config/omarchy/hooks/post-update.d/matrix,
+# where Omarchy calls it during `omarchy update`, once the new packages are in.
 #
-# El unico clon del pack es el del lock, y un clon congelado se queda atras: ahi
-# dentro estan los flujos de PAM y de huella. Se vuelve a derivar del LockView.qml
-# recien actualizado, asi que las correcciones de Omarchy llegan al lock.
+# The pack replaces two things of Omarchy's -- the lock plugin and the Plymouth
+# theme -- and neither ships as a frozen copy: both are derived from the source
+# on this machine. A frozen copy would fall behind, and the lock in particular
+# carries the PAM and fingerprint flows inside it.
 #
-# Si el lock de Omarchy ha cambiado tanto que el parche ya no encaja,
-# derivar-lock.py aborta y avisa en vez de dejarlo a medias.
+# If Omarchy's source has changed enough that a patch no longer fits, the
+# derivers abort and say so instead of leaving things half done.
 
 command -v omarchy-matrix >/dev/null 2>&1 || exit 0
 
-# El arranque tambien se deriva del omarchy.script actualizado, y por lo mismo:
-# una copia congelada se quedaria atras. Solo si lo tienes encendido, y pide sudo
-# (aqui hay terminal, que `omarchy update` es interactivo).
+# The boot splash needs sudo, and there is a terminal here: `omarchy update` is
+# interactive.
 if omarchy-matrix status --is boot 2>/dev/null; then
-  omarchy-matrix boot on || echo "matrix: no se pudo re-derivar el arranque" >&2
+  omarchy-matrix boot on || echo "matrix: could not re-derive the boot splash" >&2
 fi
 
 omarchy-matrix status --is lock 2>/dev/null || exit 0
 
 if ! omarchy-matrix lock on; then
   omarchy-notification-send -g 󱄄 "Matrix" \
-    "El lock de Omarchy ha cambiado y el parche de la lluvia ya no encaja. Lock nativo por ahora." \
+    "Omarchy's lock has changed and the rain patch no longer fits. Native lock for now." \
     2>/dev/null || true
 fi

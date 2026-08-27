@@ -4,7 +4,7 @@
   "name": "Matrix Rain",
   "version": "1.0.0",
   "author": "tymurbogach",
-  "description": "Lluvia digital en GPU para el fondo de escritorio y el salvapantallas. Parte del pack del tema Matrix.",
+  "description": "GPU digital rain for the desktop background and the screensaver. Part of the Matrix theme pack.",
   "kinds": [
     "service"
   ],

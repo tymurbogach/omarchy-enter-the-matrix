@@ -1,6 +1,6 @@
 [bar]
-# La barra baja al vacio absoluto: mas oscura que las ventanas, para que
-# lea como el borde de la pantalla y no como una superficie mas.
+# The bar drops to the absolute void: darker than the windows, so it reads as
+# the edge of the screen rather than as one more surface.
 background       = "#000200"
 background-alpha = 1.0
 text             = "#A8F5BC"

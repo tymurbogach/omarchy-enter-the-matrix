@@ -1,336 +1,366 @@
 #!/bin/bash
 
-# El interruptor del pack Matrix. Cada pieza se enciende y se apaga por separado.
+# The switchboard for the Matrix pack. Each piece turns on and off on its own.
 #
 #   omarchy-matrix on | off
 #   omarchy-matrix wallpaper|screensaver|lock|boot on|off|toggle
-#   omarchy-matrix status [--is <pieza>] [--json]
+#   omarchy-matrix status [--is <piece>] [--json]
 #   omarchy-matrix doctor
 #
-# El estado vive en ~/.config/omarchy/matrix.json, que es un archivo nuestro.
-# Deliberadamente NO va en shell.json: `omarchy refresh shell` reescribe ese
-# archivo entero y se llevaria los ajustes por delante.
+# Settings live in ~/.config/omarchy/matrix.json, a file of our own. They are
+# deliberately NOT in shell.json: `omarchy refresh shell` rewrites that file
+# wholesale and would take them with it.
 
 set -euo pipefail
 
 PLUGIN_ID="matrix.rain"
 THEME_SLUG="matrix"
+PLYMOUTH_THEME="omarchy-matrix"
 CONFIG="$HOME/.config/omarchy/matrix.json"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
-PIEZAS=(wallpaper screensaver lock boot)
+PIECES=(wallpaper screensaver lock boot)
 
 fail() {
   echo "omarchy-matrix: $*" >&2
   exit 1
 }
 
-# --- estado -----------------------------------------------------------------
+# --- state ------------------------------------------------------------------
 
-# Las piezas del escritorio solo estan EN VIGOR mientras matrix sea el tema
-# activo: al elegir otro tema el hook de theme-set llama a `suspend`, que las
-# aparta sin tocar matrix.json. Sin esto, `status` marcaba con ✓ cuatro piezas
-# apagadas de hecho y parecia que el pack estaba roto.
+# The desktop pieces are only IN EFFECT while matrix is the current theme:
+# picking another theme makes the theme-set hook call `suspend`, which stands
+# them down without touching matrix.json. Without this, `status` used to tick
+# four pieces that were in fact off, and the pack looked broken.
 #
-# `boot` es la excepcion: el splash de Plymouth es del sistema, no del tema, y
-# se queda puesto elijas el tema que elijas.
-tema_activo() {
+# `boot` is the exception: the Plymouth splash belongs to the system, not to
+# the theme, and stays put whichever theme you pick.
+current_theme() {
   cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null
 }
 
-pack_en_vigor() {
-  [[ $(tema_activo) == "$THEME_SLUG" ]]
+pack_in_effect() {
+  [[ $(current_theme) == "$THEME_SLUG" ]]
 }
 
-pieza_ligada_al_tema() {
-  [[ $1 != "boot" ]]
+# `boot` does not follow the theme, so its tick asks the system instead: is our
+# Plymouth theme the one actually in use? That way the ✓ never lies, even though
+# it stays on when you switch to another theme.
+#
+# Not `omarchy plymouth current`: that one identifies the theme by comparing
+# logo.png inside Omarchy's OWN theme folder, and ours is a separate theme it
+# cannot see. `plymouth-set-default-theme` with no arguments prints the real
+# answer and needs no sudo.
+boot_applied() {
+  local current
+  current=$(plymouth-set-default-theme 2>/dev/null) ||
+    current=$(sed -n 's/^Theme=//p' /etc/plymouth/plymouthd.conf 2>/dev/null)
+  [[ $current == "$PLYMOUTH_THEME" ]]
 }
 
-# Encendida en los ajustes Y en vigor ahora mismo. Es lo que responde al
-# `checked` del menu, o sea lo que decide el ✓.
-activa() {
-  [[ $(leer "$1") == "true" ]] || return 1
-  pieza_ligada_al_tema "$1" || return 0
-  pack_en_vigor
+# Switched on in the settings AND in effect right now. This is what answers the
+# menu's `checked`, so it is what decides the ✓.
+is_active() {
+  [[ $(read_setting "$1") == "true" ]] || return 1
+  [[ $1 != "boot" ]] || { boot_applied; return; }
+  pack_in_effect
 }
 
-leer() {
-  local pieza="$1"
+read_setting() {
+  local piece="$1"
   [[ -f $CONFIG ]] || { echo "true"; return; }
-  # `// true` no vale aqui: jq trata false como ausente y `boot: false` volveria
-  # como true. Hay que preguntar por la clave, no por su valor.
-  jq -r --arg k "$pieza" 'if has($k) then .[$k] else true end | tostring' "$CONFIG" 2>/dev/null || echo "true"
+  # `// true` is wrong here: jq treats false as absent, so `boot: false` would
+  # come back as true. Ask for the key, not for its value.
+  jq -r --arg k "$piece" 'if has($k) then .[$k] else true end | tostring' "$CONFIG" 2>/dev/null || echo "true"
 }
 
-escribir() {
-  local pieza="$1" valor="$2" tmp
+write_setting() {
+  local piece="$1" value="$2" tmp
   mkdir -p "$(dirname "$CONFIG")"
   [[ -f $CONFIG ]] || echo '{}' >"$CONFIG"
   tmp=$(mktemp "$CONFIG.XXXXXX")
-  jq --arg k "$pieza" --argjson v "$valor" '.[$k] = $v' "$CONFIG" >"$tmp" 2>/dev/null ||
-    { rm -f "$tmp"; fail "no se pudo escribir $CONFIG"; }
+  jq --arg k "$piece" --argjson v "$value" '.[$k] = $v' "$CONFIG" >"$tmp" 2>/dev/null ||
+    { rm -f "$tmp"; fail "could not write $CONFIG"; }
   mv "$tmp" "$CONFIG"
 }
 
-# El id del clon del lock lo pone `omarchy plugin clone`: <usuario>.lock. Se
-# descubre en vez de darlo por hecho, porque en otra maquina el usuario es otro.
+# `omarchy plugin clone` decides the lock clone's id: <username>.lock. Discover
+# it rather than assume it, because on another machine the username differs.
 lock_clone_id() {
-  local id
-  for id in "$PLUGINS_DIR"/*.lock; do
-    [[ -d $id ]] || continue
-    jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$id/manifest.json" >/dev/null 2>&1 || continue
-    jq -r '.id' "$id/manifest.json"
+  local dir
+  for dir in "$PLUGINS_DIR"/*.lock; do
+    [[ -d $dir ]] || continue
+    jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || continue
+    jq -r '.id' "$dir/manifest.json"
     return 0
   done
   return 1
 }
 
-plugin_habilitado() {
+plugin_enabled() {
   omarchy-plugin-list --json 2>/dev/null |
     jq -e --arg id "$1" 'any(.[]; .id == $id and .enabled)' >/dev/null 2>&1
 }
 
-plugin_existe() {
+plugin_known() {
   omarchy-plugin-list --json 2>/dev/null |
     jq -e --arg id "$1" 'any(.[]; .id == $id)' >/dev/null 2>&1
 }
 
-avisar_shell() {
+nudge_shell() {
   omarchy-shell matrix refresh >/dev/null 2>&1 || true
 }
 
-# --- piezas -----------------------------------------------------------------
+# --- pieces -----------------------------------------------------------------
 
-# El plugin hace falta si alguna de sus dos capas esta encendida.
-sincronizar_plugin() {
-  local quiere="false"
-  [[ $(leer wallpaper) == "true" || $(leer screensaver) == "true" ]] && quiere="true"
+# The plugin is needed if either of its two layers is on.
+sync_plugin() {
+  local wanted="false"
+  [[ $(read_setting wallpaper) == "true" || $(read_setting screensaver) == "true" ]] && wanted="true"
 
-  if ! plugin_existe "$PLUGIN_ID"; then
+  if ! plugin_known "$PLUGIN_ID"; then
     omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
     sleep 0.3
   fi
-  plugin_existe "$PLUGIN_ID" || {
-    echo "omarchy-matrix: el plugin $PLUGIN_ID no esta instalado" >&2
-    echo "  instalalo con: omarchy plugin add https://github.com/tymurbogach/omarchy-matrix --enable --yes" >&2
+  plugin_known "$PLUGIN_ID" || {
+    echo "omarchy-matrix: the $PLUGIN_ID plugin is not installed" >&2
+    echo "  install it with: omarchy plugin add https://github.com/tymurbogach/omarchy-matrix --enable --yes" >&2
     return 1
   }
 
-  if [[ $quiere == "true" ]]; then
-    plugin_habilitado "$PLUGIN_ID" || omarchy-plugin-enable "$PLUGIN_ID" >/dev/null
+  if [[ $wanted == "true" ]]; then
+    plugin_enabled "$PLUGIN_ID" || omarchy-plugin-enable "$PLUGIN_ID" >/dev/null
   else
-    ! plugin_habilitado "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
+    ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
   fi
 }
 
-# La lluvia de escritorio se elige como un fondo mas del carrusel, asi que
-# encender la pieza sin poner ese fondo no se veria: la pieza quedaria en ✓ y la
-# pantalla igual. Encenderla lo selecciona; apagarla sale de el, porque quedarse
-# en el fotograma estatico se ve exactamente igual que una lluvia congelada.
+# The desktop rain is picked like any other background in the carousel, so
+# switching the piece on without selecting that background would show nothing:
+# a ✓ in the menu and an unchanged screen. Switching it on selects it; switching
+# it off moves away from it, because sitting on the still frame looks exactly
+# like rain that has frozen.
 #
-# Ojo con `omarchy theme set`: rota al SIGUIENTE fondo del tema, asi que reaplicar
-# el tema te saca de 0-lluvia-viva. Por eso el hook de theme-set no lo fuerza --
-# seria pelearse con Omarchy-- y en su lugar lo hace este interruptor.
-FONDO_VIVO="$HOME/.local/state/omarchy/current/theme/backgrounds/0-lluvia-viva.png"
+# Careful with `omarchy theme set`: it rotates to the NEXT background of the
+# theme, so re-applying the theme takes you off 0-live-rain. That is why the
+# theme-set hook does not force it -- that would be fighting Omarchy -- and this
+# switch does it instead.
+LIVE_BACKGROUND="$HOME/.local/state/omarchy/current/theme/backgrounds/0-live-rain.png"
 
-fondo_actual_es_vivo() {
-  [[ $(readlink -f "$HOME/.local/state/omarchy/current/background" 2>/dev/null) == *0-lluvia-viva.png ]]
+on_live_background() {
+  [[ $(readlink -f "$HOME/.local/state/omarchy/current/background" 2>/dev/null) == *0-live-rain.png ]]
 }
 
-aplicar_wallpaper() {
-  if [[ $(leer wallpaper) == "true" ]]; then
-    [[ ! -f $FONDO_VIVO ]] || fondo_actual_es_vivo || omarchy-theme-bg-set "$FONDO_VIVO" >/dev/null
-  elif fondo_actual_es_vivo; then
+apply_wallpaper() {
+  if [[ $(read_setting wallpaper) == "true" ]]; then
+    [[ ! -f $LIVE_BACKGROUND ]] || on_live_background || omarchy-theme-bg-set "$LIVE_BACKGROUND" >/dev/null
+  elif on_live_background; then
     omarchy-theme-bg-next >/dev/null
   fi
-  sincronizar_plugin && avisar_shell
+  sync_plugin && nudge_shell
 }
 
-# Con el flag puesto, omarchy-launch-screensaver sale solo y no abre la terminal
-# con ttfx: el salvapantallas pasa a dibujarlo nuestro plugin, que es el mismo
-# shader que el fondo y que el lock.
-sincronizar_screensaver() {
-  if [[ $(leer screensaver) == "true" ]]; then
+# With the flag set, omarchy-launch-screensaver bows out instead of opening the
+# terminal with ttfx: the screensaver is drawn by our plugin, which is the same
+# shader as the wallpaper and the lock.
+sync_screensaver() {
+  if [[ $(read_setting screensaver) == "true" ]]; then
     omarchy-toggle screensaver-off on
   else
     omarchy-toggle screensaver-off off
   fi
 }
 
-aplicar_screensaver() {
-  sincronizar_screensaver
-  sincronizar_plugin && avisar_shell
+apply_screensaver() {
+  sync_screensaver
+  sync_plugin && nudge_shell
 }
 
-# Devolver el lock de Omarchy pasa SIEMPRE por `plugin remove`, que es quien lo
-# reactiva (cloneSourceRestores). Desactivar el clon a secas dejaria la sesion
-# sin ningun lock habilitado, porque al clonar Omarchy metio el suyo en
-# disabledPlugins: el equipo no podria bloquearse.
-quitar_clon_lock() {
+# Handing Omarchy's lock back ALWAYS goes through `plugin remove`, which is what
+# re-enables it (cloneSourceRestores). Merely disabling the clone would leave
+# the session with no lock enabled at all, because cloning put Omarchy's own
+# into disabledPlugins: the machine could not lock.
+remove_lock_clone() {
   local id
   id=$(lock_clone_id) || return 0
   omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
     omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
 }
 
-aplicar_lock() {
-  if [[ $(leer lock) == "true" ]]; then
-    "$(dirname "${BASH_SOURCE[0]}")/derivar-lock.py" || return 1
+apply_lock() {
+  if [[ $(read_setting lock) == "true" ]]; then
+    "$(dirname "${BASH_SOURCE[0]}")/derive-lock.py" || return 1
   else
     if lock_clone_id >/dev/null; then
-      quitar_clon_lock
-      echo "Lock devuelto al de Omarchy"
+      remove_lock_clone
+      echo "Handed the lock back to Omarchy"
     fi
   fi
 }
 
-aplicar_boot() {
-  # La imagen de arranque, antes del login. Pide sudo y reconstruye el initramfs,
-  # asi que nunca se hace sola: solo cuando la pides tu.
+apply_boot() {
+  # The screen before login. Needs sudo and rebuilds the initramfs, so it never
+  # happens on its own: only when you ask for it.
   #
-  # No vale `omarchy plymouth set-by-theme`: eso solo deja poner colores y un PNG
-  # estatico, y aqui la frase se teclea. derivar-plymouth.py parte del
-  # omarchy.script de la maquina y le anade la animacion, dejando intacto el tema
-  # de Omarchy en su carpeta. Volver es `omarchy plymouth reset`.
-  if [[ $(leer boot) == "true" ]]; then
-    "$(dirname "${BASH_SOURCE[0]}")/derivar-plymouth.py" || return 1
+  # `omarchy plymouth set-by-theme` will not do: it only takes colours and a
+  # still PNG, and here the line is typed out. derive-plymouth.py starts from
+  # this machine's omarchy.script and adds the animation, leaving Omarchy's own
+  # theme untouched in its folder. Going back is `omarchy plymouth reset`.
+  if [[ $(read_setting boot) == "true" ]]; then
+    "$(dirname "${BASH_SOURCE[0]}")/derive-plymouth.py" || return 1
   else
     omarchy-plymouth-reset
   fi
 }
 
-aplicar() {
+apply_piece() {
   case "$1" in
-  wallpaper) aplicar_wallpaper ;;
-  screensaver) aplicar_screensaver ;;
-  lock) aplicar_lock ;;
-  boot) aplicar_boot ;;
+  wallpaper) apply_wallpaper ;;
+  screensaver) apply_screensaver ;;
+  lock) apply_lock ;;
+  boot) apply_boot ;;
   esac
 }
 
-# --- comandos ---------------------------------------------------------------
+# --- commands ---------------------------------------------------------------
 
 cmd_status() {
-  local formato="texto" consulta="" pieza
+  local format="text" query="" piece
   while (($# > 0)); do
     case "$1" in
-    --json) formato="json"; shift ;;
-    --is) consulta="${2:-}"; shift 2 ;;
-    *) fail "opcion desconocida: $1" ;;
+    --json) format="json"; shift ;;
+    --is) query="${2:-}"; shift 2 ;;
+    *) fail "unknown option: $1" ;;
     esac
   done
 
-  if [[ -n $consulta ]]; then
-    [[ " ${PIEZAS[*]} " == *" $consulta "* ]] || fail "pieza desconocida: $consulta"
-    # Lo que responde al ✓ del menu: encendida Y en vigor, no solo encendida.
-    activa "$consulta"
+  if [[ -n $query ]]; then
+    [[ " ${PIECES[*]} " == *" $query "* ]] || fail "unknown piece: $query"
+    # What answers the menu's ✓: on AND in effect, not merely on.
+    is_active "$query"
     return
   fi
 
-  if [[ $formato == "json" ]]; then
+  if [[ $format == "json" ]]; then
     jq -n \
-      --argjson w "$(leer wallpaper)" --argjson s "$(leer screensaver)" \
-      --argjson l "$(leer lock)" --argjson b "$(leer boot)" \
-      --argjson vigor "$(pack_en_vigor && echo true || echo false)" \
-      --arg tema "$(tema_activo)" \
-      '{theme: $tema, active: $vigor,
+      --argjson w "$(read_setting wallpaper)" --argjson s "$(read_setting screensaver)" \
+      --argjson l "$(read_setting lock)" --argjson b "$(read_setting boot)" \
+      --argjson effect "$(pack_in_effect && echo true || echo false)" \
+      --arg theme "$(current_theme)" \
+      '{theme: $theme, active: $effect,
         settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b}}'
     return
   fi
 
-  if ! pack_en_vigor; then
-    printf '  el pack esta apartado: el tema activo es \033[1m%s\033[0m, no %s\n' \
-      "$(tema_activo)" "$THEME_SLUG"
-    printf '  vuelve con: omarchy theme set %s\n\n' "$THEME_SLUG"
+  if ! pack_in_effect; then
+    printf '  the pack is stood down: the current theme is \033[1m%s\033[0m, not %s\n' \
+      "$(current_theme)" "$THEME_SLUG"
+    printf '  bring it back with: omarchy theme set %s\n\n' "$THEME_SLUG"
   fi
 
-  for pieza in "${PIEZAS[@]}"; do
-    if activa "$pieza"; then
-      printf '  \033[32m✓\033[0m %-12s\n' "$pieza"
-    elif [[ $(leer "$pieza") == "true" ]]; then
-      printf '    %-12s \033[2mencendida, pero apartada con el tema\033[0m\n' "$pieza"
+  for piece in "${PIECES[@]}"; do
+    if is_active "$piece"; then
+      printf '  \033[32m✓\033[0m %-12s\n' "$piece"
+    elif [[ $(read_setting "$piece") == "true" && $piece == "boot" ]]; then
+      printf '    %-12s \033[2mon, but not applied — run: omarchy-matrix boot on\033[0m\n' "$piece"
+    elif [[ $(read_setting "$piece") == "true" ]]; then
+      printf '    %-12s \033[2mon, but stood down with the theme\033[0m\n' "$piece"
     else
-      printf '    %-12s\n' "$pieza"
+      printf '    %-12s\n' "$piece"
     fi
   done
 
-  if pack_en_vigor && ! plugin_habilitado "$PLUGIN_ID"; then
-    printf '\n  el plugin %s no esta activo — arreglalo con: omarchy-matrix doctor\n' "$PLUGIN_ID"
+  if pack_in_effect && ! plugin_enabled "$PLUGIN_ID"; then
+    printf '\n  the %s plugin is not active — fix it with: omarchy-matrix doctor\n' "$PLUGIN_ID"
   fi
 }
 
 cmd_doctor() {
-  # Se vuelve a afirmar todo. Es lo que hay que ejecutar despues de un
-  # `omarchy refresh shell`, que reescribe shell.json y deja el plugin apagado.
-  local pieza fallos=0
-  echo "Revisando el pack Matrix..."
-  sincronizar_screensaver
-  sincronizar_plugin || fallos=1
-  [[ $(leer lock) != "true" ]] || aplicar_lock || fallos=1
-  avisar_shell
-  # `boot` se deja fuera aposta: pide sudo y esto corre desde hooks.
+  # Asserts everything again. This is what to run after an
+  # `omarchy refresh shell`, which rewrites shell.json and leaves the plugin off.
+  local failures=0
+  echo "Checking the Matrix pack..."
+  sync_screensaver
+  sync_plugin || failures=1
+  [[ $(read_setting lock) != "true" ]] || apply_lock || failures=1
+  nudge_shell
+  # `boot` is left out on purpose: it needs sudo and this runs from hooks.
   cmd_status
-  return $fallos
+  return $failures
 }
 
-# Cuando el tema activo deja de ser matrix, el pack se aparta sin tocar
-# matrix.json: al volver a matrix se enciende exactamente lo que tenias.
+# When the current theme stops being matrix, the pack stands down without
+# touching matrix.json: going back to matrix restores exactly what you had.
 #
-# El lock se aparta borrando el clon, no desactivandolo: ver quitar_clon_lock.
-# `boot` no se toca, que el splash de Plymouth es del sistema y no del tema.
+# The lock stands down by deleting the clone, not by disabling it: see
+# remove_lock_clone. `boot` is left alone, since the Plymouth splash belongs to
+# the system rather than to the theme.
 cmd_suspend() {
-  ! plugin_habilitado "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
+  ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
   omarchy-toggle screensaver-off off
-  quitar_clon_lock
+  remove_lock_clone
 }
 
-cmd_todo() {
-  local valor="$1" pieza
-  for pieza in wallpaper screensaver lock; do
-    escribir "$pieza" "$valor"
+cmd_all() {
+  local value="$1" piece
+  for piece in wallpaper screensaver lock; do
+    write_setting "$piece" "$value"
   done
-  aplicar_screensaver
-  aplicar_lock
+  apply_screensaver
+  apply_lock
   cmd_status
 }
 
-uso() {
-  cat <<'USO'
-Uso: omarchy-matrix <comando>
+usage() {
+  cat <<'USAGE'
+Usage: omarchy-matrix <command>
 
-  on | off                            Enciende o apaga el pack entero
+  on | off                            Turn the whole pack on or off
   wallpaper|screensaver|lock|boot on|off|toggle
-                                      Pieza a pieza
-  status [--is <pieza>] [--json]      Que esta encendido
-  doctor                              Vuelve a afirmarlo todo
-  suspend                             Aparta el pack sin olvidar tus ajustes
+                                      One piece at a time
+  status [--is <piece>] [--json]      What is on
+  doctor                              Assert everything again
+  suspend                             Stand the pack down, keeping your settings
 
-Piezas:
-  wallpaper    La lluvia como fondo de escritorio (elige el fondo 0-lluvia-viva)
-  screensaver  La lluvia al quedarte quieto, en vez de la terminal de Omarchy
-  lock         La lluvia detras del campo de contrasena al bloquear
-  boot         La imagen de arranque (Plymouth), antes del login. Pide sudo.
-USO
+Pieces:
+  wallpaper    Rain on the desktop (selects the 0-live-rain background)
+  screensaver  Rain when you go idle, instead of Omarchy's terminal one
+  lock         Rain behind the password field when you lock
+  boot         The screen before login (Plymouth). Needs sudo.
+USAGE
 }
 
-comando="${1:-status}"
+command="${1:-status}"
 shift || true
 
-case "$comando" in
-on) cmd_todo true ;;
-off) cmd_todo false ;;
+case "$command" in
+on) cmd_all true ;;
+off) cmd_all false ;;
 status) cmd_status "$@" ;;
 doctor) cmd_doctor ;;
 suspend) cmd_suspend ;;
 wallpaper | screensaver | lock | boot)
-  accion="${1:-toggle}"
-  case "$accion" in
-  on) escribir "$comando" true ;;
-  off) escribir "$comando" false ;;
-  toggle) [[ $(leer "$comando") == "true" ]] && escribir "$comando" false || escribir "$comando" true ;;
-  *) fail "accion desconocida: $accion (usa on, off o toggle)" ;;
+  action="${1:-toggle}"
+  case "$action" in
+  show)
+    # This is what Omarchy's menu row calls. Its stock action is
+    # `omarchy-launch-screensaver force`, and that `force` skips the
+    # screensaver-off flag on purpose. Without this, asking for it from the menu
+    # brought up Omarchy's own with random effects even with the piece ticked.
+    [[ $command == "screensaver" ]] || fail "'show' only applies to screensaver"
+    if [[ $(read_setting screensaver) == "true" ]]; then
+      omarchy-shell matrix screensaver start >/dev/null
+    else
+      omarchy-launch-screensaver force
+    fi
+    exit 0
+    ;;
+  on) write_setting "$command" true ;;
+  off) write_setting "$command" false ;;
+  toggle) [[ $(read_setting "$command") == "true" ]] && write_setting "$command" false || write_setting "$command" true ;;
+  *) fail "unknown action: $action (use on, off or toggle)" ;;
   esac
-  aplicar "$comando"
+  apply_piece "$command"
   ;;
--h | --help | help) uso ;;
-*) uso; exit 1 ;;
+-h | --help | help) usage ;;
+*) usage; exit 1 ;;
 esac
