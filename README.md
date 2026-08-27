@@ -267,7 +267,8 @@ IPC while the new one paints, and the symptom is maddening.
 
 `CLAUDE.md` holds the working agreement for this repo: the rules, the two-clone
 workflow, and a list of traps that each cost real debugging time. Read it before
-changing anything — several of them are invisible from the code.
+changing anything — several of them are invisible from the code. `AGENTS.md` is a
+short pointer to it, for tools that look for that name.
 
 ## Credits
 
