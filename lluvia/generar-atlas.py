@@ -36,7 +36,8 @@ def celda(simbolo):
 
 def main():
     assert len(SIMBOLOS) <= COLS * FILAS, "los simbolos no caben en la rejilla"
-    salida = os.path.join(AQUI, "glifos.png")
+    # El atlas vive en la raiz del repo, junto a MatrixRain.qml que lo carga.
+    salida = os.path.join(AQUI, os.pardir, "glifos.png")
 
     # Fila a fila y luego apilado: +append/-append respetan el orden, mientras
     # que -montage lo reordena por su cuenta.

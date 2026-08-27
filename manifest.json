@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "matrix.rain",
+  "name": "Matrix Rain",
+  "version": "1.0.0",
+  "author": "tymurbogach",
+  "description": "Lluvia digital en GPU para el fondo de escritorio y el salvapantallas. Parte del pack del tema Matrix.",
+  "kinds": [
+    "service"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}
