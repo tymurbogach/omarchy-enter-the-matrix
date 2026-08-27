@@ -40,7 +40,7 @@ omarchy-matrix boot on
 | Pieza | Qué es | Cómo está hecha |
 |---|---|---|
 | `wallpaper` | La lluvia de fondo de escritorio | Capa propia del plugin en `WlrLayer.Bottom`: por encima del fondo, por debajo de toda ventana, con `mask: Region {}` para que los clics lleguen al escritorio. **El fondo de Omarchy no se toca.** Se ve al tener elegido el fondo `0-lluvia-viva`. Con cargador llueve siempre; con batería, solo mientras no haya ventanas en el espacio activo. |
-| `screensaver` | La lluvia al quedarte quieto | La misma capa en `WlrLayer.Overlay`, con el tiempo de `idle.screensaver` de tu `shell.json`. Pone el flag nativo `screensaver-off` para que Omarchy no abra además su salvapantallas en terminal. |
+| `screensaver` | La lluvia al quedarte quieto, igual que el de Omarchy: esconde el puntero, el ratón no lo cierra y sale con cualquier tecla | La misma capa en `WlrLayer.Overlay`, con el tiempo de `idle.screensaver` de tu `shell.json`. Pone el flag nativo `screensaver-off` para que Omarchy no abra además su salvapantallas en terminal. |
 | `lock` | La lluvia al bloquear | Lo único que sustituye un plugin de Omarchy. Ver abajo. |
 | `boot` | La imagen de antes del login | `omarchy plymouth set-by-theme matrix`, que ya es nativo. Pide contraseña, así que nunca se aplica solo. |
 

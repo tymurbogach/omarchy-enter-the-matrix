@@ -64,6 +64,10 @@ Item {
   // Con la sesion bloqueada manda la WlSessionLock del lock, que por protocolo
   // tapa cualquier capa. Seguir dibujando debajo solo gastaria GPU.
   readonly property bool sessionLocked: serviceLike(".lock", "locked", false)
+  // Al entrar el bloqueo el salvapantallas se da por terminado. Si no, al
+  // desbloquear reaparecia encima del escritorio sin que nadie lo hubiera
+  // pedido, porque ya nada lo cierra al mover el raton.
+  onSessionLockedChanged: if (sessionLocked) dismissScreensaver()
   // Respetar "stay awake" es lo mismo que hace el idle de Omarchy: si el
   // usuario ha pedido no dormir, tampoco queremos salvapantallas.
   readonly property bool idleAllowed: serviceLike(".idle", "idleEnabled", true)
@@ -89,6 +93,23 @@ Item {
     if (!root.screensaverActive) return
     root.screensaverActive = false
   }
+
+  // El salvapantallas de Omarchy esconde el puntero mientras corre y lo devuelve
+  // al salir (bin/omarchy-screensaver, con la misma orden y el mismo respaldo).
+  // Se hace igual para que la sensacion sea la misma: pantalla limpia, sin un
+  // puntero flotando encima de la lluvia.
+  function ocultarPuntero(oculto) {
+    var valor = oculto ? "true" : "false"
+    Quickshell.execDetached(["bash", "-lc",
+      "hyprctl eval 'hl.config({ cursor = { invisible = " + valor + " } })' &>/dev/null" +
+      " || hyprctl keyword cursor:invisible " + valor + " &>/dev/null || true"])
+  }
+
+  // Un solo sitio decide: se esconde al salir y se devuelve al entrar, pase lo
+  // que pase con el salvapantallas. Si la shell se cayera con el puntero
+  // escondido, `hyprctl keyword cursor:invisible false` lo devuelve.
+  onScreensaverActiveChanged: ocultarPuntero(root.screensaverActive)
+  Component.onDestruction: if (root.screensaverActive) ocultarPuntero(false)
 
   FileView {
     id: configFile
@@ -158,10 +179,10 @@ Item {
     enabled: root.wantScreensaver && root.idleAllowed && !root.sessionLocked
     timeout: root.screensaverSeconds
     respectInhibitors: true
-    onIsIdleChanged: {
-      if (isIdle) root.screensaverActive = true
-      else root.dismissScreensaver()
-    }
+    // Solo enciende. Cerrar al dejar de estar ocioso es lo que hacia que se
+    // fuera al mover el raton, y el de Omarchy no hace eso: su bucle solo mira
+    // el teclado (`read -n1`) y si sigue teniendo el foco. El raton no lo cierra.
+    onIsIdleChanged: if (isIdle) root.screensaverActive = true
   }
 
   Component.onCompleted: root.refreshBackground()
@@ -244,12 +265,17 @@ Item {
         running: screensaverPanel.visible
       }
 
-      // Cualquier senal de vida lo cierra. El IdleMonitor tambien lo haria solo,
-      // pero esto responde al primer movimiento en vez de al siguiente tick.
-      //
-      // Con la gracia: la superficie aparece justo debajo del cursor, asi que el
-      // compositor le manda un evento de posicion nada mas mapearla. Sin esto el
-      // salvapantallas se cerraba solo en el mismo fotograma en que salia.
+      // Se traga el raton sin hacerle caso. Ni lo cierra ni lo deja pasar a lo
+      // que haya debajo, que es como se porta la ventana del salvapantallas de
+      // Omarchy: un clic dentro no la cierra porque su bucle solo lee teclas.
+      MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.AllButtons
+      }
+
+      // Una gracia corta antes de admitir teclas: la superficie recibe el foco
+      // en cuanto se mapea y no queremos que una pulsacion en vuelo la cierre en
+      // el mismo fotograma en que sale.
       Timer {
         id: gracia
         interval: 400
@@ -257,37 +283,12 @@ Item {
         running: screensaverPanel.visible
       }
 
-      MouseArea {
-        id: despertador
-        anchors.fill: parent
-        hoverEnabled: true
-        acceptedButtons: Qt.AllButtons
-        // Punto de referencia: el raton tiene que moverse de verdad, no solo
-        // entrar en la superficie recien creada.
-        property real desdeX: -1
-        property real desdeY: -1
-
-        function despertar() {
-          if (gracia.running) return
-          root.dismissScreensaver()
-        }
-
-        onVisibleChanged: { desdeX = -1; desdeY = -1 }
-        onClicked: despertar()
-        onWheel: despertar()
-        onPositionChanged: function (mouse) {
-          if (desdeX < 0) { desdeX = mouse.x; desdeY = mouse.y; return }
-          if (Math.abs(mouse.x - desdeX) + Math.abs(mouse.y - desdeY) < 8) return
-          despertar()
-        }
-      }
-
       Item {
         anchors.fill: parent
         focus: screensaverPanel.visible
         Keys.onPressed: function (event) {
           event.accepted = true
-          despertador.despertar()
+          if (!gracia.running) root.dismissScreensaver()
         }
       }
     }
