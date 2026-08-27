@@ -26,6 +26,33 @@ fail() {
 
 # --- estado -----------------------------------------------------------------
 
+# Las piezas del escritorio solo estan EN VIGOR mientras matrix sea el tema
+# activo: al elegir otro tema el hook de theme-set llama a `suspend`, que las
+# aparta sin tocar matrix.json. Sin esto, `status` marcaba con ✓ cuatro piezas
+# apagadas de hecho y parecia que el pack estaba roto.
+#
+# `boot` es la excepcion: el splash de Plymouth es del sistema, no del tema, y
+# se queda puesto elijas el tema que elijas.
+tema_activo() {
+  cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null
+}
+
+pack_en_vigor() {
+  [[ $(tema_activo) == "$THEME_SLUG" ]]
+}
+
+pieza_ligada_al_tema() {
+  [[ $1 != "boot" ]]
+}
+
+# Encendida en los ajustes Y en vigor ahora mismo. Es lo que responde al
+# `checked` del menu, o sea lo que decide el ✓.
+activa() {
+  [[ $(leer "$1") == "true" ]] || return 1
+  pieza_ligada_al_tema "$1" || return 0
+  pack_en_vigor
+}
+
 leer() {
   local pieza="$1"
   [[ -f $CONFIG ]] || { echo "true"; return; }
@@ -134,14 +161,23 @@ aplicar_screensaver() {
   sincronizar_plugin && avisar_shell
 }
 
-aplicar_lock() {
+# Devolver el lock de Omarchy pasa SIEMPRE por `plugin remove`, que es quien lo
+# reactiva (cloneSourceRestores). Desactivar el clon a secas dejaria la sesion
+# sin ningun lock habilitado, porque al clonar Omarchy metio el suyo en
+# disabledPlugins: el equipo no podria bloquearse.
+quitar_clon_lock() {
   local id
+  id=$(lock_clone_id) || return 0
+  omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
+    omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+}
+
+aplicar_lock() {
   if [[ $(leer lock) == "true" ]]; then
     "$(dirname "${BASH_SOURCE[0]}")/derivar-lock.py" || return 1
   else
-    if id=$(lock_clone_id); then
-      omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
-        omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+    if lock_clone_id >/dev/null; then
+      quitar_clon_lock
       echo "Lock devuelto al de Omarchy"
     fi
   fi
@@ -181,26 +217,41 @@ cmd_status() {
 
   if [[ -n $consulta ]]; then
     [[ " ${PIEZAS[*]} " == *" $consulta "* ]] || fail "pieza desconocida: $consulta"
-    [[ $(leer "$consulta") == "true" ]]
+    # Lo que responde al ✓ del menu: encendida Y en vigor, no solo encendida.
+    activa "$consulta"
     return
   fi
 
   if [[ $formato == "json" ]]; then
-    jq -n --argjson w "$(leer wallpaper)" --argjson s "$(leer screensaver)" \
+    jq -n \
+      --argjson w "$(leer wallpaper)" --argjson s "$(leer screensaver)" \
       --argjson l "$(leer lock)" --argjson b "$(leer boot)" \
-      '{wallpaper: $w, screensaver: $s, lock: $l, boot: $b}'
+      --argjson vigor "$(pack_en_vigor && echo true || echo false)" \
+      --arg tema "$(tema_activo)" \
+      '{theme: $tema, active: $vigor,
+        settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b}}'
     return
   fi
 
+  if ! pack_en_vigor; then
+    printf '  el pack esta apartado: el tema activo es \033[1m%s\033[0m, no %s\n' \
+      "$(tema_activo)" "$THEME_SLUG"
+    printf '  vuelve con: omarchy theme set %s\n\n' "$THEME_SLUG"
+  fi
+
   for pieza in "${PIEZAS[@]}"; do
-    if [[ $(leer "$pieza") == "true" ]]; then
-      printf '  \033[32m✓\033[0m %s\n' "$pieza"
+    if activa "$pieza"; then
+      printf '  \033[32m✓\033[0m %-12s\n' "$pieza"
+    elif [[ $(leer "$pieza") == "true" ]]; then
+      printf '    %-12s \033[2mencendida, pero apartada con el tema\033[0m\n' "$pieza"
     else
-      printf '    %s\n' "$pieza"
+      printf '    %-12s\n' "$pieza"
     fi
   done
-  plugin_habilitado "$PLUGIN_ID" ||
+
+  if pack_en_vigor && ! plugin_habilitado "$PLUGIN_ID"; then
     printf '\n  el plugin %s no esta activo — arreglalo con: omarchy-matrix doctor\n' "$PLUGIN_ID"
+  fi
 }
 
 cmd_doctor() {
@@ -220,12 +271,12 @@ cmd_doctor() {
 # Cuando el tema activo deja de ser matrix, el pack se aparta sin tocar
 # matrix.json: al volver a matrix se enciende exactamente lo que tenias.
 #
-# El lock se deja como este a proposito. Apagar el clon dejaria a Omarchy sin
-# ningun lock habilitado (el suyo quedo en disabledPlugins al clonar) y el equipo
-# sin poder bloquearse. Para volver al lock de Omarchy: omarchy-matrix lock off.
+# El lock se aparta borrando el clon, no desactivandolo: ver quitar_clon_lock.
+# `boot` no se toca, que el splash de Plymouth es del sistema y no del tema.
 cmd_suspend() {
   ! plugin_habilitado "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
   omarchy-toggle screensaver-off off
+  quitar_clon_lock
 }
 
 cmd_todo() {

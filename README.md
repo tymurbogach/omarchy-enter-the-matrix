@@ -98,6 +98,19 @@ la barra:
 | `omarchy theme set <otro>` | El pack se aparta sin olvidar tus ajustes |
 | `omarchy update` | Se vuelve a derivar el lock del recién actualizado |
 
+Apartarse quiere decir: el plugin se desactiva, vuelve el salvapantallas de
+Omarchy y **se borra el clon del lock** — con `omarchy plugin remove`, que es
+quien reactiva el de Omarchy; desactivarlo a secas te dejaría sin ningún lock
+habilitado. Tus ajustes no se tocan: al volver a matrix vuelve exactamente lo que
+tenías.
+
+`boot` es la excepción y no se aparta: el splash de Plymouth es del sistema, no
+del tema.
+
+Mientras el pack está apartado, el menú **no marca nada** y `omarchy-matrix
+status` dice por qué. El ✓ significa "esto está pasando ahora", no "lo tienes
+configurado".
+
 ## Qué lleva dentro
 
 | | |
