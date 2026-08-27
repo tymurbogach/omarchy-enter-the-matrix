@@ -40,7 +40,7 @@ omarchy-matrix boot on
 | Pieza | Qué es | Cómo está hecha |
 |---|---|---|
 | `wallpaper` | La lluvia de fondo de escritorio | Capa propia del plugin en `WlrLayer.Bottom`: por encima del fondo, por debajo de toda ventana, con `mask: Region {}` para que los clics lleguen al escritorio. **El fondo de Omarchy no se toca.** Se ve al tener elegido el fondo `0-lluvia-viva`. Con cargador llueve siempre; con batería, solo mientras no haya ventanas en el espacio activo. |
-| `screensaver` | La lluvia al quedarte quieto | La misma capa en `WlrLayer.Overlay`, con el tiempo de `idle.screensaver` de tu `shell.json`. Pone el flag nativo `screensaver-off` para que Omarchy no abra además su salvapantallas en terminal, y pisa la fila **System → Screensaver** del menú, que de fábrica corre `omarchy-launch-screensaver force` y ese `force` se salta el flag. |
+| `screensaver` | La lluvia al quedarte quieto | La misma capa en `WlrLayer.Overlay`, con el tiempo de `idle.screensaver` de tu `shell.json`. Pone el flag nativo `screensaver-off` para que Omarchy no abra además su salvapantallas en terminal. |
 | `lock` | La lluvia al bloquear | Lo único que sustituye un plugin de Omarchy. Ver abajo. |
 | `boot` | La imagen de antes del login | `omarchy plymouth set-by-theme matrix`, que ya es nativo. Pide contraseña, así que nunca se aplica solo. |
 
@@ -84,16 +84,6 @@ la barra:
 ```
 
 `./desinstalar.sh` lo quita todo y deja el tema funcionando como cualquier otro.
-
-> **Si tienes "stay awake" puesto, no sale solo.** El pack respeta el mismo
-> interruptor que el idle de Omarchy (`~/.local/state/omarchy/indicators/stay-awake`):
-> con él puesto no hay salvapantallas, ni el nuestro ni el suyo. Para verlo sin
-> esperar: `omarchy-matrix screensaver show`.
-
-> **Ojo con el toggle de Omarchy.** La pieza `screensaver` usa el flag nativo
-> `screensaver-off`, así que `omarchy toggle screensaver` (SUPER → Toggle →
-> Screensaver) lo desactiva por debajo y `matrix.json` se queda diciendo que sí.
-> `omarchy-matrix doctor` los vuelve a poner de acuerdo.
 
 > **`omarchy refresh shell` apaga la lluvia.** Ese comando reescribe
 > `shell.json` entero, y ahí es donde Omarchy guarda qué plugins están activos.
