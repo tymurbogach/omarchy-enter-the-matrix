@@ -60,10 +60,26 @@ if [[ -d "/usr/share/plymouth/themes/$PLYMOUTH_THEME" && ${live_plymouth:-} != "
     echo "  skipped — remove it later with: sudo rm -rf /usr/share/plymouth/themes/$PLYMOUTH_THEME" >&2
 fi
 
+# `omarchy plugin remove` renames rather than deletes: every folder it took away
+# above is still on disk as .<id>.bak.<timestamp>, and a development machine had
+# nine of them. Only folders carrying MatrixRain.qml are removed -- a lock clone
+# somebody made for their own reasons has the same name shape and stays.
+echo "· removing the plugin backups the pack left behind"
+for dir in "$PLUGINS_DIR"/.*.bak.*; do
+  [[ -d $dir ]] || continue
+  if [[ -f $dir/MatrixRain.qml ]] ||
+    [[ $(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]; then
+    rm -rf "$dir"
+  fi
+done
+
 echo "· removing hooks, menu entries and the CLI"
 rm -f "$HOOKS/theme-set.d/matrix" "$HOOKS/post-update.d/matrix"
 rm -f "$BIN_DIR/omarchy-matrix" "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py"
 rm -f "$HOME/.config/omarchy/matrix.json"
+# Left by a much older version of the pack, which cloned omarchy-screensaver into
+# ~/.local/bin instead of drawing the screensaver itself.
+rm -f "$BIN_DIR"/omarchy-screensaver "$BIN_DIR"/omarchy-screensaver.bak.*
 
 if [[ -f $MENU ]]; then
   python3 - "$MENU" <<'PY'

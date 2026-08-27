@@ -96,6 +96,30 @@ lock_clone_id() {
   return 1
 }
 
+# `omarchy plugin remove` does not delete a folder, it renames it to
+# .<id>.bak.<timestamp>. That is the right call for a plugin somebody wrote by
+# hand, and the wrong one for ours: the lock clone is DERIVED and rebuilds from
+# Omarchy's own source in a second, so a backup of it is litter. Nine of them had
+# piled up here during development before anyone noticed.
+#
+# Ours is a folder carrying MatrixRain.qml -- the deriver copies it into every
+# folder the pack owns -- or the rain plugin itself. A lock clone somebody made
+# for their own reasons has the same name shape and must survive untouched.
+ours() {
+  [[ -f "$1/MatrixRain.qml" ]] && return 0
+  [[ -f "$1/manifest.json" ]] &&
+    [[ $(jq -r '.id // empty' "$1/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]
+}
+
+prune_backups() {
+  local dir
+  for dir in "$PLUGINS_DIR"/.*.bak.*; do
+    [[ -d $dir ]] || continue
+    if ours "$dir"; then rm -rf "$dir"; fi
+  done
+  return 0
+}
+
 # The pack's only footprint outside $HOME. `omarchy plymouth reset` puts
 # Omarchy's theme back but leaves ours sitting in /usr/share/plymouth/themes, so
 # off has to take it back too -- someone who never runs uninstall.sh would carry
@@ -197,6 +221,7 @@ remove_lock_clone() {
   id=$(lock_clone_id) || return 0
   omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
     omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+  prune_backups
 }
 
 apply_lock() {

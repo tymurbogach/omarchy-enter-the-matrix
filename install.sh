@@ -103,10 +103,27 @@ if [[ -n ${old_background:-} ]]; then
     omarchy-plugin-remove "$old_background" >/dev/null 2>&1 || true
 fi
 
-if [[ -f $BIN_DIR/omarchy-screensaver ]]; then
+# The clone itself, and the timestamped copies an even older install.sh left
+# beside it. Both are ours: Omarchy's own launcher is on PATH and is untouched.
+if compgen -G "$BIN_DIR/omarchy-screensaver*" >/dev/null; then
   echo "· removing the old omarchy-screensaver clone"
-  rm -f "$BIN_DIR/omarchy-screensaver"
+  rm -f "$BIN_DIR"/omarchy-screensaver "$BIN_DIR"/omarchy-screensaver.bak.*
 fi
+
+# `omarchy plugin remove` renames rather than deletes, so every clone the pack
+# ever handed back is still on disk as .<id>.bak.<timestamp>. Ours are the ones
+# carrying MatrixRain.qml; a clone somebody made themselves has the same name
+# shape and is left alone.
+pruned=0
+for dir in "$HOME/.config/omarchy/plugins"/.*.bak.*; do
+  [[ -d $dir ]] || continue
+  if [[ -f $dir/MatrixRain.qml ]] ||
+    [[ $(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]; then
+    rm -rf "$dir"
+    pruned=$((pruned + 1))
+  fi
+done
+((pruned == 0)) || echo "· removed $pruned stale plugin backup(s) of ours"
 
 AUTOSTART="$HOME/.config/hypr/autostart.lua"
 if [[ -f $AUTOSTART ]] && grep -q 'hl.env("PATH"' "$AUTOSTART"; then
