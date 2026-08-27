@@ -1,0 +1,9 @@
+  // >>> omarchy-matrix — no edites entre estas dos marcas: instalar.sh las reescribe
+  // y desinstalar.sh borra el bloque entero. Todo lo de fuera se respeta.
+  "style.matrix": {"icon":"󰘨","label":"Matrix","aliases":["matrix","lluvia"],"description":"Las piezas del pack Matrix","when":"command -v omarchy-matrix >/dev/null"},
+  "style.matrix.wallpaper": {"icon":"󰸉","label":"Lluvia en el fondo","description":"Se ve al elegir el fondo 0-lluvia-viva","checked":"omarchy-matrix status --is wallpaper","action":"omarchy-matrix wallpaper toggle"},
+  "style.matrix.screensaver": {"icon":"󱄄","label":"Lluvia al quedarte quieto","description":"En vez del salvapantallas en terminal de Omarchy","checked":"omarchy-matrix status --is screensaver","action":"omarchy-matrix screensaver toggle"},
+  "style.matrix.lock": {"icon":"󰌾","label":"Lluvia al bloquear","description":"Deriva el lock de Omarchy y le pone la lluvia detras","checked":"omarchy-matrix status --is lock","action":"omarchy-matrix lock toggle"},
+  "style.matrix.boot": {"icon":"󰜉","label":"Arranque Matrix","description":"La imagen de antes del login (Plymouth). Pide contrasena.","checked":"omarchy-matrix status --is boot","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix boot toggle'"},
+  "style.matrix.doctor": {"icon":"󰗠","label":"Revisar el pack","description":"Vuelve a afirmarlo todo tras un omarchy refresh shell","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix doctor'"},
+  // <<< omarchy-matrix

@@ -1,0 +1,19 @@
+#!/bin/bash
+# Hook de omarchy-matrix. Se instala en ~/.config/omarchy/hooks/post-update.d/matrix
+# y Omarchy lo llama durante `omarchy update`, ya con los paquetes nuevos puestos.
+#
+# El unico clon del pack es el del lock, y un clon congelado se queda atras: ahi
+# dentro estan los flujos de PAM y de huella. Se vuelve a derivar del LockView.qml
+# recien actualizado, asi que las correcciones de Omarchy llegan al lock.
+#
+# Si el lock de Omarchy ha cambiado tanto que el parche ya no encaja,
+# derivar-lock.py aborta y avisa en vez de dejarlo a medias.
+
+command -v omarchy-matrix >/dev/null 2>&1 || exit 0
+[[ $(omarchy-matrix status --is lock 2>/dev/null; echo $?) == 0 ]] || exit 0
+
+if ! omarchy-matrix lock on; then
+  omarchy-notification-send -g 󱄄 "Matrix" \
+    "El lock de Omarchy ha cambiado y el parche de la lluvia ya no encaja. Lock nativo por ahora." \
+    2>/dev/null || true
+fi
