@@ -42,11 +42,15 @@ omarchy-matrix boot on
 | `wallpaper` | La lluvia de fondo de escritorio | Capa propia del plugin en `WlrLayer.Bottom`: por encima del fondo, por debajo de toda ventana, con `mask: Region {}` para que los clics lleguen al escritorio. **El fondo de Omarchy no se toca.** Se ve al tener elegido el fondo `0-lluvia-viva`. Con cargador llueve siempre; con batería, solo mientras no haya ventanas en el espacio activo. |
 | `screensaver` | La lluvia al quedarte quieto, igual que el de Omarchy: esconde el puntero, el ratón no lo cierra y sale con cualquier tecla | La misma capa en `WlrLayer.Overlay`, con el tiempo de `idle.screensaver` de tu `shell.json`. Pone el flag nativo `screensaver-off` para que Omarchy no abra además su salvapantallas en terminal. |
 | `lock` | La lluvia al bloquear | Lo único que sustituye un plugin de Omarchy. Ver abajo. |
-| `boot` | La imagen de antes del login | `omarchy plymouth set-by-theme matrix`, que ya es nativo. Pide contraseña, así que nunca se aplica solo. |
+| `boot` | La pantalla de antes del login, tecleando las cuatro frases de la película | El otro derivado. Ver abajo. Pide contraseña y reconstruye el initramfs, así que nunca se aplica solo. |
 
 Los tres primeros son **el mismo shader**, instanciado tres veces. Eso es a
 propósito: antes el salvapantallas era `ttfx` dentro de un terminal —otro
 programa dibujando otra lluvia— y no había manera de que los tres cuadrasen.
+
+Los dos últimos son lo mismo por otro lado: `lock` y `boot` son las dos piezas
+que Omarchy no deja configurar, y las dos se resuelven **derivando** su código en
+vez de empaquetar una copia.
 
 ## El lock
 
@@ -68,6 +72,45 @@ lo dice** en vez de dejarlo a medias.
 Pruébalo sin bloquearte: `omarchy-shell lock preview`. Para volver al de
 Omarchy: `omarchy-matrix lock off`.
 
+## El arranque
+
+El splash de Omarchy es también un tema de script (`omarchy.script`,
+`ModuleName=script`), y lo que `omarchy plymouth set-by-theme` deja cambiar son
+tres cosas: color de fondo, color de texto y **un PNG estático**. Por esa puerta
+no entra una animación.
+
+`bin/derivar-plymouth.py` parte del `omarchy.script` de tu máquina y le sustituye
+el logo estático por las cuatro frases del principio de la película, tecleadas:
+
+```
+Wake up, Neo...
+The Matrix has you...
+Follow the white rabbit.
+Knock, knock, Neo.
+```
+
+El diálogo de contraseña, la barra de progreso y los mensajes de arranque son los
+de Omarchy, intactos. Se instala como tema **aparte** en
+`/usr/share/plymouth/themes/omarchy-matrix/`, sin tocar el suyo: volver es
+`omarchy plymouth reset`. El hook `post-update.d` lo vuelve a derivar tras cada
+`omarchy update`.
+
+Tres detalles que explican el diseño:
+
+- **La tabla de pasos se genera en Python** y llega al `.script` con cada texto ya
+  literal, así que el script no necesita `SubString`, `Length` ni concatenar
+  cadenas — código que no se puede probar sin arrancar la máquina.
+- **El cuerpo de la letra se calcula al derivar**, desde el ancho *nativo* del
+  panel. Plymouth dibuja a resolución nativa, no a la lógica: un cuerpo pensado
+  para 1080p sale diminuto en una pantalla de 3072 px.
+- **`logo.png` se sigue cargando aunque invisible.** Su caja es la que usa
+  `omarchy.script` para colocar el campo de contraseña, y no queremos moverlo.
+
+> **Si tu disco está cifrado**, Plymouth es además quien te pide la frase de
+> paso. Por eso el parche es aditivo y no toca ningún callback de contraseña. Si
+> algo fuera mal: `omarchy plymouth reset` desde el sistema, o `plymouth.enable=0`
+> en la línea del kernel desde el gestor de arranque.
+
 ## Qué se toca de tu sistema
 
 Todo lo que instala el pack son archivos suyos o archivos que Omarchy deja para
@@ -79,9 +122,13 @@ la barra:
 ~/.config/omarchy/matrix.json              qué piezas están encendidas
 ~/.config/omarchy/hooks/{theme-set,post-update}.d/matrix
 ~/.config/omarchy/extensions/omarchy-menu.jsonc   (bloque entre marcas)
-~/.local/bin/{omarchy-matrix,derivar-lock.py}
+~/.local/bin/{omarchy-matrix,derivar-lock.py,derivar-plymouth.py}
 ~/.config/omarchy/plugins/<usuario>.lock   solo si `lock` está encendido
+/usr/share/plymouth/themes/omarchy-matrix/ solo si `boot` está encendido
 ```
+
+Los dos últimos son los derivados, y ninguno pisa al original: el
+`omarchy.lock` y el tema `omarchy` de Plymouth se quedan donde estaban.
 
 `./desinstalar.sh` lo quita todo y deja el tema funcionando como cualquier otro.
 
@@ -118,9 +165,10 @@ configurado".
 | `colors.toml` | La paleta. Semántica, no `color0..15`. Incluye los colores del borde de Hyprland, que van por plantilla. |
 | `shell.{bar,menu,launcher,notifications}.toml` | Overrides de sección de la shell: dan relieve a barra y tarjetas, que si no pintan todas del mismo negro. |
 | `backgrounds/` | Los fondos, a 3840×2400. `0-lluvia-viva` es un fotograma del propio shader: sirve de miniatura, de marcador y de respaldo. |
-| `unlock.png`, `preview-unlock.png` | Marca del splash de Plymouth. |
+| `unlock.png`, `preview-unlock.png` | La marca estática del arranque, para quien instale el tema sin el pack. Con el pack, `logo.png` queda invisible y las frases se teclean. |
 | `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glifos.png` | El plugin. |
-| `bin/`, `hooks/`, `extensions/` | El CLI, la auto-reparación y las entradas de menú. |
+| `bin/` | `omarchy-matrix` (el CLI de los interruptores) y los dos derivadores, `derivar-lock.py` y `derivar-plymouth.py`. |
+| `hooks/`, `extensions/` | La auto-reparación al cambiar de tema o actualizar, y las entradas de menú. |
 | `lluvia/` | Las fuentes del shader: `matrix.frag` y el generador del atlas. |
 | `generar-fondos.py`, `generar-marca.py` | Regeneran los PNG. Ninguno es un binario intocable. |
 
