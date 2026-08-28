@@ -225,6 +225,35 @@ apply_screensaver() {
 # the machine unable to lock", and "it self-heals in about a second" is not the
 # same statement. So wait for the target to come back, and if it does not, say
 # what to do about it rather than returning success.
+# Which plugins currently provide a lock. Compared before and after a swap:
+# when this set changes, two lock plugins were briefly loaded at once and the
+# shell has to be restarted. See restart_shell_for_lock.
+enabled_locks() {
+  omarchy-plugin-list --json 2>/dev/null |
+    jq -r '[.[] | select(.enabled and (.id | endswith(".lock"))) | .id] | sort | join(",")'
+}
+
+# Swapping which plugin owns the lock leaves BOTH loaded in the running shell.
+# Quickshell then hands the `lock` IPC target to one of them and refuses the
+# other:
+#
+#   QML IpcHandler ... Handler was registered but will not be used because
+#   another handler is registered for target lock
+#
+# Which one wins is not ours to choose, and here it alternated from run to run.
+# When Omarchy's won, the machine locked to Omarchy's blurred wallpaper -- while
+# `plugin list` reported cyberdyne.lock enabled, `lock status` answered, and the
+# patched QML sat on disk exactly right. Every check the pack had passed. Only a
+# screenshot of `omarchy-shell lock preview` showed the truth.
+#
+# `rescanPlugins` does not unload the loser; a restart does. This is the trap
+# already written down in CLAUDE.md, reaching the one piece where being wrong is
+# invisible until you lock the screen.
+restart_shell_for_lock() {
+  echo "  restarting the shell so only one lock plugin is loaded"
+  omarchy-restart-shell >/dev/null 2>&1 || return 1
+}
+
 # Waits for a STEADY answer, not for the first one. Measured here: `lock off`
 # returns after ~0.8s, while the handler on its way out is still registered and
 # still replying; the real gap does not open until ~1.3s and lasts ~0.6s. A
@@ -262,6 +291,9 @@ remove_lock_clone() {
 }
 
 apply_lock() {
+  local before after
+  before=$(enabled_locks)
+
   if [[ $(read_setting lock) == "true" ]]; then
     "$(dirname "${BASH_SOURCE[0]}")/derive-lock.py" || return 1
   else
@@ -272,6 +304,12 @@ apply_lock() {
       return 0 # nothing was swapped, nothing to wait for
     fi
   fi
+
+  # Only when the set actually changed. Re-deriving over a clone that was
+  # already the enabled one -- what the theme-set hook does on every `omarchy
+  # theme set matrix` -- loads no second plugin and needs no restart.
+  after=$(enabled_locks)
+  [[ $before == "$after" ]] || restart_shell_for_lock
   wait_for_lock
 }
 
@@ -385,8 +423,9 @@ cmd_suspend() {
   if lock_clone_id >/dev/null; then
     remove_lock_clone
     # Standing down runs from the theme-set hook, where nobody is watching the
-    # output -- which is exactly when being left without a lock would go
-    # unnoticed. Wait for Omarchy's to answer before saying the job is done.
+    # output -- which is exactly when being left without a lock, or left with
+    # the wrong one still painting, would go unnoticed.
+    restart_shell_for_lock
     wait_for_lock
   fi
 }

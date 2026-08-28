@@ -47,6 +47,11 @@ the other three. Picking another theme stands them all down. And `off` must
 *remove* what a piece wrote, including outside `$HOME`: it is not enough for
 `uninstall.sh` to clean up, because most people never uninstall.
 
+**Screenshot the lock, never trust its status.** Swapping the lock plugin leaves
+both loaded and Quickshell picks which one paints. Every status check passed
+while the machine locked to Omarchy's blurred wallpaper; `grim` over
+`omarchy-shell lock preview` was the only thing that caught it.
+
 **Before publishing, run the clean-room test.** Strip the machine, install from
 the published URL the way a stranger does, verify the four pieces on screen,
 toggle each one alone, switch theme away and back, uninstall and compare against

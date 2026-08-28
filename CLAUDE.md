@@ -254,6 +254,16 @@ Omarchy's own screensaver does not do — its loop only watches the keyboard.
 immediately. Without a short grace period it dismisses itself in the frame it
 appears.
 
+**Swapping the lock plugin leaves both loaded, and the loser is chosen for
+you.** With `omarchy.lock` and the clone briefly alive at once, Quickshell hands
+the `lock` IPC target to one and refuses the other (`Handler was registered but
+will not be used because another handler is registered for target lock`). Which
+one wins alternated between runs here. When Omarchy's won, the screen locked to
+Omarchy's blurred wallpaper while `plugin list` said the clone was enabled,
+`lock status` answered, and the patched QML on disk was perfect. `rescanPlugins`
+does not unload the loser; `omarchy-restart-shell` does, and `apply_lock` now
+calls it whenever the set of enabled locks changes.
+
 **`omarchy plugin remove` renames, it does not delete.** The folder comes back as
 `.<id>.bak.<timestamp>` unless it contains a `.git`, in which case it is deleted
 outright (`omarchy-plugin-remove:113`). Our lock clone has no `.git` and is
@@ -293,6 +303,10 @@ failure in any one of them is a failure to ship.
    README literally and doing nothing it does not say. What the README omits, the
    stranger does not know.
 3. **Verify the four pieces are on and on screen** — not merely configured.
+   For the lock this means a **screenshot**, not a status query: bring up
+   `omarchy-shell lock preview` and `grim` it. Every non-visual check passed
+   while the machine was in fact locking to Omarchy's blurred wallpaper, and the
+   image was the only thing that said so.
 4. **Toggle each piece off and back on, one at a time**, checking each time that
    the other three did not move.
 5. **Switch to another theme and back.** Away: nothing rains, nothing is ticked,
