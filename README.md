@@ -26,7 +26,7 @@ like it should work — the manifest is at the root — but it installs the whol
 repository as the plugin and skips the CLI, the hooks and the menu, which is
 most of the pack.
 
-The desktop rain is one more background in the carousel, `0-live-rain`.
+The desktop rain is one more background in the carousel, `1-live-rain`.
 `omarchy-matrix wallpaper on` selects it for you. Mind that `omarchy theme set`
 rotates to the theme's next background, so re-applying the theme takes you off
 the rain — come back with that same command, or from the menu.
@@ -44,7 +44,7 @@ omarchy-matrix boot on
 
 | Piece | What it is | How it is done |
 |---|---|---|
-| `wallpaper` | Rain on the desktop | A layer of the plugin's own at `WlrLayer.Bottom`: above the wallpaper, below every window, with `mask: Region {}` so clicks reach the desktop. **Omarchy's background is not touched.** Shows while the `0-live-rain` background is selected. On mains it always rains; on battery, only while no window is on the active workspace. |
+| `wallpaper` | Rain on the desktop | A layer of the plugin's own at `WlrLayer.Bottom`: above the wallpaper, below every window, with `mask: Region {}` so clicks reach the desktop. **Omarchy's background is not touched.** Shows while the `1-live-rain` background is selected. On mains it always rains; on battery, only while no window is on the active workspace. |
 | `screensaver` | Rain when you go idle, behaving like Omarchy's own: hides the pointer, the mouse does not dismiss it, any key does | The same layer at `WlrLayer.Overlay`, using the `idle.screensaver` timing from your `shell.json`. It sets the native `screensaver-off` flag so Omarchy does not also open its terminal screensaver. |
 | `lock` | Rain behind the password field | One of the two derived pieces. See below. |
 | `boot` | The screen before login, typing out the four lines from the film | The other derived piece. See below. Needs a password and rebuilds the initramfs, so it never applies on its own. |
@@ -196,7 +196,7 @@ configured".
 |---|---|
 | `colors.toml` | The palette. Semantic, not `color0..15`. Includes the Hyprland border colours, which go through the template. |
 | `shell.{bar,menu,launcher,notifications}.toml` | Shell section overrides: they give the bar and the cards some relief, which otherwise all paint the same black. |
-| `backgrounds/` | The backgrounds, at 3840×2400. `0-live-rain` is a still frame of the shader itself: it doubles as thumbnail, as marker and as fallback. |
+| `backgrounds/` | The carousel. `0-neo-sleep` is the default, so installing only the theme still gives you a wallpaper. `1-live-rain` is a still frame of the shader: thumbnail, marker and fallback in one — selecting it is what turns the desktop rain on. The rest are film stills. |
 | `unlock.png`, `preview-unlock.png` | The static boot mark, for anyone installing the theme without the pack. With the pack, `logo.png` goes invisible and the lines are typed instead. |
 | `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glyphs.png` | The plugin. |
 | `bin/` | `omarchy-matrix` (the switch CLI) and the two derivers, `derive-lock.py` and `derive-plymouth.py`. |
@@ -298,6 +298,19 @@ IPC while the new one paints, and the symptom is maddening.
 workflow, and a list of traps that each cost real debugging time. Read it before
 changing anything — several of them are invisible from the code. `AGENTS.md` is a
 short pointer to it, for tools that look for that name.
+
+## The backgrounds
+
+`0-neo-sleep` is the default, so installing the theme on its own still leaves you
+with a wallpaper rather than a frozen screenshot of an animation you have not
+installed. `1-live-rain` is the live one — selecting it is what turns the desktop
+rain on — and the rest are stills.
+
+> The stills are frames from *The Matrix* (1999), © Warner Bros. They are here
+> because this is a fan theme and they are what the theme is about. They are not
+> covered by this repository's MIT licence, which applies to the code. If you
+> would rather not carry them, delete `backgrounds/*.jpg`; nothing depends on
+> them.
 
 ## Credits
 

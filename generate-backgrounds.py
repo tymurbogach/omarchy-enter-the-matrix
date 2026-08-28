@@ -2,7 +2,7 @@
 """Generate the matrix theme's static backgrounds.
 
     ./generate-backgrounds.py                  regenerate every preset
-    ./generate-backgrounds.py --only 0-live-rain
+    ./generate-backgrounds.py --only 1-live-rain
     ./generate-backgrounds.py --out /tmp/test.png --seed 99 --density 0.7
 
 What it paints is **a frame of the rain/matrix.frag shader**, not a rain of its
@@ -132,7 +132,7 @@ def build(seed, density, scale, output, minimal=False):
 # --out for one-offs.
 PRESETS = {
     # seed, density, scale, minimal
-    "0-live-rain": (11, 0.92, 1.0, False),
+    "1-live-rain": (11, 0.92, 1.0, False),
     # No mark and no logo: black, a few very dim columns of texture and one lit
     # streak. The idea is atmosphere, not a poster.
     "1-minimal":   (29, 0.50, 1.0, True),

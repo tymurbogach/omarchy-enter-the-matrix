@@ -195,7 +195,7 @@ tear later.
    but it is the two-instances trap idling. Stage into a temp directory and move
    it into place in one go, or end with `omarchy-restart-shell`.
 4. **`omarchy theme set` rotates away from the rain.** The theme-set hook does
-   not re-select `0-live-rain` because that would fight Omarchy's rotation. It
+   not re-select `1-live-rain` because that would fight Omarchy's rotation. It
    only fights it when the user has explicitly asked for the rain wallpaper,
    which `matrix.json` already records. Worth revisiting.
 5. **`omarchy theme update` pulls the repo but never re-runs `install.sh`**, so

@@ -39,9 +39,13 @@ Item {
 
   // --- which background is selected --------------------------------------
   // The rain is picked like any other background in the carousel.
-  // 0-live-rain.png is a still frame of this very shader: it doubles as the
+  // The live-rain background is a still frame of this very shader: it doubles as the
   // thumbnail, as the marker, and as the fallback if the plugin is not running.
-  readonly property string liveMarker: "0-live-rain.png"
+  // Matched by suffix, never by number: the carousel gets reordered (the default
+  // is now a still from the film, so the rain no longer has to sort first) and
+  // anything pinning "0-" silently stops raining when it does. That is exactly
+  // how it broke once -- the background got selected, and nothing drew.
+  readonly property string liveMarker: "live-rain."
   property string currentBackground: ""
   readonly property bool rainIsBackground: String(currentBackground).indexOf(liveMarker) >= 0
 
