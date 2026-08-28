@@ -594,7 +594,11 @@ cmd_status() {
     fi
   done
 
-  if pack_in_effect && ! plugin_enabled "$PLUGIN_ID"; then
+  # Only when something actually wants it. With both rain layers off the plugin
+  # is disabled on purpose, and telling the user to repair a machine that is
+  # doing exactly what they asked is how a warning stops being read.
+  if pack_in_effect && [[ $(read_setting wallpaper) == "true" || $(read_setting screensaver) == "true" ]] &&
+    ! plugin_enabled "$PLUGIN_ID"; then
     printf '\n  the %s plugin is not active — fix it with: %s doctor\n' "$PLUGIN_ID" "$SELF"
   fi
 }
