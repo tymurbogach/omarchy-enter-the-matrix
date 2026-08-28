@@ -150,6 +150,13 @@ Removing it is **Uninstall**, at the bottom of the bar widget's panel, or
 CLI, the hooks, the boot splash and the theme directory itself — and leaves
 Omarchy's own lock, screensaver and splash in charge again.
 
+The theme has to go somewhere, and it goes back to **the one you were using
+before you picked this one**. The `theme-set` hook writes that down every time
+you leave, because Omarchy overwrites `current/theme.name` before any hook runs
+and afterwards nobody knows. If there is nothing recorded — you installed the
+pack and never switched away — it asks, and falls back to the first stock theme
+when there is no terminal to ask on.
+
 Pass `--keep-theme` if you want the colours and backgrounds to stay behind as an
 ordinary Omarchy theme.
 

@@ -24,6 +24,14 @@ done
 
 eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) PLYMOUTH_THEME=\(.plymouth.theme) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")"
 
+CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
+
+# Read before anything is deleted: the theme step-off at the very bottom needs
+# it, and matrix.json is removed long before then. The theme-set hook records it
+# every time you pick another theme, because Omarchy overwrites
+# current/theme.name before it calls that hook -- afterwards nobody knows.
+PREVIOUS_THEME=$(jq -r '.previousTheme // empty' "$CONFIG" 2>/dev/null || echo "")
+
 HOOKS="$HOME/.config/omarchy/hooks"
 MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
@@ -151,13 +159,50 @@ DONE
   exit 0
 fi
 
+theme_exists() {
+  [[ -n ${1:-} ]] || return 1
+  [[ -d "$HOME/.config/omarchy/themes/$1" || -d "/usr/share/omarchy/themes/$1" ]]
+}
+
+# Where to land. In order: the theme you were on before you picked this one,
+# then whatever you say when there is a terminal to ask on, and only then the
+# first stock theme -- which is alphabetical, which is why everyone who ever
+# uninstalled this pack ended up on catppuccin.
+step_off_target() {
+  if theme_exists "$PREVIOUS_THEME"; then
+    echo "$PREVIOUS_THEME"
+    return
+  fi
+
+  local first reply
+  first=$(find /usr/share/omarchy/themes -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort | head -1)
+
+  # Not `-t 1`: this function is called from a command substitution, so its
+  # stdout is a pipe by construction and would say "no terminal here" on a
+  # machine that plainly has one. The prompt goes to stderr, so ask about that.
+  if [[ -t 0 && -t 2 ]]; then
+    echo >&2
+    echo "  This theme is about to go. Which one do you want instead?" >&2
+    find "$HOME/.config/omarchy/themes" /usr/share/omarchy/themes -mindepth 1 -maxdepth 1 -type d \
+      -printf '%f\n' 2>/dev/null | grep -vx "$THEME_SLUG" | sort -u | column -c 74 | sed 's/^/  /' >&2
+    printf '  [%s] ' "$first" >&2
+    read -r reply || true
+    reply=${reply// /}
+    if theme_exists "$reply"; then
+      echo "$reply"
+      return
+    fi
+    [[ -z $reply ]] || printf '\n  no theme called %s; using %s\n' "'$reply'" "$first" >&2
+  fi
+
+  echo "$first"
+}
+
 if [[ $(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null) == "$THEME_SLUG" ]]; then
-  # Any stock theme will do; the first one is the least surprising choice and is
-  # guaranteed to exist, unlike whatever the user had before.
-  fallback=$(find /usr/share/omarchy/themes -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort | head -1)
-  if [[ -n ${fallback:-} ]]; then
-    echo "· stepping off the $THEME_SLUG theme onto $fallback"
-    omarchy-theme-set "$fallback" >/dev/null 2>&1 || true
+  target=$(step_off_target)
+  if [[ -n ${target:-} ]]; then
+    echo "· stepping off the $THEME_SLUG theme onto $target"
+    omarchy-theme-set "$target" >/dev/null 2>&1 || true
   fi
 fi
 

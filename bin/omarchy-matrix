@@ -121,11 +121,22 @@ read_setting() {
 }
 
 write_setting() {
-  local piece="$1" value="$2" tmp
+  write_key "$1" --argjson "$2"
+}
+
+# `previousTheme` is a string, not a switch. Same file: it is the pack's own,
+# and it is the only place that survives both a theme change and an uninstall
+# that has not happened yet.
+write_string() {
+  write_key "$1" --arg "$2"
+}
+
+write_key() {
+  local key="$1" kind="$2" value="$3" tmp
   mkdir -p "$(dirname "$CONFIG")"
   [[ -f $CONFIG ]] || echo '{}' >"$CONFIG"
   tmp=$(mktemp "$CONFIG.XXXXXX")
-  jq --arg k "$piece" --argjson v "$value" '.[$k] = $v' "$CONFIG" >"$tmp" 2>/dev/null ||
+  jq --arg k "$key" "$kind" v "$value" '.[$k] = $v' "$CONFIG" >"$tmp" 2>/dev/null ||
     { rm -f "$tmp"; fail "could not write $CONFIG"; }
   mv "$tmp" "$CONFIG"
 }
@@ -634,6 +645,14 @@ cmd_doctor() {
 # remove_lock_clone. `boot` is left alone, since the Plymouth splash belongs to
 # the system rather than to the theme.
 cmd_suspend() {
+  # Remember what you left for. Omarchy overwrites current/theme.name before it
+  # calls the theme-set hook, so this is the last moment anyone knows -- and
+  # `uninstall.sh` needs it much later, to put you back where you were instead
+  # of on whichever stock theme happens to sort first.
+  local leaving
+  leaving=$(current_theme)
+  [[ -z $leaving || $leaving == "$THEME_SLUG" ]] || write_string previousTheme "$leaving"
+
   ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
   forget_plugin_list
   # The bar icon goes with the rest: a Matrix switch on the bar under somebody
