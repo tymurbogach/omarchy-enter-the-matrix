@@ -176,6 +176,39 @@ that set. New work should keep the seam visible — a provider contributes a
 shader and its assets, the machinery around it stays generic — rather than
 hard-coding one more `matrix` string.
 
+### The list, in the order it is worth doing
+
+Everything below came out of the clean-room test on 2026-08-28, the run that
+also fixed seven bugs. None of it is broken today; all of it is a seam that will
+tear later.
+
+1. **The bar widget.** `kinds: ["bar-widget", "service"]` plus a `panel`, which
+   is confirmed to exist in Omarchy 4 and is what its own built-ins use. The
+   plugin is already a `service`; this is the same folder. It ends the splice
+   into `omarchy-menu.jsonc` — the last thing the pack writes into a file that
+   is not its own — and puts the switches one click away instead of three.
+2. **Separate the machinery from the provider.** A provider hands over a shader
+   and its assets; everything around it stops saying `matrix`. Today that string
+   is hard-coded in the CLI, both derivers, the hooks and the menu.
+3. **`install.sh` fires eleven plugin hot-reloads in one second**, one per file
+   copied. It caused no harm when measured — one shell process, no QML errors —
+   but it is the two-instances trap idling. Stage into a temp directory and move
+   it into place in one go, or end with `omarchy-restart-shell`.
+4. **`omarchy theme set` rotates away from the rain.** The theme-set hook does
+   not re-select `0-live-rain` because that would fight Omarchy's rotation. It
+   only fights it when the user has explicitly asked for the rain wallpaper,
+   which `matrix.json` already records. Worth revisiting.
+5. **`omarchy theme update` pulls the repo but never re-runs `install.sh`**, so
+   the copies under `plugins/matrix.rain/` go stale while the theme does not.
+   The `post-update.d` hook re-derives the lock and the splash but does not
+   recopy the plugin. Most likely thing to bite a stranger without their
+   noticing.
+6. **`omarchy refresh shell` recovery is documented but untested.** The README
+   promises `doctor` brings it back. Verify it once, on a machine whose
+   `shell.json` you are willing to lose.
+7. **`TESTED_ON` says 4.0 while what was actually tested is 4.0.1.** It matches
+   by prefix, so nothing warns; the point of the pin is to record what was run.
+
 ---
 
 ## How to work on this repo
