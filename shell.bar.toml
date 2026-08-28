@@ -1,10 +1,10 @@
 [bar]
 # The bar drops to the absolute void: darker than the windows, so it reads as
 # the edge of the screen rather than as one more surface.
-background       = "#000200"
+background       = "#040604"
 background-alpha = 1.0
-text             = "#B8ECC6"
-active           = "#F0263F"
+text             = "#ACD2B4"
+active           = "#D85A63"
 scale-with-font  = true
 size-horizontal  = 26
 size-vertical    = 28

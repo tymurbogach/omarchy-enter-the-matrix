@@ -229,17 +229,28 @@ hl.config({
 Everything is green except the red, which is reserved for errors. What sets it
 apart from any other green theme is that each ANSI slot sits on a **different
 rung of luminance**, so in `nvim` or `bat` the syntactic roles stay apart instead
-of blurring into one smear. Minimum contrast against the background: 4.86.
+of blurring into one smear. Minimum contrast against the background: 5.2.
+
+The hue axis is **126°**, which is where the rain itself lives (120°). That
+matters more than it sounds: the palette used to sit at 135–158°, drifting into
+mint and teal while the wallpaper stayed true green, and the mismatch is the
+kind the eye notices without being able to name. Saturation is held at 42–52%
+— the rain's own trail is 25% — so the interface accompanies the wallpaper
+instead of competing with it.
+
+And the accent is not the border. `#60C76B` marks what the eye should find;
+window frames, selections and card edges run dimmer, around 4.3:1 against the
+surface they sit on. A border delimits; it does not need to shout.
 
 | | | |
 |---|---|---|
-| `yellow` | `#C6FF57` | lime · 17.1 |
-| `cyan` | `#7BFFD4` | mint · 16.4 |
-| `green` | `#00FF41` | the hero · 14.8 |
-| `orange` | `#8FE03A` | · 12.4 |
-| `magenta` | `#35D68F` | jade · 10.7 |
-| `blue` | `#12A96A` | emerald · 6.6 |
-| `red` | `#F0263F` | errors · 4.9 |
+| `cyan` | `#92D9BB` | mint · 12.1 |
+| `yellow` | `#B6CF7D` | lime · 11.4 |
+| `green` | `#60C76B` | the hero · 9.3 |
+| `magenta` | `#4FC482` | jade · 9.0 |
+| `orange` | `#81B851` | olive · 8.4 |
+| `blue` | `#319B4A` | emerald · 5.5 |
+| `red` | `#D85A63` | errors · 5.2 |
 
 ### Regenerating
 
