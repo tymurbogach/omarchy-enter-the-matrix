@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installs the Matrix pack: the rain plugin, the CLI, the hooks and the menu.
 #
-#   ./install.sh
+#   ./install.sh            interactive when there is a terminal
+#   ./install.sh --sync     copy the files and nothing else
 #
 # It is additive. Nothing under /usr/share/omarchy is touched, nor hyprland.lua,
 # nor Omarchy's background: the desktop rain draws on a layer of its own above
@@ -15,6 +16,13 @@ set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 TESTED_ON="4.0"
+
+# --sync copies the files and stops: no questions, no doctor, no boot splash.
+# It is what `omarchy-matrix doctor` calls when it notices the theme directory
+# has moved on. `omarchy theme update` is a bare `git pull` per theme and fires
+# no hooks at all, so nothing else would ever refresh these copies.
+SYNC_ONLY=0
+[[ ${1:-} != "--sync" ]] || SYNC_ONLY=1
 
 command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 
@@ -49,16 +57,39 @@ WARNING
 # --- the plugin -------------------------------------------------------------
 # Only the files the plugin needs are copied, not the whole theme: that keeps
 # the plugins directory readable and passes `omarchy plugin validate`.
+#
+# Built in a staging directory and moved into place, rather than copied file by
+# file over the live one. Saving ANY file under ~/.config/omarchy/plugins/
+# hot-reloads that plugin, so the old way fired one reload per file -- eleven in
+# under a second, which is the two-instances trap idling (see CLAUDE.md). A
+# dot-prefixed name is skipped by the plugin scanner on purpose: Omarchy uses
+# the same idiom for its own clone staging (PluginRegistry.qml:707).
+
+stage_plugin() { # <id> <source subdir> <file>...
+  local id="$1" src="$2" f
+  shift 2
+  local dest="$PLUGINS_DIR/$id" staging="$PLUGINS_DIR/.$id.staging"
+
+  rm -rf "$staging"
+  mkdir -p "$staging"
+  for f in "$@"; do
+    cp -f "$HERE/$src/$f" "$staging/$f"
+  done
+
+  # Validated BEFORE it goes live: a folder that fails validation must never be
+  # the one the shell picks up.
+  if ! omarchy-plugin-validate "$staging" >/dev/null; then
+    rm -rf "$staging"
+    echo "  $id does not pass Omarchy's validation; stopping here" >&2
+    exit 1
+  fi
+
+  rm -rf "$dest"
+  mv "$staging" "$dest"
+}
 
 echo "· plugin $PLUGIN_ID"
-mkdir -p "$PLUGIN_DIR"
-for f in "${PLUGIN_FILES[@]}"; do
-  cp -f "$HERE/$PLUGIN_SRC/$f" "$PLUGIN_DIR/$f"
-done
-omarchy-plugin-validate "$PLUGIN_DIR" >/dev/null || {
-  echo "  the plugin does not pass Omarchy's validation; stopping here" >&2
-  exit 1
-}
+stage_plugin "$PLUGIN_ID" "$PLUGIN_SRC" "${PLUGIN_FILES[@]}"
 
 # --- the CLI ----------------------------------------------------------------
 
@@ -116,6 +147,15 @@ text = text[:opening + 1] + re.sub(r"^\n(?:[ \t]*\n)+", "\n", text[opening + 1:]
 
 menu.write_text(text[:opening + 1] + "\n" + block + text[opening + 1:])
 PY
+
+# Everything above is a file copy, and that is all --sync is for: refreshing
+# what a `omarchy theme update` pulled into the theme directory. What follows
+# migrates old installs and switches pieces on, neither of which a refresh may
+# do behind the user's back.
+if ((SYNC_ONLY)); then
+  omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+  exit 0
+fi
 
 # --- migrate an older install ----------------------------------------------
 # This used to live in a clone of omarchy.background, a clone of

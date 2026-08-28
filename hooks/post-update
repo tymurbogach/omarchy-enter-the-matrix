@@ -14,6 +14,11 @@ command -v omarchy-matrix >/dev/null 2>&1 || exit 0
 
 name=$(omarchy-matrix provider displayName 2>/dev/null) || exit 0
 
+# First, in case the theme directory was pulled since: `omarchy theme update`
+# fires no hooks of its own, so doctor's staleness check is the only thing that
+# ever refreshes the pack's copies. It also re-asserts the plugin and the lock.
+omarchy-matrix doctor >/dev/null 2>&1 || true
+
 # The boot splash needs sudo, and there is a terminal here: `omarchy update` is
 # interactive.
 if omarchy-matrix status --is boot 2>/dev/null; then

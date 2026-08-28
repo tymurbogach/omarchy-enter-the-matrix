@@ -44,7 +44,7 @@ done
 [[ -n ${PROVIDER:-} ]] || fail "cannot find provider.json. Re-run the pack's install.sh."
 
 # One jq for all of it: this runs on every menu tick and every toggle.
-eval "$(jq -r '@sh "THEME_SLUG=\(.slug) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) WIDGET_SECTION=\(.widget.section) PLYMOUTH_THEME=\(.plymouth.theme) IPC=\(.ipc) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")" ||
+eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) WIDGET_SECTION=\(.widget.section) PLYMOUTH_THEME=\(.plymouth.theme) IPC=\(.ipc) RAIN_QML=\(.rainFiles[0]) PLUGIN_SRC=\(.plugin.dir) WIDGET_SRC=\(.widget.dir)"' "$PROVIDER")" ||
   fail "$PROVIDER is not valid JSON"
 
 CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
@@ -172,6 +172,62 @@ plugin_known() {
 
 nudge_shell() {
   omarchy-shell "$IPC" refresh >/dev/null 2>&1 || true
+}
+
+# --- the theme directory ----------------------------------------------------
+#
+# `omarchy theme update` is a bare `git pull` per theme and fires NO hooks --
+# not one, and `omarchy update` never calls it. So after a pull the theme moves
+# on while the pack's copies of the plugin, the CLI, the derivers and the hooks
+# sit at whatever version installed them. Nothing else would ever notice.
+#
+# So the CLI notices, on the one run that is meant to assert everything again:
+# `doctor`, which the theme-set hook calls on every `omarchy theme set <slug>`.
+
+theme_dir() {
+  omarchy-theme-dir "$THEME_SLUG" 2>/dev/null
+}
+
+# Every file install.sh copies out of the theme directory, paired with where it
+# lands. Kept here rather than derived from install.sh because a comparison that
+# silently checks nothing is worse than no comparison at all.
+installed_pairs() {
+  local theme="$1" f
+  for f in $(jq -r '.plugin.files[]' "$PROVIDER"); do
+    echo "$theme/$PLUGIN_SRC/$f|$PLUGINS_DIR/$PLUGIN_ID/$f"
+  done
+  for f in $(jq -r '.widget.files[]' "$PROVIDER"); do
+    echo "$theme/$WIDGET_SRC/$f|$PLUGINS_DIR/$WIDGET_ID/$f"
+  done
+  echo "$theme/bin/$CLI|$HOME/.local/bin/$CLI"
+  echo "$theme/bin/derive-lock.py|$HOME/.local/bin/derive-lock.py"
+  echo "$theme/bin/derive-plymouth.py|$HOME/.local/bin/derive-plymouth.py"
+  echo "$theme/bin/provider.py|$HOME/.local/bin/provider.py"
+  echo "$theme/uninstall.sh|$HOME/.local/bin/$CLI-uninstall"
+  echo "$theme/hooks/theme-set|$HOME/.config/omarchy/hooks/theme-set.d/$THEME_SLUG"
+  echo "$theme/hooks/post-update|$HOME/.config/omarchy/hooks/post-update.d/$THEME_SLUG"
+  echo "$theme/provider.json|$HOME/.local/share/omarchy-matrix/provider.json"
+}
+
+# A source file that is missing is not staleness, it is a theme directory that
+# does not carry this file -- an older or newer layout. Only files present on
+# both sides, and different, count.
+files_stale() {
+  local theme="$1" source target
+  while IFS='|' read -r source target; do
+    [[ -f $source ]] || continue
+    cmp -s "$source" "$target" || return 0
+  done < <(installed_pairs "$theme")
+  return 1
+}
+
+sync_files() {
+  local theme
+  theme=$(theme_dir) || return 0
+  [[ -n $theme && -x $theme/install.sh ]] || return 0
+  files_stale "$theme" || return 0
+  echo "  the theme directory has moved on; refreshing the pack's copies"
+  "$theme/install.sh" --sync || echo "  could not refresh them; run $theme/install.sh" >&2
 }
 
 # --- pieces -----------------------------------------------------------------
@@ -449,7 +505,8 @@ cmd_doctor() {
   # Asserts everything again. This is what to run after an
   # `omarchy refresh shell`, which rewrites shell.json and leaves the plugin off.
   local failures=0
-  echo "Checking the Matrix pack..."
+  echo "Checking the pack..."
+  sync_files
   sync_screensaver
   sync_plugin || failures=1
   [[ $(read_setting lock) != "true" ]] || apply_lock || failures=1
