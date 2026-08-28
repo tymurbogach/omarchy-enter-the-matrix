@@ -301,9 +301,9 @@ short pointer to it, for tools that look for that name.
 
 ## The backgrounds
 
-`0-neo-sleep` is the default, so installing the theme on its own still leaves you
-with a wallpaper rather than a frozen screenshot of an animation you have not
-installed. `1-live-rain` is the live one — selecting it is what turns the desktop
+`0-red-blue-pill` is the default, so installing the theme on its own still
+leaves you with a wallpaper rather than a frozen screenshot of an animation you
+have not installed. `1-live-rain` is the live one — selecting it is what turns the desktop
 rain on — and the rest are stills.
 
 > The stills are frames from *The Matrix* (1999), © Warner Bros. They are here
