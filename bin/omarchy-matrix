@@ -1,35 +1,62 @@
 #!/bin/bash
 
-# The switchboard for the Matrix pack. Each piece turns on and off on its own.
+# The switchboard. Each piece turns on and off on its own.
 #
-#   omarchy-matrix on | off
-#   omarchy-matrix wallpaper|screensaver|lock|boot on|off|toggle
-#   omarchy-matrix status [--is <piece>] [--json]
-#   omarchy-matrix doctor
+#   <cli> on | off
+#   <cli> wallpaper|screensaver|lock|boot|widget on|off|toggle
+#   <cli> status [--is <piece>] [--json]
+#   <cli> doctor
 #
-# Settings live in ~/.config/omarchy/matrix.json, a file of our own. They are
+# Which pack this is comes from provider.json, below: everything in here is
+# machinery, and the provider contributes the shader, its assets and its names.
+#
+# Settings live in ~/.config/omarchy/<slug>.json, a file of our own. They are
 # deliberately NOT in shell.json: `omarchy refresh shell` rewrites that file
 # wholesale and would take them with it.
 
 set -euo pipefail
 
-PLUGIN_ID="matrix.rain"
-THEME_SLUG="matrix"
-PLYMOUTH_THEME="omarchy-matrix"
-CONFIG="$HOME/.config/omarchy/matrix.json"
-PLUGINS_DIR="$HOME/.config/omarchy/plugins"
-PIECES=(wallpaper screensaver lock boot)
+SELF=$(basename "$0")
 
 fail() {
-  echo "omarchy-matrix: $*" >&2
+  echo "$SELF: $*" >&2
   exit 1
 }
 
+# --- the provider -----------------------------------------------------------
+# The pack is machinery plus one provider, and provider.json is the only file
+# that names the provider. bin/provider.py resolves it the same way for the two
+# derivers: keep the two in step.
+#
+#   $OMARCHY_MATRIX_PROVIDER          an explicit override, and what tests use
+#   ~/.local/share/omarchy-matrix/    where install.sh puts it -- readable even
+#                                     while another theme is current, which is
+#                                     exactly when `suspend` and `lock off` run
+#   next to this script               a working copy, with nothing installed
+for candidate in \
+  "${OMARCHY_MATRIX_PROVIDER:-}" \
+  "$HOME/.local/share/omarchy-matrix/provider.json" \
+  "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/provider.json"; do
+  [[ -n $candidate && -f $candidate ]] || continue
+  PROVIDER="$candidate"
+  break
+done
+[[ -n ${PROVIDER:-} ]] || fail "cannot find provider.json. Re-run the pack's install.sh."
+
+# One jq for all of it: this runs on every menu tick and every toggle.
+eval "$(jq -r '@sh "THEME_SLUG=\(.slug) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) WIDGET_SECTION=\(.widget.section) PLYMOUTH_THEME=\(.plymouth.theme) IPC=\(.ipc) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")" ||
+  fail "$PROVIDER is not valid JSON"
+
+CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
+PLUGINS_DIR="$HOME/.config/omarchy/plugins"
+PIECES=(wallpaper screensaver lock boot)
+
 # --- state ------------------------------------------------------------------
 
-# The desktop pieces are only IN EFFECT while matrix is the current theme:
+# The desktop pieces are only IN EFFECT while the pack's theme is the current
+# one:
 # picking another theme makes the theme-set hook call `suspend`, which stands
-# them down without touching matrix.json. Without this, `status` used to tick
+# them down without touching the settings. Without this, `status` used to tick
 # four pieces that were in fact off, and the pack looked broken.
 #
 # `boot` is the exception: the Plymouth splash belongs to the system, not to
@@ -102,11 +129,11 @@ lock_clone_id() {
 # Omarchy's own source in a second, so a backup of it is litter. Nine of them had
 # piled up here during development before anyone noticed.
 #
-# Ours is a folder carrying MatrixRain.qml -- the deriver copies it into every
-# folder the pack owns -- or the rain plugin itself. A lock clone somebody made
-# for their own reasons has the same name shape and must survive untouched.
+# Ours is a folder carrying the provider's rain QML -- the deriver copies it into
+# every folder the pack owns -- or the rain plugin itself. A lock clone somebody
+# made for their own reasons has the same name shape and must survive untouched.
 ours() {
-  [[ -f "$1/MatrixRain.qml" ]] && return 0
+  [[ -f "$1/$RAIN_QML" ]] && return 0
   [[ -f "$1/manifest.json" ]] &&
     [[ $(jq -r '.id // empty' "$1/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]
 }
@@ -144,7 +171,7 @@ plugin_known() {
 }
 
 nudge_shell() {
-  omarchy-shell matrix refresh >/dev/null 2>&1 || true
+  omarchy-shell "$IPC" refresh >/dev/null 2>&1 || true
 }
 
 # --- pieces -----------------------------------------------------------------
@@ -159,11 +186,11 @@ sync_plugin() {
     sleep 0.3
   fi
   plugin_known "$PLUGIN_ID" || {
-    echo "omarchy-matrix: the $PLUGIN_ID plugin is not installed" >&2
+    echo "$SELF: the $PLUGIN_ID plugin is not installed" >&2
     # NOT `omarchy plugin add <repo-url>`: that would install the whole repo as
     # the plugin, bypassing the CLI, the hooks and the menu. install.sh copies in
     # the five files the plugin actually needs. It is the only supported path.
-    echo "  install it with: ~/.config/omarchy/themes/matrix/install.sh" >&2
+    echo "  install it with: $(omarchy-theme-dir "$THEME_SLUG" 2>/dev/null || echo "~/.config/omarchy/themes/$THEME_SLUG")/install.sh" >&2
     return 1
   }
 
@@ -294,7 +321,7 @@ wait_for_lock() {
     sleep 0.15
     waited=$((waited + 1))
   done
-  echo "omarchy-matrix: the lock is not answering steadily after the swap." >&2
+  echo "$SELF: the lock is not answering steadily after the swap." >&2
   echo "  Run 'omarchy restart shell' before locking the screen." >&2
   return 1
 }
@@ -328,7 +355,7 @@ apply_lock() {
 
   # Only when the set actually changed. Re-deriving over a clone that was
   # already the enabled one -- what the theme-set hook does on every `omarchy
-  # theme set matrix` -- loads no second plugin and needs no restart.
+  # theme set <slug>` -- loads no second plugin and needs no restart.
   after=$(enabled_locks)
   [[ $before == "$after" ]] || restart_shell_for_lock
   wait_for_lock
@@ -405,7 +432,7 @@ cmd_status() {
     if is_active "$piece"; then
       printf '  \033[32m✓\033[0m %-12s\n' "$piece"
     elif [[ $(read_setting "$piece") == "true" && $piece == "boot" ]]; then
-      printf '    %-12s \033[2mon, but not applied — run: omarchy-matrix boot on\033[0m\n' "$piece"
+      printf '    %-12s \033[2mon, but not applied — run: %s boot on\033[0m\n' "$piece" "$SELF"
     elif [[ $(read_setting "$piece") == "true" ]]; then
       printf '    %-12s \033[2mon, but stood down with the theme\033[0m\n' "$piece"
     else
@@ -414,7 +441,7 @@ cmd_status() {
   done
 
   if pack_in_effect && ! plugin_enabled "$PLUGIN_ID"; then
-    printf '\n  the %s plugin is not active — fix it with: omarchy-matrix doctor\n' "$PLUGIN_ID"
+    printf '\n  the %s plugin is not active — fix it with: %s doctor\n' "$PLUGIN_ID" "$SELF"
   fi
 }
 
@@ -432,8 +459,8 @@ cmd_doctor() {
   return $failures
 }
 
-# When the current theme stops being matrix, the pack stands down without
-# touching matrix.json: going back to matrix restores exactly what you had.
+# When the current theme stops being ours, the pack stands down without touching
+# the settings: coming back restores exactly what you had.
 #
 # The lock stands down by deleting the clone, not by disabling it: see
 # remove_lock_clone. `boot` is left alone, since the Plymouth splash belongs to
@@ -499,7 +526,7 @@ wallpaper | screensaver | lock | boot)
     # brought up Omarchy's own with random effects even with the piece ticked.
     [[ $command == "screensaver" ]] || fail "'show' only applies to screensaver"
     if [[ $(read_setting screensaver) == "true" ]]; then
-      omarchy-shell matrix screensaver start >/dev/null
+      omarchy-shell "$IPC" screensaver start >/dev/null
     else
       omarchy-launch-screensaver force
     fi
@@ -511,6 +538,13 @@ wallpaper | screensaver | lock | boot)
   *) fail "unknown action: $action (use on, off or toggle)" ;;
   esac
   apply_piece "$command"
+  ;;
+provider)
+  # What the hooks ask when they need to know the provider's names. They are
+  # installed once and then live in ~/.config/omarchy/hooks, where they have no
+  # idea where provider.json ended up -- this script does.
+  [[ $# -gt 0 ]] || fail "provider needs a key, e.g. slug or plugin.id"
+  jq -r ".$1" "$PROVIDER"
   ;;
 -h | --help | help) usage ;;
 *) usage; exit 1 ;;

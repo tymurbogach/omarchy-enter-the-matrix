@@ -8,13 +8,25 @@
 
 set -uo pipefail
 
-PLUGIN_ID="matrix.rain"
-PLYMOUTH_THEME="omarchy-matrix"
+# provider.json is the only file that names the provider. Look for it where
+# install.sh put it first, then beside this script -- this runs both from PATH,
+# with the theme directory possibly already gone, and from a working copy.
 BIN_DIR="$HOME/.local/bin"
+SHARE_DIR="$HOME/.local/share/omarchy-matrix"
+HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
+for candidate in "${OMARCHY_MATRIX_PROVIDER:-}" "$SHARE_DIR/provider.json" "$HERE/provider.json"; do
+  [[ -n $candidate && -f $candidate ]] || continue
+  PROVIDER="$candidate"
+  break
+done
+[[ -n ${PROVIDER:-} ]] || { echo "cannot find provider.json; nothing to undo" >&2; exit 1; }
+
+eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) PLYMOUTH_THEME=\(.plymouth.theme) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")"
+
 HOOKS="$HOME/.config/omarchy/hooks"
 MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
-THEME_SLUG="matrix"
 THEME_DIR="$HOME/.config/omarchy/themes/$THEME_SLUG"
 
 # The theme goes too, unless you say otherwise. It used to be kept -- it is a
@@ -72,30 +84,33 @@ fi
 
 # `omarchy plugin remove` renames rather than deletes: every folder it took away
 # above is still on disk as .<id>.bak.<timestamp>, and a development machine had
-# nine of them. Only folders carrying MatrixRain.qml are removed -- a lock clone
+# nine of them. Only folders carrying the rain's QML are removed -- a lock clone
 # somebody made for their own reasons has the same name shape and stays.
 echo "· removing the plugin backups the pack left behind"
 for dir in "$PLUGINS_DIR"/.*.bak.*; do
   [[ -d $dir ]] || continue
-  if [[ -f $dir/MatrixRain.qml ]] ||
+  if [[ -f $dir/$RAIN_QML ]] ||
     [[ $(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]; then
     rm -rf "$dir"
   fi
 done
 
 echo "· removing hooks, menu entries and the CLI"
-rm -f "$HOOKS/theme-set.d/matrix" "$HOOKS/post-update.d/matrix"
-rm -f "$BIN_DIR/omarchy-matrix" "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py"
+rm -f "$HOOKS/theme-set.d/$THEME_SLUG" "$HOOKS/post-update.d/$THEME_SLUG"
+rm -f "$BIN_DIR/$CLI" "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
+  "$BIN_DIR/provider.py"
 # Including this script, when it is the copy on PATH that is running. Unlinking
 # a running bash script is safe -- the open inode survives to the last line --
 # but truncating it is not, so never rewrite it here.
-rm -f "$BIN_DIR/omarchy-matrix-uninstall"
-rm -f "$HOME/.config/omarchy/matrix.json"
+rm -f "$BIN_DIR/$CLI-uninstall"
+rm -f "$HOME/.config/omarchy/$THEME_SLUG.json"
+# Where install.sh keeps provider.json, so the CLI could read it from anywhere.
+rm -rf "$SHARE_DIR"
 # Left by a much older version of the pack, which cloned omarchy-screensaver into
 # ~/.local/bin instead of drawing the screensaver itself.
 rm -f "$BIN_DIR"/omarchy-screensaver "$BIN_DIR"/omarchy-screensaver.bak.*
 # Where derive-plymouth.py --stage-only leaves a build for inspection.
-rm -rf "$HOME/.cache/omarchy-matrix"
+rm -rf "$HOME/.cache/$CLI"
 
 if [[ -f $MENU ]]; then
   python3 - "$MENU" <<'PY'
@@ -124,12 +139,12 @@ omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 # current/theme.name pointing at nothing, so step off it first.
 
 if ((KEEP_THEME)); then
-  cat <<'DONE'
+  cat <<DONE
 
-Done. The matrix theme was kept and works like any other theme.
+Done. The theme was kept and works like any other Omarchy theme.
 
 To remove that too:
-  omarchy-matrix-uninstall     (or: rm -rf ~/.config/omarchy/themes/matrix)
+  $CLI-uninstall     (or: rm -rf $THEME_DIR)
 DONE
   exit 0
 fi
@@ -139,7 +154,7 @@ if [[ $(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null) == "$TH
   # guaranteed to exist, unlike whatever the user had before.
   fallback=$(find /usr/share/omarchy/themes -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort | head -1)
   if [[ -n ${fallback:-} ]]; then
-    echo "· stepping off the matrix theme onto $fallback"
+    echo "· stepping off the $THEME_SLUG theme onto $fallback"
     omarchy-theme-set "$fallback" >/dev/null 2>&1 || true
   fi
 fi

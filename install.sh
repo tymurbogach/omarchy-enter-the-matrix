@@ -14,15 +14,29 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PLUGIN_ID="matrix.rain"
-PLUGIN_DIR="$HOME/.config/omarchy/plugins/$PLUGIN_ID"
-BIN_DIR="$HOME/.local/bin"
-HOOKS="$HOME/.config/omarchy/hooks"
-MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
-CONFIG="$HOME/.config/omarchy/matrix.json"
 TESTED_ON="4.0"
 
 command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
+
+# --- the provider -----------------------------------------------------------
+# provider.json is the only file that names the provider; everything below is
+# machinery. It is installed next to the CLI's other files so that the CLI can
+# still read it while another theme is current -- which is exactly when
+# `suspend` and `lock off` run.
+
+PROVIDER="$HERE/provider.json"
+[[ -f $PROVIDER ]] || { echo "cannot find $PROVIDER" >&2; exit 1; }
+eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCENT=\(.accent) PLUGIN_ID=\(.plugin.id) PLUGIN_SRC=\(.plugin.dir) WIDGET_ID=\(.widget.id) WIDGET_SRC=\(.widget.dir)"' "$PROVIDER")"
+mapfile -t PLUGIN_FILES < <(jq -r '.plugin.files[]' "$PROVIDER")
+mapfile -t WIDGET_FILES < <(jq -r '.widget.files[]' "$PROVIDER")
+
+PLUGINS_DIR="$HOME/.config/omarchy/plugins"
+PLUGIN_DIR="$PLUGINS_DIR/$PLUGIN_ID"
+BIN_DIR="$HOME/.local/bin"
+SHARE_DIR="$HOME/.local/share/omarchy-matrix"
+HOOKS="$HOME/.config/omarchy/hooks"
+MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
+CONFIG="$HOME/.config/omarchy/$SLUG.json"
 
 version=$(omarchy version 2>/dev/null || echo unknown)
 [[ $version == $TESTED_ON* ]] || cat >&2 <<WARNING
@@ -38,8 +52,8 @@ WARNING
 
 echo "· plugin $PLUGIN_ID"
 mkdir -p "$PLUGIN_DIR"
-for f in manifest.json Service.qml MatrixRain.qml matrix.frag.qsb glyphs.png; do
-  cp -f "$HERE/$f" "$PLUGIN_DIR/$f"
+for f in "${PLUGIN_FILES[@]}"; do
+  cp -f "$HERE/$PLUGIN_SRC/$f" "$PLUGIN_DIR/$f"
 done
 omarchy-plugin-validate "$PLUGIN_DIR" >/dev/null || {
   echo "  the plugin does not pass Omarchy's validation; stopping here" >&2
@@ -48,15 +62,18 @@ omarchy-plugin-validate "$PLUGIN_DIR" >/dev/null || {
 
 # --- the CLI ----------------------------------------------------------------
 
-echo "· omarchy-matrix in $BIN_DIR"
-mkdir -p "$BIN_DIR"
-install -m 755 "$HERE/bin/omarchy-matrix" "$BIN_DIR/omarchy-matrix"
+echo "· $CLI in $BIN_DIR"
+mkdir -p "$BIN_DIR" "$SHARE_DIR"
+install -m 755 "$HERE/bin/$CLI" "$BIN_DIR/$CLI"
 install -m 755 "$HERE/bin/derive-lock.py" "$BIN_DIR/derive-lock.py"
 install -m 755 "$HERE/bin/derive-plymouth.py" "$BIN_DIR/derive-plymouth.py"
+# Imported by both derivers, and the python half of the provider lookup.
+install -m 644 "$HERE/bin/provider.py" "$BIN_DIR/provider.py"
+install -m 644 "$PROVIDER" "$SHARE_DIR/provider.json"
 # uninstall.sh lives in the theme directory, and `omarchy theme remove` deletes
 # that directory and nothing else -- leaving the whole pack installed with no
 # script left to undo it. So a copy goes on PATH, where it outlives the theme.
-install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/omarchy-matrix-uninstall"
+install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/$CLI-uninstall"
 
 # --- the hooks --------------------------------------------------------------
 # theme-set: brings the pack back when you pick matrix, stands it down when you
@@ -67,7 +84,7 @@ install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/omarchy-matrix-uninstall"
 echo "· theme-set and post-update hooks"
 for hook in theme-set post-update; do
   mkdir -p "$HOOKS/$hook.d"
-  install -m 755 "$HERE/hooks/$hook" "$HOOKS/$hook.d/matrix"
+  install -m 755 "$HERE/hooks/$hook" "$HOOKS/$hook.d/$SLUG"
 done
 
 # --- the menu ---------------------------------------------------------------
@@ -164,7 +181,7 @@ fi
 # the old behaviour when there is not: this also runs from `omarchy theme
 # install` chained on one line, from a hook, and from an agent.
 
-G=$'\033[38;2;96;199;107m'   # the theme's accent
+G=$'\033[38;2;'$((16#${ACCENT:1:2}))';'$((16#${ACCENT:3:2}))';'$((16#${ACCENT:5:2}))'m'  # the provider's accent
 DIM=$'\033[2m'
 BOLD=$'\033[1m'
 OFF=$'\033[0m'
@@ -199,23 +216,23 @@ omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 sleep 0.5
 
 echo
-"$BIN_DIR/omarchy-matrix" doctor
+"$BIN_DIR/$CLI" doctor
 # Once, so a fresh install ends up actually looking at the rain. `doctor` does
 # not do this: it runs from the theme-set hook, and forcing the background on
 # every theme change would be fighting Omarchy's rotation.
-[[ $(jq -r '.wallpaper' "$CONFIG") != "true" ]] || "$BIN_DIR/omarchy-matrix" wallpaper on >/dev/null
+[[ $(jq -r '.wallpaper' "$CONFIG") != "true" ]] || "$BIN_DIR/$CLI" wallpaper on >/dev/null
 
 # The boot splash is last because it is the only piece that needs a password and
 # rebuilds the initramfs.
-if ! "$BIN_DIR/omarchy-matrix" status --is boot 2>/dev/null; then
+if ! "$BIN_DIR/$CLI" status --is boot 2>/dev/null; then
   echo
   echo "  ${BOLD}Boot splash${OFF} — the screen before login, typing out the four lines"
   echo "  from the film. ${DIM}Writes to /usr/share/plymouth and rebuilds the initramfs,"
   echo "  so it asks for your password.${OFF}"
   if ask "Install it" "you can also do this later"; then
-    "$BIN_DIR/omarchy-matrix" boot on || echo "  skipped — the rest of the pack is installed and working" >&2
+    "$BIN_DIR/$CLI" boot on || echo "  skipped — the rest of the pack is installed and working" >&2
   else
-    "$BIN_DIR/omarchy-matrix" boot off >/dev/null 2>&1 || true
+    "$BIN_DIR/$CLI" boot off >/dev/null 2>&1 || true
     echo "  ${DIM}skipped. Turn it on later with: omarchy-matrix boot on${OFF}"
   fi
 fi

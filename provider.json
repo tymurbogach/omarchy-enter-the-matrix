@@ -1,0 +1,65 @@
+{
+  "//": [
+    "The provider. Everything else in the pack is machinery and reads its names",
+    "from here: the CLI, both derivers, the hooks, install.sh and uninstall.sh.",
+    "",
+    "The four pieces -- wallpaper, screensaver, lock, boot -- are not really",
+    "matrix-specific. A provider hands over a shader, its assets and the words on",
+    "the boot splash; the machinery around it stays generic. Keeping that seam",
+    "visible is the point of this file: a second provider should not need a",
+    "single line of bash changed.",
+    "",
+    "Installed to ~/.local/share/omarchy-matrix/provider.json so the CLI can",
+    "still read it while another theme is current -- `suspend` and `lock off`",
+    "run exactly then, and ~/.local/state/omarchy/current/theme points elsewhere."
+  ],
+
+  "slug": "matrix",
+  "displayName": "Matrix",
+  "cli": "omarchy-matrix",
+  "//ipc": "The IpcHandler target the service registers; `omarchy-shell <ipc> ...`.",
+  "ipc": "matrix",
+  "accent": "#60c76b",
+  "repoUrl": "https://github.com/tymurbogach/omarchy-matrix",
+
+  "plugin": {
+    "id": "matrix.rain",
+    "dir": ".",
+    "files": [
+      "manifest.json",
+      "Service.qml",
+      "MatrixRain.qml",
+      "matrix.frag.qsb",
+      "glyphs.png"
+    ]
+  },
+
+  "widget": {
+    "id": "matrix.control",
+    "dir": "widget",
+    "files": ["manifest.json", "Panel.qml"],
+    "section": "right"
+  },
+
+  "//rainFiles": [
+    "What the lock clone needs beside Omarchy's own sources: the shader, its",
+    "atlas and the QML that draws them. derive-lock.py copies these into the",
+    "clone before it patches LockView.qml."
+  ],
+  "rainFiles": ["MatrixRain.qml", "matrix.frag.qsb", "glyphs.png"],
+
+  "plymouth": {
+    "theme": "omarchy-matrix",
+    "name": "Omarchy Matrix",
+    "description": "Omarchy's splash with the line from the start of the film.",
+    "//lines": "The four lines from the start of the film, in order.",
+    "lines": [
+      "Wake up, Neo...",
+      "The Matrix has you...",
+      "Follow the white rabbit.",
+      "Knock, knock, Neo."
+    ],
+    "//color": "The typed line's colour, as Plymouth wants it: r, g, b in 0..1.",
+    "color": [0.0, 1.0, 0.255]
+  }
+}

@@ -1,16 +1,20 @@
 #!/bin/bash
-# omarchy-matrix hook. Installed at ~/.config/omarchy/hooks/theme-set.d/matrix,
-# where Omarchy calls it at the end of every `omarchy theme set`, with the slug
-# as $1.
+# Pack hook. Installed at ~/.config/omarchy/hooks/theme-set.d/<slug>, where
+# Omarchy calls it at the end of every `omarchy theme set`, with the slug as $1.
 #
-# This is what makes the pack come on "just by picking the theme": choose matrix
+# This is what makes the pack come on "just by picking the theme": choose ours
 # and it returns, choose another and it stands down. It is also the net that
 # catches `omarchy refresh shell`, which rewrites shell.json wholesale and leaves
 # the plugin disabled -- re-applying the theme is the way back.
+#
+# The slug is asked for rather than written in: the pack is machinery plus one
+# provider, and provider.json is the only file that names the provider.
 
 command -v omarchy-matrix >/dev/null 2>&1 || exit 0
 
-if [[ ${1:-} == "matrix" ]]; then
+slug=$(omarchy-matrix provider slug 2>/dev/null) || exit 0
+
+if [[ ${1:-} == "$slug" ]]; then
   omarchy-matrix doctor >/dev/null 2>&1 || true
 else
   omarchy-matrix suspend >/dev/null 2>&1 || true
