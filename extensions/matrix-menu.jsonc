@@ -15,4 +15,11 @@
   "style.matrix.lock": {"icon":"󰌾","label":"Lock","description":"Rain behind the password field. Derives a clone of Omarchy's lock.","checked":"omarchy-matrix status --is lock","action":"omarchy-matrix lock toggle"},
   "style.matrix.boot": {"icon":"󰜉","label":"Boot Splash","description":"The screen before login (Plymouth). Asks for your password.","checked":"omarchy-matrix status --is boot","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix boot toggle'"},
   "style.matrix.repair": {"icon":"󰗠","label":"Repair","description":"Re-apply everything. Run after omarchy refresh shell.","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix doctor'"},
+  //
+  // Uninstall is here because Omarchy's own `Remove -> Theme` only deletes the
+  // theme folder: it would leave the plugin, the lock clone, the CLI, the hooks
+  // and this very block installed, pointing at a theme that no longer exists --
+  // and it would delete uninstall.sh along with the folder. This row calls the
+  // copy install.sh leaves on PATH, which survives that.
+  "style.matrix.uninstall": {"icon":"󰩹","label":"Uninstall","description":"Remove the pack and hand Omarchy's lock, screensaver and boot splash back","action":"omarchy-launch-floating-terminal-with-presentation 'omarchy-matrix-uninstall'"},
   // <<< omarchy-matrix

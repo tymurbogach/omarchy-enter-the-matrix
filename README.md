@@ -141,8 +141,16 @@ your home directory: `omarchy-matrix boot off` hands the splash back **and**
 removes that directory. Turning a piece off leaves nothing behind, whether or
 not you ever run `uninstall.sh`.
 
-`./uninstall.sh` removes all of it, boot splash included, and leaves the theme
-working like any other.
+Removing it is **SUPER → Style → Matrix → Uninstall**, or `./uninstall.sh`. It
+takes all of it back, boot splash included, and leaves the theme working like
+any other.
+
+> **Do not use Omarchy's `Remove → Theme` on its own.** That command deletes the
+> theme folder and nothing else, which would leave the plugin, the lock clone,
+> the CLI and the hooks installed and pointing at a theme that is gone — and it
+> deletes `uninstall.sh` along with the folder. Uninstall first, remove the theme
+> after. If you already did it the other way round, `install.sh` leaves a copy of
+> the uninstaller on your PATH as `omarchy-matrix-uninstall` for exactly this.
 
 > **With "stay awake" on, the screensaver never comes up.** The pack respects
 > the same switch Omarchy's idle service does

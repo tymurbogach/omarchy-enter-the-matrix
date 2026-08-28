@@ -77,6 +77,10 @@ done
 echo "· removing hooks, menu entries and the CLI"
 rm -f "$HOOKS/theme-set.d/matrix" "$HOOKS/post-update.d/matrix"
 rm -f "$BIN_DIR/omarchy-matrix" "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py"
+# Including this script, when it is the copy on PATH that is running. Unlinking
+# a running bash script is safe -- the open inode survives to the last line --
+# but truncating it is not, so never rewrite it here.
+rm -f "$BIN_DIR/omarchy-matrix-uninstall"
 rm -f "$HOME/.config/omarchy/matrix.json"
 # Left by a much older version of the pack, which cloned omarchy-screensaver into
 # ~/.local/bin instead of drawing the screensaver itself.

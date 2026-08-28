@@ -53,6 +53,10 @@ mkdir -p "$BIN_DIR"
 install -m 755 "$HERE/bin/omarchy-matrix" "$BIN_DIR/omarchy-matrix"
 install -m 755 "$HERE/bin/derive-lock.py" "$BIN_DIR/derive-lock.py"
 install -m 755 "$HERE/bin/derive-plymouth.py" "$BIN_DIR/derive-plymouth.py"
+# uninstall.sh lives in the theme directory, and `omarchy theme remove` deletes
+# that directory and nothing else -- leaving the whole pack installed with no
+# script left to undo it. So a copy goes on PATH, where it outlives the theme.
+install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/omarchy-matrix-uninstall"
 
 # --- the hooks --------------------------------------------------------------
 # theme-set: brings the pack back when you pick matrix, stands it down when you
