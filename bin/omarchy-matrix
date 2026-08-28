@@ -44,12 +44,12 @@ done
 [[ -n ${PROVIDER:-} ]] || fail "cannot find provider.json. Re-run the pack's install.sh."
 
 # One jq for all of it: this runs on every menu tick and every toggle.
-eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) WIDGET_SECTION=\(.widget.section) PLYMOUTH_THEME=\(.plymouth.theme) IPC=\(.ipc) RAIN_QML=\(.rainFiles[0]) PLUGIN_SRC=\(.plugin.dir) WIDGET_SRC=\(.widget.dir)"' "$PROVIDER")" ||
+eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) DISPLAY_NAME=\(.displayName) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) WIDGET_SECTION=\(.widget.section) PLYMOUTH_THEME=\(.plymouth.theme) IPC=\(.ipc) RAIN_QML=\(.rainFiles[0]) PLUGIN_SRC=\(.plugin.dir) WIDGET_SRC=\(.widget.dir)"' "$PROVIDER")" ||
   fail "$PROVIDER is not valid JSON"
 
 CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
-PIECES=(wallpaper screensaver lock boot)
+PIECES=(wallpaper screensaver lock boot widget)
 
 # --- state ------------------------------------------------------------------
 
@@ -101,6 +101,7 @@ is_active() {
   case "$1" in
   boot) boot_applied ;;
   wallpaper) pack_in_effect && on_live_background ;;
+  widget) pack_in_effect && plugin_enabled "$WIDGET_ID" ;;
   *) pack_in_effect ;;
   esac
 }
@@ -226,14 +227,19 @@ installed_pairs() {
   echo "$theme/provider.json|$HOME/.local/share/omarchy-matrix/provider.json"
 }
 
-# A source file that is missing is not staleness, it is a theme directory that
-# does not carry this file -- an older or newer layout. Only files present on
-# both sides, and different, count.
-files_stale() {
+# NEWER, not merely different. "Different" is the wrong question and it bit on
+# the first run: a working copy installed over an older theme directory looks
+# exactly as different as a pulled theme looks over an older install, and
+# syncing then copies the OLD files over the new ones. A `git pull` gives every
+# file it changes a fresh mtime, which is precisely the event this is for.
+#
+# A source file that is missing is not staleness either, it is a theme directory
+# that does not carry that file -- an older or a newer layout.
+files_outdated() {
   local theme="$1" source target
   while IFS='|' read -r source target; do
     [[ -f $source ]] || continue
-    cmp -s "$source" "$target" || return 0
+    [[ -f $target && ! $source -nt $target ]] || return 0
   done < <(installed_pairs "$theme")
   return 1
 }
@@ -242,7 +248,11 @@ sync_files() {
   local theme
   theme=$(theme_dir) || return 0
   [[ -n $theme && -x $theme/install.sh ]] || return 0
-  files_stale "$theme" || return 0
+  # An install.sh old enough not to know --sync would run the whole thing --
+  # questions, boot splash and all -- from inside a doctor that is only meant to
+  # refresh files. Ask before calling.
+  grep -q -- '--sync' "$theme/install.sh" 2>/dev/null || return 0
+  files_outdated "$theme" || return 0
   echo "  the theme directory has moved on; refreshing the pack's copies"
   "$theme/install.sh" --sync || echo "  could not refresh them; run $theme/install.sh" >&2
 }
@@ -437,6 +447,30 @@ apply_lock() {
   wait_for_lock
 }
 
+# The bar icon and its panel: the pack's own switchboard, one click away.
+#
+# For a plugin of kind `bar-widget`, "enabled" means "present in bar.layout" --
+# PluginRegistry.setEnabled inserts the entry there and removes it again
+# (PluginRegistry.qml:498-520). That is why the widget is a plugin of its own
+# and not another kind on the rain: turning both rain layers off disables that
+# plugin, and folding the two together would take the icon off the bar with them.
+apply_widget() {
+  if [[ $(read_setting widget) == "true" ]]; then
+    if ! plugin_known "$WIDGET_ID"; then
+      omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+      sleep 0.3
+    fi
+    plugin_known "$WIDGET_ID" || {
+      echo "$SELF: the $WIDGET_ID plugin is not installed" >&2
+      return 1
+    }
+    plugin_enabled "$WIDGET_ID" ||
+      omarchy-plugin-enable "$WIDGET_ID" --section "$WIDGET_SECTION" >/dev/null
+  else
+    ! plugin_enabled "$WIDGET_ID" || omarchy-plugin-disable "$WIDGET_ID" >/dev/null
+  fi
+}
+
 apply_boot() {
   # The screen before login. Needs sudo and rebuilds the initramfs, so it never
   # happens on its own: only when you ask for it.
@@ -465,6 +499,7 @@ apply_piece() {
   screensaver) apply_screensaver ;;
   lock) apply_lock ;;
   boot) apply_boot ;;
+  widget) apply_widget ;;
   esac
 }
 
@@ -497,8 +532,8 @@ cmd_status() {
       --argjson aw "$(active_of wallpaper)" --argjson as "$(active_of screensaver)" \
       --argjson al "$(active_of lock)" --argjson ab "$(active_of boot)" \
       --argjson effect "$(pack_in_effect && echo true || echo false)" \
-      --arg theme "$(current_theme)" \
-      '{theme: $theme, active: $effect,
+      --arg theme "$(current_theme)" --arg name "$DISPLAY_NAME" --arg slug "$THEME_SLUG" \
+      '{name: $name, slug: $slug, theme: $theme, active: $effect,
         settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b},
         pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab}}'
     return
@@ -550,6 +585,7 @@ cmd_doctor() {
   # picker) never calls a hook, so a deliberate pick inside the theme still
   # stands until the next `theme set`.
   [[ $(read_setting wallpaper) != "true" ]] || select_live_background
+  apply_widget || failures=1
   [[ $(read_setting lock) != "true" ]] || apply_lock || failures=1
   nudge_shell
   # `boot` is left out on purpose: it needs sudo and this runs from hooks.
@@ -565,6 +601,9 @@ cmd_doctor() {
 # the system rather than to the theme.
 cmd_suspend() {
   ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
+  # The bar icon goes with the rest: a Matrix switch on the bar under somebody
+  # else's theme is the pack refusing to stand down (Rule 5).
+  ! plugin_enabled "$WIDGET_ID" || omarchy-plugin-disable "$WIDGET_ID" >/dev/null
   omarchy-toggle screensaver-off off
   if lock_clone_id >/dev/null; then
     remove_lock_clone
@@ -587,11 +626,11 @@ cmd_all() {
 }
 
 usage() {
-  cat <<'USAGE'
-Usage: omarchy-matrix <command>
+  cat <<USAGE
+Usage: $SELF <command>
 
   on | off                            Turn the whole pack on or off
-  wallpaper|screensaver|lock|boot on|off|toggle
+  wallpaper|screensaver|lock|boot|widget on|off|toggle
                                       One piece at a time
   status [--is <piece>] [--json]      What is on
   doctor                              Assert everything again
@@ -602,6 +641,7 @@ Pieces:
   screensaver  Rain when you go idle, instead of Omarchy's terminal one
   lock         Rain behind the password field when you lock
   boot         The screen before login (Plymouth). Needs sudo.
+  widget       The switchboard on the bar: these switches, one click away
 USAGE
 }
 
@@ -614,7 +654,7 @@ off) cmd_all false ;;
 status) cmd_status "$@" ;;
 doctor) cmd_doctor ;;
 suspend) cmd_suspend ;;
-wallpaper | screensaver | lock | boot)
+wallpaper | screensaver | lock | boot | widget)
   action="${1:-toggle}"
   case "$action" in
   show)

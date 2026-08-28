@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "matrix.control",
+  "name": "Matrix",
+  "version": "1.0.0",
+  "author": "tymurbogach",
+  "license": "MIT",
+  "description": "The Matrix pack's four switches -- desktop, screensaver, lock and boot splash -- on the bar. Part of the Matrix theme pack.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Matrix",
+    "description": "One bar icon and one panel: turn the desktop rain, the screensaver, the lock and the boot splash on or off, repair the pack after a shell refresh, or remove it.",
+    "category": "Style",
+    "aliases": ["matrix", "rain"],
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

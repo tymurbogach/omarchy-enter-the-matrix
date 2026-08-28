@@ -48,9 +48,11 @@ for dir in "$PLUGINS_DIR"/*.lock; do
     omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
 done
 
-echo "· removing the rain plugin"
-omarchy-plugin-remove "$PLUGIN_ID" --yes >/dev/null 2>&1 ||
-  omarchy-plugin-remove "$PLUGIN_ID" >/dev/null 2>&1 || true
+echo "· removing the rain plugin and the bar widget"
+for id in "$PLUGIN_ID" "$WIDGET_ID"; do
+  omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
+    omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+done
 
 echo "· handing Omarchy's screensaver back"
 omarchy-toggle screensaver-off off
@@ -89,13 +91,13 @@ fi
 echo "· removing the plugin backups the pack left behind"
 for dir in "$PLUGINS_DIR"/.*.bak.*; do
   [[ -d $dir ]] || continue
-  if [[ -f $dir/$RAIN_QML ]] ||
-    [[ $(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]; then
+  id=$(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null)
+  if [[ -f $dir/$RAIN_QML || $id == "$PLUGIN_ID" || $id == "$WIDGET_ID" ]]; then
     rm -rf "$dir"
   fi
 done
 
-echo "· removing hooks, menu entries and the CLI"
+echo "· removing hooks, the old menu block and the CLI"
 rm -f "$HOOKS/theme-set.d/$THEME_SLUG" "$HOOKS/post-update.d/$THEME_SLUG"
 rm -f "$BIN_DIR/$CLI" "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
   "$BIN_DIR/provider.py"

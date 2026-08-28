@@ -34,7 +34,7 @@ command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 
 PROVIDER="$HERE/provider.json"
 [[ -f $PROVIDER ]] || { echo "cannot find $PROVIDER" >&2; exit 1; }
-eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCENT=\(.accent) PLUGIN_ID=\(.plugin.id) PLUGIN_SRC=\(.plugin.dir) WIDGET_ID=\(.widget.id) WIDGET_SRC=\(.widget.dir)"' "$PROVIDER")"
+eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCENT=\(.accent) PLUGIN_ID=\(.plugin.id) PLUGIN_SRC=\(.plugin.dir) WIDGET_ID=\(.widget.id) WIDGET_SRC=\(.widget.dir) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")"
 mapfile -t PLUGIN_FILES < <(jq -r '.plugin.files[]' "$PROVIDER")
 mapfile -t WIDGET_FILES < <(jq -r '.widget.files[]' "$PROVIDER")
 
@@ -91,6 +91,13 @@ stage_plugin() { # <id> <source subdir> <file>...
 echo "· plugin $PLUGIN_ID"
 stage_plugin "$PLUGIN_ID" "$PLUGIN_SRC" "${PLUGIN_FILES[@]}"
 
+# The switchboard on the bar. A plugin of its own rather than another kind on
+# the rain: for a `bar-widget`, enabled means present in bar.layout, so folding
+# the two together would take the icon off the bar the moment both rain layers
+# were switched off.
+echo "· bar widget $WIDGET_ID"
+stage_plugin "$WIDGET_ID" "$WIDGET_SRC" "${WIDGET_FILES[@]}"
+
 # --- the CLI ----------------------------------------------------------------
 
 echo "· $CLI in $BIN_DIR"
@@ -118,25 +125,23 @@ for hook in theme-set post-update; do
   install -m 755 "$HERE/hooks/$hook" "$HOOKS/$hook.d/$SLUG"
 done
 
-# --- the menu ---------------------------------------------------------------
-# Spliced into the user's extensions file, which is the place Omarchy leaves for
-# this. The block sits between markers and everything outside it is kept; it
-# goes right after the opening brace so it does not depend on whether the user's
-# last entry has a trailing comma (and Omarchy's parser tolerates a dangling one
-# before the closing brace).
+# --- the menu, which we no longer write ------------------------------------
+# The four switches used to be spliced into the user's extensions file, between
+# markers. That was the last thing the pack wrote into a file that is not its
+# own, and it put the switches three clicks deep under Style. They live on the
+# bar now, so the block is taken back out -- including from installs that
+# predate the widget.
 
-echo "· menu entries"
-mkdir -p "$(dirname "$MENU")"
-[[ -f $MENU ]] || echo '{}' >"$MENU"
-python3 - "$MENU" "$HERE/extensions/matrix-menu.jsonc" <<'PY'
+if [[ -f $MENU ]] && grep -q '>>> omarchy-matrix' "$MENU"; then
+  echo "· removing the old menu block (the switches are on the bar now)"
+  python3 - "$MENU" <<'PY'
 import sys, pathlib, re
-menu, fragment = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+menu = pathlib.Path(sys.argv[1])
 text = menu.read_text()
-block = fragment.read_text().rstrip("\n") + "\n"
 
-# Take the newline install.sh puts BEFORE the block, not just the block: without
-# the leading \n? every install/uninstall cycle left one more blank line behind.
-# Nine had stacked up in a file that is not ours to litter.
+# Take the newline install.sh used to put BEFORE the block, not just the block:
+# without the leading \n? every install/uninstall cycle left one more blank line
+# behind. Nine had stacked up in a file that is not ours to litter.
 text = re.sub(r"\n?[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
               "", text, flags=re.S)
 
@@ -144,9 +149,9 @@ text = re.sub(r"\n?[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
 # after the opening brace mean nothing in JSONC and every one of them is ours.
 opening = text.index("{")
 text = text[:opening + 1] + re.sub(r"^\n(?:[ \t]*\n)+", "\n", text[opening + 1:])
-
-menu.write_text(text[:opening + 1] + "\n" + block + text[opening + 1:])
+menu.write_text(text)
 PY
+fi
 
 # Everything above is a file copy, and that is all --sync is for: refreshing
 # what a `omarchy theme update` pulled into the theme directory. What follows
@@ -180,13 +185,13 @@ fi
 
 # `omarchy plugin remove` renames rather than deletes, so every clone the pack
 # ever handed back is still on disk as .<id>.bak.<timestamp>. Ours are the ones
-# carrying MatrixRain.qml; a clone somebody made themselves has the same name
+# carrying the rain's QML; a clone somebody made themselves has the same name
 # shape and is left alone.
 pruned=0
-for dir in "$HOME/.config/omarchy/plugins"/.*.bak.*; do
+for dir in "$PLUGINS_DIR"/.*.bak.*; do
   [[ -d $dir ]] || continue
-  if [[ -f $dir/MatrixRain.qml ]] ||
-    [[ $(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]; then
+  id=$(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null)
+  if [[ -f $dir/$RAIN_QML || $id == "$PLUGIN_ID" || $id == "$WIDGET_ID" ]]; then
     rm -rf "$dir"
     pruned=$((pruned + 1))
   fi
@@ -242,14 +247,16 @@ if [[ ! -f $CONFIG ]]; then
   if ((INTERACTIVE)); then
     echo
     echo "  ${BOLD}Which pieces do you want?${OFF} Each one switches on and off later,"
-    echo "  ${DIM}from SUPER -> Style -> Matrix or with 'omarchy-matrix'.${OFF}"
+    echo "  ${DIM}from the $DISPLAY_NAME icon on the bar, or with '$CLI'.${OFF}"
     echo
   fi
-  w=true; s=true; l=true
+  w=true; s=true; l=true; g=true
   ask "Background " "rain on the desktop"                  || w=false
   ask "Screensaver" "rain when idle, instead of Omarchy's" || s=false
   ask "Lock       " "rain behind the password field"       || l=false
-  printf '{"wallpaper": %s, "screensaver": %s, "lock": %s, "boot": true}\n' "$w" "$s" "$l" >"$CONFIG"
+  ask "Bar icon   " "these switches, one click away"       || g=false
+  printf '{"wallpaper": %s, "screensaver": %s, "lock": %s, "boot": true, "widget": %s}\n' \
+    "$w" "$s" "$l" "$g" >"$CONFIG"
 fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
@@ -257,10 +264,15 @@ sleep 0.5
 
 echo
 "$BIN_DIR/$CLI" doctor
-# Once, so a fresh install ends up actually looking at the rain. `doctor` does
-# not do this: it runs from the theme-set hook, and forcing the background on
-# every theme change would be fighting Omarchy's rotation.
-[[ $(jq -r '.wallpaper' "$CONFIG") != "true" ]] || "$BIN_DIR/$CLI" wallpaper on >/dev/null
+
+# One restart at the end, and only here. Two reasons, both paid for:
+#
+# - A hot reload is not enough for a bar widget that has just appeared or
+#   changed shape. Watched here: the icon's slot stayed 0 px wide through
+#   several reloads and only took its size after a restart.
+# - It guarantees exactly one instance of every plugin the pack touches, which
+#   is the two-instances trap closed rather than dodged.
+omarchy-restart-shell >/dev/null 2>&1 || true
 
 # The boot splash is last because it is the only piece that needs a password and
 # rebuilds the initramfs.
@@ -288,8 +300,8 @@ cat <<EOF
     omarchy-matrix wallpaper off  ${DIM}any piece: wallpaper screensaver lock boot${OFF}
     omarchy-matrix doctor         ${DIM}re-apply everything after 'omarchy refresh shell'${OFF}
 
-  ${BOLD}SUPER -> Style -> Matrix${OFF}       ${DIM}the same switches, with a tick${OFF}
-  ${DIM}and an Uninstall row that takes all of it back, theme included${OFF}
+  ${BOLD}The $DISPLAY_NAME icon on your bar${OFF}  ${DIM}the same switches, with a tick${OFF}
+  ${DIM}and Repair and Uninstall beneath them. Not there? '$CLI widget on'${OFF}
 
   ${DIM}Note: 'omarchy theme set' rotates to the next background, so re-applying
   the theme takes you off the rain. Back with: omarchy-matrix wallpaper on${OFF}
