@@ -306,7 +306,8 @@ short pointer to it, for tools that look for that name.
 1-neo-sleep.jpg
 2-morpheus.jpg
 3-sunglasses.jpg
-4-minimal.png
+4-rain-still.png   a frozen frame of the shader, as a plain wallpaper
+5-minimal.png
 ```
 
 `0-live-pills` does three jobs at once: it is the thumbnail in the picker, it is
@@ -315,9 +316,11 @@ in the selected background's name — and it is the frame you are left looking a
 when the plugin is off. It is also the theme's default, so installing the theme
 on its own leaves you with a wallpaper rather than a screenshot.
 
-That last part is why it is a photograph. It used to be a still frame of the
-rain shader, which meant anyone installing the theme alone was handed a frozen
-picture of the one thing the theme is about making move.
+That last part is why it is a photograph. The marker used to be a still frame of
+the rain shader, which meant anyone installing the theme alone was handed a
+frozen picture of the one thing the theme is about making move. That frame is
+still in the carousel as `4-rain-still` — it is a fine wallpaper, it was just a
+bad ambassador — and without `-live-` in its name it is only ever a picture.
 
 With the pack running you will not see the pills themselves, since the rain
 draws over them. `omarchy-matrix wallpaper off` steps to the next background and

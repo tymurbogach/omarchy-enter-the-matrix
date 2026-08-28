@@ -139,7 +139,7 @@ PRESETS = {
     # seed, density, scale, minimal
     # No mark and no logo: black, a few very dim columns of texture and one lit
     # streak. The idea is atmosphere, not a poster.
-    "4-minimal":   (29, 0.50, 1.0, True),
+    "5-minimal":   (29, 0.50, 1.0, True),
 }
 
 
