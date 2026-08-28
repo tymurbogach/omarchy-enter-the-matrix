@@ -7,19 +7,21 @@ digital rain on the desktop, as the screensaver, and behind the lock.
 
 ## Install
 
-**The theme.** Colours, backgrounds and the boot mark. Depends on nothing else:
+One line, both halves:
 
 ```bash
-omarchy theme install https://github.com/tymurbogach/omarchy-matrix
-omarchy theme set matrix
+omarchy theme install https://github.com/tymurbogach/omarchy-matrix &&
+  ~/.config/omarchy/themes/matrix/install.sh
 ```
 
-**The rain.** It is a shell plugin and installs separately, because an animation
-does not fit inside an Omarchy theme:
+The first command is the **theme** — colours, backgrounds and the boot mark —
+and it depends on nothing else. The second is the **pack**: the rain, which is a
+shell plugin and cannot live inside an Omarchy theme, plus the switches, the
+menu row and the boot splash. It asks which pieces you want.
 
-```bash
-~/.config/omarchy/themes/matrix/install.sh
-```
+Chain them. Nothing in Omarchy's theme installer can tell you the second half
+exists, so on its own the first line leaves you with a theme and no idea there
+is more.
 
 That script is the only supported way in. `omarchy plugin add <this repo>` looks
 like it should work — the manifest is at the root — but it installs the whole

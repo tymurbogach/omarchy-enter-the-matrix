@@ -160,9 +160,39 @@ PY
 fi
 
 # --- switch it on -----------------------------------------------------------
+# Interactive when there is a terminal to ask on, and silent-but-identical to
+# the old behaviour when there is not: this also runs from `omarchy theme
+# install` chained on one line, from a hook, and from an agent.
+
+G=$'\033[38;2;96;199;107m'   # the theme's accent
+DIM=$'\033[2m'
+BOLD=$'\033[1m'
+OFF=$'\033[0m'
+
+INTERACTIVE=0
+[[ -t 0 && -t 1 ]] && INTERACTIVE=1
+
+# Default yes. Anything starting with n is a no; Enter is a yes.
+ask() {
+  local reply=""
+  ((INTERACTIVE)) || return 0
+  printf '  %s%s%s  %s%s%s [Y/n] ' "$G" "$1" "$OFF" "$DIM" "$2" "$OFF"
+  read -r reply || true
+  [[ ${reply,,} != n* ]]
+}
 
 if [[ ! -f $CONFIG ]]; then
-  echo '{"wallpaper": true, "screensaver": true, "lock": true, "boot": true}' >"$CONFIG"
+  if ((INTERACTIVE)); then
+    echo
+    echo "  ${BOLD}Which pieces do you want?${OFF} Each one switches on and off later,"
+    echo "  ${DIM}from SUPER -> Style -> Matrix or with 'omarchy-matrix'.${OFF}"
+    echo
+  fi
+  w=true; s=true; l=true
+  ask "Background " "rain on the desktop"                  || w=false
+  ask "Screensaver" "rain when idle, instead of Omarchy's" || s=false
+  ask "Lock       " "rain behind the password field"       || l=false
+  printf '{"wallpaper": %s, "screensaver": %s, "lock": %s, "boot": true}\n' "$w" "$s" "$l" >"$CONFIG"
 fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
@@ -173,30 +203,37 @@ echo
 # Once, so a fresh install ends up actually looking at the rain. `doctor` does
 # not do this: it runs from the theme-set hook, and forcing the background on
 # every theme change would be fighting Omarchy's rotation.
-"$BIN_DIR/omarchy-matrix" wallpaper on >/dev/null
+[[ $(jq -r '.wallpaper' "$CONFIG") != "true" ]] || "$BIN_DIR/omarchy-matrix" wallpaper on >/dev/null
 
 # The boot splash is last because it is the only piece that needs a password and
-# rebuilds the initramfs. If you would rather not, answer nothing: the install
-# is already complete and you can turn it on later.
-if [[ $("$BIN_DIR/omarchy-matrix" status --is boot && echo yes || echo no) == "no" ]]; then
+# rebuilds the initramfs.
+if ! "$BIN_DIR/omarchy-matrix" status --is boot 2>/dev/null; then
   echo
-  echo "· boot splash: needs your password (writes to /usr/share/plymouth and"
-  echo "  rebuilds the initramfs). Ctrl-C to skip; turn it on later with"
-  echo "  'omarchy-matrix boot on'."
-  "$BIN_DIR/omarchy-matrix" boot on || {
-    echo "  skipped — the rest of the pack is installed and working" >&2
-  }
+  echo "  ${BOLD}Boot splash${OFF} — the screen before login, typing out the four lines"
+  echo "  from the film. ${DIM}Writes to /usr/share/plymouth and rebuilds the initramfs,"
+  echo "  so it asks for your password.${OFF}"
+  if ask "Install it" "you can also do this later"; then
+    "$BIN_DIR/omarchy-matrix" boot on || echo "  skipped — the rest of the pack is installed and working" >&2
+  else
+    "$BIN_DIR/omarchy-matrix" boot off >/dev/null 2>&1 || true
+    echo "  ${DIM}skipped. Turn it on later with: omarchy-matrix boot on${OFF}"
+  fi
 fi
 
-cat <<'DONE'
+cat <<EOF
 
-Done.
+  ${G}${BOLD}Done.${OFF}
 
-  omarchy theme set matrix        apply the theme (and bring the pack back)
-  omarchy-matrix status           what is on
-  SUPER -> Style -> Matrix        the switches, with ✓
+  ${BOLD}omarchy-matrix${OFF}                 ${DIM}the switchboard${OFF}
+  ${DIM}installed at${OFF} $BIN_DIR/omarchy-matrix
 
-Note: `omarchy theme set` rotates to the theme's next background, so re-applying
-the theme takes you off the rain. Back with:
-  omarchy-matrix wallpaper on
-DONE
+    omarchy-matrix status         ${DIM}what is on right now${OFF}
+    omarchy-matrix wallpaper off  ${DIM}any piece: wallpaper screensaver lock boot${OFF}
+    omarchy-matrix doctor         ${DIM}re-apply everything after 'omarchy refresh shell'${OFF}
+
+  ${BOLD}SUPER -> Style -> Matrix${OFF}       ${DIM}the same switches, with a tick${OFF}
+  ${DIM}and an Uninstall row that takes all of it back, theme included${OFF}
+
+  ${DIM}Note: 'omarchy theme set' rotates to the next background, so re-applying
+  the theme takes you off the rain. Back with: omarchy-matrix wallpaper on${OFF}
+EOF
