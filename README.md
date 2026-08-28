@@ -16,8 +16,8 @@ omarchy theme install https://github.com/tymurbogach/omarchy-matrix &&
 
 The first command is the **theme** — colours, backgrounds and the boot mark —
 and it depends on nothing else. The second is the **pack**: the rain, which is a
-shell plugin and cannot live inside an Omarchy theme, plus the switches, the
-menu row and the boot splash. It asks which pieces you want.
+shell plugin and cannot live inside an Omarchy theme, plus the switches on your
+bar and the boot splash. It asks which pieces you want.
 
 Chain them. Nothing in Omarchy's theme installer can tell you the second half
 exists, so on its own the first line leaves you with a theme and no idea there
@@ -25,18 +25,18 @@ is more.
 
 That script is the only supported way in. `omarchy plugin add <this repo>` looks
 like it should work — the manifest is at the root — but it installs the whole
-repository as the plugin and skips the CLI, the hooks and the menu, which is
-most of the pack.
+repository as the plugin and skips the CLI, the hooks and the bar widget, which
+is most of the pack.
 
 The desktop rain is one more background in the carousel, `1-live-rain`.
 `omarchy-matrix wallpaper on` selects it for you. Mind that `omarchy theme set`
 rotates to the theme's next background, so re-applying the theme takes you off
-the rain — come back with that same command, or from the menu.
+the rain — come back with that same command, or from the bar.
 
 ## The pieces
 
-Each one switches on and off separately, from the menu
-(**SUPER → Style → Matrix**, with ✓) or from the command line:
+Each one switches on and off separately, from the **Matrix icon on your bar**
+(with a ✓ each) or from the command line:
 
 ```bash
 omarchy-matrix status
@@ -127,10 +127,12 @@ background, nor the bar:
 
 ```
 ~/.config/omarchy/plugins/matrix.rain/     the plugin
+~/.config/omarchy/plugins/matrix.control/  the bar widget
 ~/.config/omarchy/matrix.json              which pieces are on
 ~/.config/omarchy/hooks/{theme-set,post-update}.d/matrix
-~/.config/omarchy/extensions/omarchy-menu.jsonc   (block between markers)
-~/.local/bin/{omarchy-matrix,derive-lock.py,derive-plymouth.py}
+~/.config/omarchy/shell.json               one entry in the bar layout
+~/.local/bin/{omarchy-matrix,derive-lock.py,derive-plymouth.py,provider.py}
+~/.local/share/omarchy-matrix/provider.json
 ~/.config/omarchy/plugins/<username>.lock  only while `lock` is on
 /usr/share/plymouth/themes/omarchy-matrix/ only while `boot` is on
 ```
@@ -143,10 +145,10 @@ your home directory: `omarchy-matrix boot off` hands the splash back **and**
 removes that directory. Turning a piece off leaves nothing behind, whether or
 not you ever run `uninstall.sh`.
 
-Removing it is **SUPER → Style → Matrix → Uninstall**, or `./uninstall.sh`. It
-takes all of it back — the plugin, the lock clone, the CLI, the hooks, the menu
-block, the boot splash and the theme directory itself — and leaves Omarchy's own
-lock, screensaver and splash in charge again.
+Removing it is **Uninstall**, at the bottom of the bar widget's panel, or
+`./uninstall.sh`. It takes all of it back — both plugins, the lock clone, the
+CLI, the hooks, the boot splash and the theme directory itself — and leaves
+Omarchy's own lock, screensaver and splash in charge again.
 
 Pass `--keep-theme` if you want the colours and backgrounds to stay behind as an
 ordinary Omarchy theme.
@@ -192,9 +194,11 @@ exactly what you had.
 the system, not to the theme. Its ✓ asks the system which theme is really
 installed, so it never lies either.
 
-While the pack is stood down, the menu **ticks nothing** and `omarchy-matrix
+While the pack is stood down, the widget **ticks nothing** and `omarchy-matrix
 status` says why. The ✓ means "this is happening now", not "you have it
-configured".
+configured" — which is why the Background tick goes out the moment you pick
+another background from the carousel, and comes back with
+`omarchy-matrix wallpaper on`.
 
 ## What is inside
 
@@ -205,8 +209,10 @@ configured".
 | `backgrounds/` | The carousel. `0-neo-sleep` is the default, so installing only the theme still gives you a wallpaper. `1-live-rain` is a still frame of the shader: thumbnail, marker and fallback in one — selecting it is what turns the desktop rain on. The rest are film stills. |
 | `unlock.png`, `preview-unlock.png` | The static boot mark, for anyone installing the theme without the pack. With the pack, `logo.png` goes invisible and the lines are typed instead. |
 | `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glyphs.png` | The plugin. |
-| `bin/` | `omarchy-matrix` (the switch CLI) and the two derivers, `derive-lock.py` and `derive-plymouth.py`. |
-| `hooks/`, `extensions/` | The self-repair on theme change and update, and the menu entries. |
+| `widget/` | The bar widget: one icon, four switches, Repair and Uninstall. |
+| `provider.json` | The only file that names this provider — slug, plugin ids, Plymouth theme, the lines typed at boot. Everything else is machinery. |
+| `bin/` | `omarchy-matrix` (the switch CLI), the two derivers and `provider.py`. |
+| `hooks/` | The self-repair on theme change and update. |
 | `rain/` | The shader sources: `matrix.frag` and the atlas generator. |
 | `generate-backgrounds.py`, `generate-brand.py` | Regenerate the PNGs. Neither is an untouchable binary. |
 

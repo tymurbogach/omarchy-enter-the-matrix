@@ -161,75 +161,39 @@ handing it back always goes through `omarchy plugin remove`, never
 
 ## Where this is going
 
-Today the pack is a theme plus a block spliced into the user's menu under
-**Style** — one level deeper than it should be, and it only knows about matrix.
+The pack is a **theme plus a layer**, and the layer is now two shell plugins:
+`matrix.rain` draws, `matrix.control` is one icon on the bar that owns the
+switches. Nothing of the pack is written into a file that is not its own any
+more -- the block that used to be spliced into `omarchy-menu.jsonc` is gone, and
+the only shared file it touches is `shell.json`, through Omarchy's own
+`omarchy plugin enable`, which is what that command is for.
 
-The direction is a single **bar widget**: `kinds: ["bar-widget", "service"]` with
-a `panel` entry point, the way Omarchy's own built-ins do it. One item on the
-bar owns the four switches, and the pack stops writing into
-`omarchy-menu.jsonc` at all — which is the most invasive thing it currently does
-to a file that is not its own.
-
-Beyond that, the four pieces are not really matrix-specific: they are
-*wallpaper, screensaver, lock and boot as a set*, and matrix is one provider of
-that set. New work should keep the seam visible — a provider contributes a
-shader and its assets, the machinery around it stays generic — rather than
-hard-coding one more `matrix` string.
+The four pieces are not matrix-specific: they are *wallpaper, screensaver, lock
+and boot as a set*, and matrix is one provider of that set. `provider.json` is
+the seam -- the only file that names the provider. Keep it that way: new work
+adds to the machinery and asks the descriptor, rather than writing `matrix` down
+one more time.
 
 ### The list, in the order it is worth doing
 
-Everything below came out of the clean-room test on 2026-08-28, the run that
-also fixed seven bugs. None of it is broken today; all of it is a seam that will
-tear later.
+The nine seams the 2026-08-28 clean-room test turned up are closed. What is
+below came out of closing them.
 
-1. **The bar widget.** `kinds: ["bar-widget", "service"]` plus a `panel`, which
-   is confirmed to exist in Omarchy 4 and is what its own built-ins use. The
-   plugin is already a `service`; this is the same folder. It ends the splice
-   into `omarchy-menu.jsonc` — the last thing the pack writes into a file that
-   is not its own — and puts the switches one click away instead of three.
-2. **Separate the machinery from the provider.** A provider hands over a shader
-   and its assets; everything around it stops saying `matrix`. Today that string
-   is hard-coded in the CLI, both derivers, the hooks and the menu.
-3. **`install.sh` fires eleven plugin hot-reloads in one second**, one per file
-   copied. It caused no harm when measured — one shell process, no QML errors —
-   but it is the two-instances trap idling. Stage into a temp directory and move
-   it into place in one go, or end with `omarchy-restart-shell`.
-4. **`omarchy theme set` rotates away from the rain, and the ✓ then lies.** The
-   theme-set hook does not re-select the live background, on the grounds that it
-   would fight Omarchy's rotation. But it only fights it when the user has
-   explicitly asked for the rain, which `matrix.json` already records — and the
-   cost of not doing it is worse than the fight. Observed: after a round trip to
-   another theme and back, `status` printed `✓ wallpaper` with **zero rain
-   surfaces on screen**, because the rotation had landed on a still. The tick is
-   supposed to mean "this is happening now"; here it meant "configured". Either
-   `doctor` re-selects the live background when the piece is on, or `is_active`
-   has to check `on_live_background` and stop ticking when it is not.
-5. **`omarchy theme update` pulls the repo but never re-runs `install.sh`**, so
-   the copies under `plugins/matrix.rain/` go stale while the theme does not.
-   The `post-update.d` hook re-derives the lock and the splash but does not
-   recopy the plugin. Most likely thing to bite a stranger without their
-   noticing.
-6. **`omarchy refresh shell` recovery is documented but untested.** The README
-   promises `doctor` brings it back. Verify it once, on a machine whose
-   `shell.json` you are willing to lose.
-7. **`TESTED_ON` says 4.0 while what was actually tested is 4.0.1.** It matches
-   by prefix, so nothing warns; the point of the pin is to record what was run.
-8. **Nothing tells you the pack exists after `omarchy theme install`.** The two
-   steps are the theme and then `install.sh`, and only the README mentions the
-   second — so whatever the README omits, the stranger does not know. There is
-   no fix by hook: `omarchy hook` only runs what is already in
-   `~/.config/omarchy/hooks/<name>.d/`, there is no `theme-install` hook, and on
-   a virgin machine our `theme-set` hook is not installed yet. A theme cannot
-   ship anything that executes either. What is left is making the README's
-   install a **single pasteable line** that chains both, and making the second
-   half loud enough to be worth arriving at.
-9. **`install.sh` should ask, in colour, rather than assume.** Today it switches
-   all four pieces on and only prompts for `boot`, which is the one needing a
-   password. It should walk the four pieces interactively with a clear default
-   each, so somebody who only wants the lock is not handed the screensaver too —
-   and it should end on a coloured summary of what is on and how to change it.
-   Same when it is run non-interactively: detect no tty and fall back to today's
-   behaviour rather than blocking.
+1. **`derive-lock.py` copies into the live lock clone file by file**, and the
+   journal shows six reloads of the lock plugin per derive. It is the same seam
+   `install.sh` had, in the one plugin where being briefly wrong is invisible
+   until you lock the screen. Stage the clone and move it into place.
+2. **`widget/Panel.qml` still writes the CLI's name down.** Every other file
+   asks `provider.json`; the widget cannot, because it would need the CLI to
+   find it. Either it reads `~/.local/share/omarchy-matrix/provider.json`
+   directly with a `FileView`, or that stays the provider's one line -- decide,
+   and write down which.
+3. **`~/.local/share/omarchy-matrix/` is a bootstrap constant in three files**
+   (the CLI, `bin/provider.py`, `uninstall.sh`). It cannot come from the file it
+   is used to find, but three copies of it is two too many.
+4. **The widget's panel does not say what a stood-down piece would do.** It
+   ticks nothing and explains why at the top, which is right, but a switch that
+   is on-but-stood-down currently reads exactly like one that is off.
 
 ---
 
@@ -264,6 +228,37 @@ would otherwise be rediscovered the hard way.
 ## Traps already paid for
 
 Each of these cost real debugging time. None is obvious from the code.
+
+**For a `bar-widget`, "enabled" means "present in `bar.layout`".**
+`PluginRegistry.setEnabled` inserts the layout entry when you enable it and
+removes it when you disable it (`PluginRegistry.qml:498-520`); `isEnabled` then
+answers from wherever the entry is found. So a plugin that is both a widget and
+something else cannot be switched off without taking its icon off the bar --
+which is why the rain and the switchboard are two plugins, not one.
+
+**A bar widget with no `implicitWidth` paints nothing, silently.** The bar sizes
+each slot from `activeItem.implicitWidth` (`Bar.qml:1565`), and a plain `Item`
+has none, so every bar widget sets `implicitWidth: button.implicitWidth` on its
+root. Without it the plugin loads, answers IPC and opens its panel while
+occupying zero pixels -- and every non-visual check passes. Only a screenshot
+says otherwise.
+
+**Hot-reloading does not resize a bar widget's slot.** After adding those two
+lines to a live widget the slot stayed 0 px wide across several reloads and only
+took its size after `omarchy-restart-shell`. install.sh ends with one restart
+for this reason.
+
+**`omarchy theme update` fires no hooks at all** -- it is `git pull` per theme,
+nothing more (`cat $(which omarchy-theme-update)`) -- and `omarchy update` never
+calls it. Nothing the pack installs outside the theme directory can be refreshed
+by a hook after a pull, which is why `doctor` compares files itself and calls
+`install.sh --sync`.
+
+**"Different" is not "outdated".** That comparison first ran with `cmp`, and a
+working copy installed over an older theme directory looks exactly as different
+as a pulled theme looks over an older install -- so it dutifully copied the old
+files over the new ones. It asks `-nt` now: a `git pull` gives every file it
+touches a fresh mtime, which is the event this is actually for.
 
 **Hot-reloading plugin QML can leave two instances alive.** The old one keeps
 answering IPC while the new one paints. Symptom: the IPC reports `false` for a
@@ -349,9 +344,11 @@ failure in any one of them is a failure to ship.
 
 1. **Strip the machine.** `./uninstall.sh` first, then hunt the residue by hand:
    plugin backups matching `~/.config/omarchy/plugins/.*.bak.*`, stale binaries
-   in `~/.local/bin`, `/usr/share/plymouth/themes/omarchy-matrix/`, the marker
-   block inside `omarchy-menu.jsonc`, `~/.config/omarchy/matrix.json`, the theme
-   directory, and the `~/.local/state/omarchy/toggles/screensaver-off` flag.
+   in `~/.local/bin`, `~/.local/share/omarchy-matrix/`,
+   `/usr/share/plymouth/themes/omarchy-matrix/`, the `matrix.control` entry in
+   `shell.json`'s bar layout, any marker block left inside `omarchy-menu.jsonc`
+   by an older install, `~/.config/omarchy/matrix.json`, the theme directory, and
+   the `~/.local/state/omarchy/toggles/screensaver-off` flag.
    Prove it is gone before going on: `omarchy-matrix` must be *command not
    found*. Leave the user's own hooks alone — `theme-set.d` holds more than ours.
 2. **Install from the published URL**, never from the working copy, following the
@@ -359,14 +356,19 @@ failure in any one of them is a failure to ship.
    stranger does not know.
 3. **Verify the four pieces are on and on screen** — not merely configured.
    For the lock this means a **screenshot**, not a status query: bring up
-   `omarchy-shell lock preview` and `grim` it. Every non-visual check passed
+   `omarchy-shell lock preview` and `grim` it. For the widget it means a
+   screenshot of the bar **and** of the open panel: an icon that occupies zero
+   pixels answers every other check correctly. Every non-visual check passed
    while the machine was in fact locking to Omarchy's blurred wallpaper, and the
    image was the only thing that said so.
 4. **Toggle each piece off and back on, one at a time**, checking each time that
-   the other three did not move.
+   the others did not move. At least one of them from the widget itself, not
+   only from the CLI -- `wtype -k Down` then `wtype -k Return` drives its cursor
+   without a mouse.
 5. **Switch to another theme and back.** Away: nothing rains, nothing is ticked,
-   Omarchy's own lock and screensaver answer again, and nothing of Omarchy's is
-   left disabled. Back: exactly what was on before is on again.
+   **no Matrix icon is left on the bar**, Omarchy's own lock and screensaver
+   answer again, and nothing of Omarchy's is left disabled. Back: exactly what
+   was on before is on again.
 6. **Uninstall, and compare the machine against phase 1.** Anything still there
    is a bug, not a detail.
 

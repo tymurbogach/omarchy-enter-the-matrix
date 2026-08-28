@@ -15,7 +15,7 @@
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-TESTED_ON="4.0"
+TESTED_ON="4.0.1"
 
 # --sync copies the files and stops: no questions, no doctor, no boot splash.
 # It is what `omarchy-matrix doctor` calls when it notices the theme directory
