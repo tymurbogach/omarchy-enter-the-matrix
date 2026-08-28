@@ -1,7 +1,7 @@
 [launcher]
-background                = "#0A1A0F"
+background                = "#0F1E14"
 background-alpha          = 0.95
-text                      = "#A8F5BC"
+text                      = "#B8ECC6"
 border                    = "hyprland.active-border-foreground"
 border-alpha              = 1.0
 scrim                     = "#000200"

@@ -26,19 +26,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 MONO = "JetBrainsMono Nerd Font, monospace"
 CJK = "Noto Sans CJK JP"
 
-BG = "#030805"
-ELEVATED = "#0A1A0F"
+BG = "#020A04"
+ELEVATED = "#0F1E14"
 BAR = "#000200"
-FG = "#A8F5BC"
+FG = "#B8ECC6"
 BRIGHT = "#DFFFE9"
-DARK_FG = "#2E5C3C"
+DARK_FG = "#3A6B4A"
 ACCENT = "#00FF41"
 
 PALETTE = [
-    ("bg", "#030805"), ("red", "#F0263F"), ("green", "#00FF41"),
-    ("yellow", "#C6FF57"), ("blue", "#12A96A"), ("magenta", "#35D68F"),
-    ("cyan", "#7BFFD4"), ("fg", "#A8F5BC"),
-    ("muted", "#1B3A25"), ("red+", "#FF5C74"), ("green+", "#6BFF92"),
+    ("bg", "#020A04"), ("red", "#F0263F"), ("green", "#00FF41"),
+    ("yellow", "#B8E65C"), ("blue", "#1AB07A"), ("magenta", "#35D68F"),
+    ("cyan", "#8AF5C8"), ("fg", "#B8ECC6"),
+    ("muted", "#203A27"), ("red+", "#FF5C74"), ("green+", "#6BFF92"),
     ("yellow+", "#E2FF8F"), ("blue+", "#2BD68C"), ("magenta+", "#66F0B4"),
     ("cyan+", "#B8FFE8"), ("fg+", "#DFFFE9"),
 ]
@@ -153,11 +153,11 @@ def preview_unlock(w=1920, h=1080):
 # show every ANSI slot at once on a realistic line of code, which is the whole
 # argument for this palette.
 CODE = [
-    [("def ", "#12A96A"), ("wake_up", "#00FF41"), ("(", FG), ("subject", "#C6FF57"),
-     (", ", FG), ("pill", "#C6FF57"), ("=", FG), ('"red"', "#7BFFD4"), ("):", FG)],
-    [("    ", FG), ("if", "#12A96A"), (" pill ", FG), ("==", FG), (' "blue"', "#7BFFD4"), (":", FG)],
-    [("        raise ", "#12A96A"), ("StillAsleep", "#F0263F"), ("(subject)", FG)],
-    [("    ", FG), ("return", "#12A96A"), (" subject.", FG), ("unplug", "#35D68F"), ("()", FG)],
+    [("def ", "#1AB07A"), ("wake_up", "#00FF41"), ("(", FG), ("subject", "#B8E65C"),
+     (", ", FG), ("pill", "#B8E65C"), ("=", FG), ('"red"', "#8AF5C8"), ("):", FG)],
+    [("    ", FG), ("if", "#1AB07A"), (" pill ", FG), ("==", FG), (' "blue"', "#8AF5C8"), (":", FG)],
+    [("        raise ", "#1AB07A"), ("StillAsleep", "#F0263F"), ("(subject)", FG)],
+    [("    ", FG), ("return", "#1AB07A"), (" subject.", FG), ("unplug", "#35D68F"), ("()", FG)],
 ]
 
 

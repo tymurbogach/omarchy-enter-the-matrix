@@ -26,10 +26,11 @@ Item {
   property real cellHeight: 32
 
   // Straight from `ttfx matrix`: --highlight-color and --rain-color-gradient.
+  // Tuned toward CRT phosphor bloom (film-accurate A).
   property color bgColor: "#000000"
-  property color headColor: "#dbffdb"
-  property color rainA: "#92be92"
-  property color rainB: "#185318"
+  property color headColor: "#E2FFE2"
+  property color rainA: "#7EBB7E"
+  property color rainB: "#0E3A12"
 
   property real elapsed: 0
 

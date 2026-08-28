@@ -1,9 +1,9 @@
 [menu]
 # Raised above the rain: the card has to lift off the wallpaper, which is full
 # of bright glyphs.
-background                = "#0A1A0F"
+background                = "#0F1E14"
 background-alpha          = 1.0
-text                      = "#A8F5BC"
+text                      = "#B8ECC6"
 border                    = "hyprland.active-border-foreground"
 border-alpha              = 1.0
 scrim                     = "#000200"

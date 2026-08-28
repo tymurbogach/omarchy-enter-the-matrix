@@ -3,7 +3,7 @@
 # the edge of the screen rather than as one more surface.
 background       = "#000200"
 background-alpha = 1.0
-text             = "#A8F5BC"
+text             = "#B8ECC6"
 active           = "#F0263F"
 scale-with-font  = true
 size-horizontal  = 26
