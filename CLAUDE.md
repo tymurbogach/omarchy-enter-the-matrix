@@ -243,6 +243,14 @@ root. Without it the plugin loads, answers IPC and opens its panel while
 occupying zero pixels -- and every non-visual check passes. Only a screenshot
 says otherwise.
 
+**A summoned panel only takes the keyboard on the first summon after the shell
+starts.** `omarchy-shell shell summon <id>` maps the panel, but a later summon
+in the same shell process leaves the keys going to whatever had focus -- Escape
+does not even close it. Omarchy's own `omarchy.bluetooth` behaves identically,
+so this is the environment, not the pack. It matters when testing: drive the
+widget's cursor with `wtype` right after `omarchy-restart-shell`, or the panel
+will sit there ignoring you and look like a bug of ours.
+
 **Hot-reloading does not resize a bar widget's slot.** After adding those two
 lines to a live widget the slot stayed 0 px wide across several reloads and only
 took its size after `omarchy-restart-shell`. install.sh ends with one restart
@@ -373,9 +381,12 @@ failure in any one of them is a failure to ship.
    while the machine was in fact locking to Omarchy's blurred wallpaper, and the
    image was the only thing that said so.
 4. **Toggle each piece off and back on, one at a time**, checking each time that
-   the others did not move. At least one of them from the widget itself, not
-   only from the CLI -- `wtype -k Down` then `wtype -k Return` drives its cursor
-   without a mouse.
+   the others did not move. `lock off` must leave `omarchy.lock` out of
+   `disabledPlugins` and no `.bak` behind, and `lock on` is checked by
+   screenshot, not by asking. At least one toggle comes from the widget itself,
+   not only from the CLI: `wtype -k Down` then `wtype -k Return` drives its
+   cursor without a mouse -- **immediately after `omarchy-restart-shell`**, or
+   the panel will not have the keyboard (see the traps).
 5. **Switch to another theme and back.** Away: nothing rains, nothing is ticked,
    **no Matrix icon is left on the bar**, Omarchy's own lock and screensaver
    answer again, and nothing of Omarchy's is left disabled. Back: exactly what
