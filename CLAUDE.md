@@ -194,10 +194,16 @@ tear later.
    copied. It caused no harm when measured — one shell process, no QML errors —
    but it is the two-instances trap idling. Stage into a temp directory and move
    it into place in one go, or end with `omarchy-restart-shell`.
-4. **`omarchy theme set` rotates away from the rain.** The theme-set hook does
-   not re-select `1-live-rain` because that would fight Omarchy's rotation. It
-   only fights it when the user has explicitly asked for the rain wallpaper,
-   which `matrix.json` already records. Worth revisiting.
+4. **`omarchy theme set` rotates away from the rain, and the ✓ then lies.** The
+   theme-set hook does not re-select the live background, on the grounds that it
+   would fight Omarchy's rotation. But it only fights it when the user has
+   explicitly asked for the rain, which `matrix.json` already records — and the
+   cost of not doing it is worse than the fight. Observed: after a round trip to
+   another theme and back, `status` printed `✓ wallpaper` with **zero rain
+   surfaces on screen**, because the rotation had landed on a still. The tick is
+   supposed to mean "this is happening now"; here it meant "configured". Either
+   `doctor` re-selects the live background when the piece is on, or `is_active`
+   has to check `on_live_background` and stop ticking when it is not.
 5. **`omarchy theme update` pulls the repo but never re-runs `install.sh`**, so
    the copies under `plugins/matrix.rain/` go stale while the theme does not.
    The `post-update.d` hook re-derives the lock and the splash but does not
@@ -208,6 +214,22 @@ tear later.
    `shell.json` you are willing to lose.
 7. **`TESTED_ON` says 4.0 while what was actually tested is 4.0.1.** It matches
    by prefix, so nothing warns; the point of the pin is to record what was run.
+8. **Nothing tells you the pack exists after `omarchy theme install`.** The two
+   steps are the theme and then `install.sh`, and only the README mentions the
+   second — so whatever the README omits, the stranger does not know. There is
+   no fix by hook: `omarchy hook` only runs what is already in
+   `~/.config/omarchy/hooks/<name>.d/`, there is no `theme-install` hook, and on
+   a virgin machine our `theme-set` hook is not installed yet. A theme cannot
+   ship anything that executes either. What is left is making the README's
+   install a **single pasteable line** that chains both, and making the second
+   half loud enough to be worth arriving at.
+9. **`install.sh` should ask, in colour, rather than assume.** Today it switches
+   all four pieces on and only prompts for `boot`, which is the one needing a
+   password. It should walk the four pieces interactively with a clear default
+   each, so somebody who only wants the lock is not handed the screensaver too —
+   and it should end on a coloured summary of what is on and how to change it.
+   Same when it is run non-interactively: detect no tty and fall back to today's
+   behaviour rather than blocking.
 
 ---
 
