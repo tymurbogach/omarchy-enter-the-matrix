@@ -84,12 +84,29 @@ boot_applied() {
   [[ $current == "$PLYMOUTH_THEME" ]]
 }
 
-# Switched on in the settings AND in effect right now. This is what answers the
-# menu's `checked`, so it is what decides the ✓.
+# Switched on in the settings AND in effect right now. This is what the widget
+# and `status` ask, so it is what decides the ✓.
+#
+# The tick is supposed to mean "this is happening now", and for `wallpaper` it
+# used to mean "configured". Observed after a round trip to another theme and
+# back: `✓ wallpaper` printed with ZERO rain surfaces on screen, because
+# `omarchy theme set` rotates to the theme's next background and the rotation
+# had landed on a still. Being on the live background is part of the piece being
+# on, so it is part of the question.
+#
+# `boot` asks the system instead of the theme: the Plymouth splash belongs to
+# the machine and stays put whichever theme you pick.
 is_active() {
   [[ $(read_setting "$1") == "true" ]] || return 1
-  [[ $1 != "boot" ]] || { boot_applied; return; }
-  pack_in_effect
+  case "$1" in
+  boot) boot_applied ;;
+  wallpaper) pack_in_effect && on_live_background ;;
+  *) pack_in_effect ;;
+  esac
+}
+
+active_of() {
+  is_active "$1" && echo true || echo false
 }
 
 read_setting() {
@@ -291,12 +308,15 @@ on_live_background() {
   [[ $(readlink -f "$HOME/.local/state/omarchy/current/background" 2>/dev/null) == *-live-* ]]
 }
 
+select_live_background() {
+  local live
+  live=$(live_background) || return 0
+  on_live_background || omarchy-theme-bg-set "$live" >/dev/null
+}
+
 apply_wallpaper() {
   if [[ $(read_setting wallpaper) == "true" ]]; then
-    local live
-    if live=$(live_background); then
-      on_live_background || omarchy-theme-bg-set "$live" >/dev/null
-    fi
+    select_live_background
   elif on_live_background; then
     omarchy-theme-bg-next >/dev/null
   fi
@@ -468,13 +488,19 @@ cmd_status() {
   fi
 
   if [[ $format == "json" ]]; then
+    # `settings` is what you asked for, `active` is what is happening. They are
+    # not the same question -- see is_active -- and the widget draws its ticks
+    # from `active` so that one definition serves both it and the text below.
     jq -n \
       --argjson w "$(read_setting wallpaper)" --argjson s "$(read_setting screensaver)" \
       --argjson l "$(read_setting lock)" --argjson b "$(read_setting boot)" \
+      --argjson aw "$(active_of wallpaper)" --argjson as "$(active_of screensaver)" \
+      --argjson al "$(active_of lock)" --argjson ab "$(active_of boot)" \
       --argjson effect "$(pack_in_effect && echo true || echo false)" \
       --arg theme "$(current_theme)" \
       '{theme: $theme, active: $effect,
-        settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b}}'
+        settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b},
+        pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab}}'
     return
   fi
 
@@ -487,12 +513,19 @@ cmd_status() {
   for piece in "${PIECES[@]}"; do
     if is_active "$piece"; then
       printf '  \033[32m✓\033[0m %-12s\n' "$piece"
-    elif [[ $(read_setting "$piece") == "true" && $piece == "boot" ]]; then
-      printf '    %-12s \033[2mon, but not applied — run: %s boot on\033[0m\n' "$piece" "$SELF"
-    elif [[ $(read_setting "$piece") == "true" ]]; then
-      printf '    %-12s \033[2mon, but stood down with the theme\033[0m\n' "$piece"
-    else
+    elif [[ $(read_setting "$piece") != "true" ]]; then
       printf '    %-12s\n' "$piece"
+    elif [[ $piece == "boot" ]]; then
+      printf '    %-12s \033[2mon, but not applied — run: %s boot on\033[0m\n' "$piece" "$SELF"
+    elif ! pack_in_effect; then
+      printf '    %-12s \033[2mon, but stood down with the theme\033[0m\n' "$piece"
+    elif [[ $piece == "wallpaper" ]]; then
+      # The one case that is neither: the theme is ours and the piece is on, but
+      # the desktop is showing another background from the carousel.
+      printf '    %-12s \033[2mon, but the desktop is on another background — run: %s wallpaper on\033[0m\n' \
+        "$piece" "$SELF"
+    else
+      printf '    %-12s \033[2mon, but not in effect — run: %s doctor\033[0m\n' "$piece" "$SELF"
     fi
   done
 
@@ -509,6 +542,14 @@ cmd_doctor() {
   sync_files
   sync_screensaver
   sync_plugin || failures=1
+  # The background too, when the piece is on. This is the other half of the ✓
+  # that lied: `omarchy theme set` rotates to the next background, so coming
+  # back to this theme lands on a still and the rain the user asked for is gone.
+  # It only ever fights the rotation for somebody who explicitly asked for the
+  # rain, which the settings already record -- and the carousel (`bg next`, the
+  # picker) never calls a hook, so a deliberate pick inside the theme still
+  # stands until the next `theme set`.
+  [[ $(read_setting wallpaper) != "true" ]] || select_live_background
   [[ $(read_setting lock) != "true" ]] || apply_lock || failures=1
   nudge_shell
   # `boot` is left out on purpose: it needs sudo and this runs from hooks.
