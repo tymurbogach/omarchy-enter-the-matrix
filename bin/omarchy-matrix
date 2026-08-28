@@ -98,11 +98,13 @@ boot_applied() {
 # the machine and stays put whichever theme you pick.
 is_active() {
   [[ $(read_setting "$1") == "true" ]] || return 1
+  [[ $1 == "boot" ]] || pack_in_effect || return 1
   case "$1" in
   boot) boot_applied ;;
-  wallpaper) pack_in_effect && on_live_background ;;
-  widget) pack_in_effect && plugin_enabled "$WIDGET_ID" ;;
-  *) pack_in_effect ;;
+  wallpaper) on_live_background && plugin_enabled "$PLUGIN_ID" ;;
+  screensaver) plugin_enabled "$PLUGIN_ID" && screensaver_flag_set ;;
+  lock) lock_clone_enabled ;;
+  widget) plugin_enabled "$WIDGET_ID" ;;
   esac
 }
 
@@ -178,14 +180,38 @@ remove_plymouth_theme() {
   sudo rm -rf "$dir"
 }
 
+# `omarchy plugin list` is a process, and one `status` now asks it five or six
+# times. Read it once and forget it whenever we change something.
+PLUGIN_LIST=""
+
+plugin_list() {
+  [[ -n $PLUGIN_LIST ]] || PLUGIN_LIST=$(omarchy-plugin-list --json 2>/dev/null || echo "[]")
+  echo "$PLUGIN_LIST"
+}
+
+forget_plugin_list() {
+  PLUGIN_LIST=""
+}
+
 plugin_enabled() {
-  omarchy-plugin-list --json 2>/dev/null |
-    jq -e --arg id "$1" 'any(.[]; .id == $id and .enabled)' >/dev/null 2>&1
+  plugin_list | jq -e --arg id "$1" 'any(.[]; .id == $id and .enabled)' >/dev/null 2>&1
 }
 
 plugin_known() {
-  omarchy-plugin-list --json 2>/dev/null |
-    jq -e --arg id "$1" 'any(.[]; .id == $id)' >/dev/null 2>&1
+  plugin_list | jq -e --arg id "$1" 'any(.[]; .id == $id)' >/dev/null 2>&1
+}
+
+# A lock is ours AND actually in charge. Merely having the clone on disk is not
+# it: `omarchy refresh shell` rewrites shell.json wholesale and leaves the folder
+# sitting there with Omarchy's own lock enabled again.
+lock_clone_enabled() {
+  local id
+  id=$(lock_clone_id) || return 1
+  plugin_enabled "$id"
+}
+
+screensaver_flag_set() {
+  [[ -f "$HOME/.local/state/omarchy/toggles/screensaver-off" ]]
 }
 
 nudge_shell() {
@@ -278,9 +304,9 @@ sync_plugin() {
   }
 
   if [[ $wanted == "true" ]]; then
-    plugin_enabled "$PLUGIN_ID" || omarchy-plugin-enable "$PLUGIN_ID" >/dev/null
+    plugin_enabled "$PLUGIN_ID" || { omarchy-plugin-enable "$PLUGIN_ID" >/dev/null; forget_plugin_list; }
   else
-    ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
+    ! plugin_enabled "$PLUGIN_ID" || { omarchy-plugin-disable "$PLUGIN_ID" >/dev/null; forget_plugin_list; }
   fi
 }
 
@@ -363,7 +389,8 @@ apply_screensaver() {
 # when this set changes, two lock plugins were briefly loaded at once and the
 # shell has to be restarted. See restart_shell_for_lock.
 enabled_locks() {
-  omarchy-plugin-list --json 2>/dev/null |
+  forget_plugin_list
+  plugin_list |
     jq -r '[.[] | select(.enabled and (.id | endswith(".lock"))) | .id] | sort | join(",")'
 }
 
@@ -465,9 +492,9 @@ apply_widget() {
       return 1
     }
     plugin_enabled "$WIDGET_ID" ||
-      omarchy-plugin-enable "$WIDGET_ID" --section "$WIDGET_SECTION" >/dev/null
+      { omarchy-plugin-enable "$WIDGET_ID" --section "$WIDGET_SECTION" >/dev/null; forget_plugin_list; }
   else
-    ! plugin_enabled "$WIDGET_ID" || omarchy-plugin-disable "$WIDGET_ID" >/dev/null
+    ! plugin_enabled "$WIDGET_ID" || { omarchy-plugin-disable "$WIDGET_ID" >/dev/null; forget_plugin_list; }
   fi
 }
 
@@ -531,11 +558,12 @@ cmd_status() {
       --argjson l "$(read_setting lock)" --argjson b "$(read_setting boot)" \
       --argjson aw "$(active_of wallpaper)" --argjson as "$(active_of screensaver)" \
       --argjson al "$(active_of lock)" --argjson ab "$(active_of boot)" \
+      --argjson g "$(read_setting widget)" --argjson ag "$(active_of widget)" \
       --argjson effect "$(pack_in_effect && echo true || echo false)" \
       --arg theme "$(current_theme)" --arg name "$DISPLAY_NAME" --arg slug "$THEME_SLUG" \
       '{name: $name, slug: $slug, theme: $theme, active: $effect,
-        settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b},
-        pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab}}'
+        settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b, widget: $g},
+        pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab, widget: $ag}}'
     return
   fi
 
@@ -554,9 +582,11 @@ cmd_status() {
       printf '    %-12s \033[2mon, but not applied — run: %s boot on\033[0m\n' "$piece" "$SELF"
     elif ! pack_in_effect; then
       printf '    %-12s \033[2mon, but stood down with the theme\033[0m\n' "$piece"
-    elif [[ $piece == "wallpaper" ]]; then
-      # The one case that is neither: the theme is ours and the piece is on, but
-      # the desktop is showing another background from the carousel.
+    elif [[ $piece == "wallpaper" ]] && ! on_live_background; then
+      # The one case that is neither: the theme is ours, the piece is on, and the
+      # desktop is showing another background from the carousel. Asked
+      # explicitly, so that a piece held back by anything else still says so
+      # below rather than blaming the background.
       printf '    %-12s \033[2mon, but the desktop is on another background — run: %s wallpaper on\033[0m\n' \
         "$piece" "$SELF"
     else
@@ -601,9 +631,11 @@ cmd_doctor() {
 # the system rather than to the theme.
 cmd_suspend() {
   ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
+  forget_plugin_list
   # The bar icon goes with the rest: a Matrix switch on the bar under somebody
   # else's theme is the pack refusing to stand down (Rule 5).
   ! plugin_enabled "$WIDGET_ID" || omarchy-plugin-disable "$WIDGET_ID" >/dev/null
+  forget_plugin_list
   omarchy-toggle screensaver-off off
   if lock_clone_id >/dev/null; then
     remove_lock_clone

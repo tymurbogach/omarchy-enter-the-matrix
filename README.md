@@ -172,9 +172,12 @@ ordinary Omarchy theme.
 
 > **`omarchy refresh shell` turns the rain off.** That command rewrites
 > `shell.json` wholesale, and that is where Omarchy records which plugins are
-> enabled. There is no hook to attach to afterwards. Recover with
-> `omarchy-matrix doctor`, or by re-applying the theme — the `theme-set` hook
-> does it for you.
+> enabled and what sits on your bar. There is no hook to attach to afterwards.
+> Recover with `omarchy-matrix doctor`, or by re-applying the theme — the
+> `theme-set` hook does it for you. Tested: it brings back the rain plugin, the
+> lock clone and the bar icon. It does **not** bring back the rest of your
+> `shell.json` — your other plugins and your bar layout are Omarchy's backup to
+> restore, `~/.config/omarchy/shell.json.bak.<timestamp>`.
 
 ## Automatic
 

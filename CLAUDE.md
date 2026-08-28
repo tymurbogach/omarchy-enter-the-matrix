@@ -267,8 +267,19 @@ longer exists in the file. Fix: `omarchy restart shell`. `rescanPlugins` is not
 always enough.
 
 **`omarchy refresh shell` rewrites `shell.json` wholesale**, and that is where
-enabled plugins are recorded. There is no post-refresh hook. Recovery is
-`omarchy-matrix doctor`, or re-applying the theme.
+enabled plugins and the bar layout are recorded. There is no post-refresh hook.
+Recovery is `omarchy-matrix doctor`, or re-applying the theme. Verified on this
+machine: after a refresh, `doctor` restored `matrix.rain`, the lock clone (with
+`omarchy.lock` disabled again) and the `matrix.control` entry in the bar. It
+restores the pack and nothing else -- the user's own plugins and bar order come
+back from Omarchy's own `shell.json.bak.<timestamp>`.
+
+**A tick has to ask the machinery, not the settings.** Found by running that
+same refresh: with `shell.json` wiped, `status` printed `✓ lock` and
+`✓ wallpaper` while the rain plugin was disabled and Omarchy's own lock was the
+one in charge. The settings were true, the theme was ours, and nothing was
+happening. `is_active` now asks whether the plugin is enabled, whether the lock
+clone is the enabled lock, and whether the screensaver flag is set.
 
 **A theme installed from git may not ship any `.lua`** — nor `alacritty.toml`,
 `foot.ini`, `ghostty.conf`, `kitty.conf` or `vscode.json`
