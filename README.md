@@ -302,29 +302,26 @@ short pointer to it, for tools that look for that name.
 ## The backgrounds
 
 ```
-0-live-pills.jpg   the default, and the live one
-1-neo-sleep.jpg
-2-morpheus.jpg
-3-sunglasses.jpg
-4-rain-still.png   a frozen frame of the shader, as a plain wallpaper
+0-pills.jpg        the default: what you get with the theme alone
+1-live-rain.png    the live one — selecting it turns the desktop rain on
+2-neo-sleep.jpg
+3-morpheus.jpg
+4-sunglasses.jpg
 5-minimal.png
 ```
 
-`0-live-pills` does three jobs at once: it is the thumbnail in the picker, it is
-the marker that switches the desktop rain on — the shader watches for `-live-`
-in the selected background's name — and it is the frame you are left looking at
-when the plugin is off. It is also the theme's default, so installing the theme
-on its own leaves you with a wallpaper rather than a screenshot.
+The rain has an entry of its own, and it is the only one with `-live-` in its
+name: that substring, not a fixed filename or a position in the list, is what
+the shader watches for. Everything else is an ordinary wallpaper and stays one
+when you pick it.
 
-That last part is why it is a photograph. The marker used to be a still frame of
-the rain shader, which meant anyone installing the theme alone was handed a
-frozen picture of the one thing the theme is about making move. That frame is
-still in the carousel as `4-rain-still` — it is a fine wallpaper, it was just a
-bad ambassador — and without `-live-` in its name it is only ever a picture.
+The default is a photograph rather than the rain frame, so installing the theme
+without the pack leaves you with a wallpaper instead of a frozen picture of the
+one thing the theme is about making move.
 
-With the pack running you will not see the pills themselves, since the rain
-draws over them. `omarchy-matrix wallpaper off` steps to the next background and
-gives them back.
+> `omarchy theme set` rotates to the *next* background, so re-applying the theme
+> does not put you back on the default — that only happens on a first install,
+> when there is no selection to advance from.
 
 > The stills are frames from *The Matrix* (1999), © Warner Bros. They are here
 > because this is a fan theme and they are what the theme is about. They are not
