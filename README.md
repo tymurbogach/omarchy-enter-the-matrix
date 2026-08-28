@@ -142,8 +142,12 @@ removes that directory. Turning a piece off leaves nothing behind, whether or
 not you ever run `uninstall.sh`.
 
 Removing it is **SUPER → Style → Matrix → Uninstall**, or `./uninstall.sh`. It
-takes all of it back, boot splash included, and leaves the theme working like
-any other.
+takes all of it back — the plugin, the lock clone, the CLI, the hooks, the menu
+block, the boot splash and the theme directory itself — and leaves Omarchy's own
+lock, screensaver and splash in charge again.
+
+Pass `--keep-theme` if you want the colours and backgrounds to stay behind as an
+ordinary Omarchy theme.
 
 > **Do not use Omarchy's `Remove → Theme` on its own.** That command deletes the
 > theme folder and nothing else, which would leave the plugin, the lock clone,

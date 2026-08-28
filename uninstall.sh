@@ -14,6 +14,15 @@ BIN_DIR="$HOME/.local/bin"
 HOOKS="$HOME/.config/omarchy/hooks"
 MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
+THEME_SLUG="matrix"
+THEME_DIR="$HOME/.config/omarchy/themes/$THEME_SLUG"
+
+# The theme goes too, unless you say otherwise. It used to be kept -- it is a
+# perfectly good theme on its own -- but "uninstall" that leaves a directory
+# behind is not what anybody means by the word, and the menu row that calls this
+# is labelled Uninstall, not Disable.
+KEEP_THEME=0
+[[ ${1:-} != "--keep-theme" ]] || KEEP_THEME=1
 
 echo "· handing Omarchy's lock back"
 for dir in "$PLUGINS_DIR"/*.lock; do
@@ -109,10 +118,41 @@ fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 
-cat <<'DONE'
+# --- the theme itself ---------------------------------------------------------
+# Last, and only now: everything above still needed the theme directory to be
+# there. Deleting it while Omarchy still names it as the current theme leaves
+# current/theme.name pointing at nothing, so step off it first.
 
-Done. The matrix theme is still installed and works like any other theme.
+if ((KEEP_THEME)); then
+  cat <<'DONE'
+
+Done. The matrix theme was kept and works like any other theme.
 
 To remove that too:
-  rm -rf ~/.config/omarchy/themes/matrix
+  omarchy-matrix-uninstall     (or: rm -rf ~/.config/omarchy/themes/matrix)
+DONE
+  exit 0
+fi
+
+if [[ $(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null) == "$THEME_SLUG" ]]; then
+  # Any stock theme will do; the first one is the least surprising choice and is
+  # guaranteed to exist, unlike whatever the user had before.
+  fallback=$(find /usr/share/omarchy/themes -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort | head -1)
+  if [[ -n ${fallback:-} ]]; then
+    echo "· stepping off the matrix theme onto $fallback"
+    omarchy-theme-set "$fallback" >/dev/null 2>&1 || true
+  fi
+fi
+
+echo "· removing the theme"
+rm -rf "$THEME_DIR"
+# Omarchy remembers a background per theme, and a hook of the user's may read it.
+rm -f "$HOME/.local/state/omarchy/backgrounds/$THEME_SLUG"
+rm -rf "$HOME/.config/omarchy/backgrounds/$THEME_SLUG"
+
+cat <<'DONE'
+
+Done. Nothing of the Matrix pack is left, the theme included.
+
+Omarchy's own lock, screensaver and boot splash are back.
 DONE
