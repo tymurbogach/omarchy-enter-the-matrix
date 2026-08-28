@@ -140,11 +140,21 @@ def main():
             continue  # the clone's carries its own id and clonedFrom; leave it
         shutil.copy2(source_file, target / source_file.name)
 
-    lock_view = target / "LockView.qml"
-    lock_view.write_text(patch(lock_view.read_text()))
-
+    # The rain's own files go in FIRST, before LockView is patched. Saving any
+    # file under ~/.config/omarchy/plugins/ hot-reloads the plugin, so writing
+    # the patched LockView while glyphs.png was still missing gave the shell a
+    # moment where the lock referenced an atlas that was not there yet:
+    #
+    #   QQuickImage at .../cyberdyne.lock/MatrixRain.qml[37:3]:
+    #     Cannot open: .../cyberdyne.lock/glyphs.png
+    #
+    # The following restart papered over it, but a lock that briefly renders
+    # without its glyphs is not something to leave to timing.
     for name in RAIN_FILES:
         shutil.copy2(rain / name, target / name)
+
+    lock_view = target / "LockView.qml"
+    lock_view.write_text(patch(lock_view.read_text()))
 
     subprocess.run(["omarchy-shell", "shell", "rescanPlugins"],
                    check=False, capture_output=True)
