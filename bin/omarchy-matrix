@@ -181,20 +181,22 @@ sync_plugin() {
 # like rain that has frozen.
 #
 # Careful with `omarchy theme set`: it rotates to the NEXT background of the
-# theme, so re-applying the theme takes you off the live-rain background. That
+# theme, so re-applying the theme takes you off the live background. That
 # theme-set hook does not force it -- that would be fighting Omarchy -- and this
 # switch does it instead.
-# Found by suffix, never by its number. The rain used to be 0-live-rain because
-# the first background in sort order is the theme's default, and the pack wanted
-# the rain there. The default is now a still from the film -- somebody who
-# installs only the theme should get a wallpaper, not a frozen screenshot of an
-# animation they have not installed -- so the rain moved down the list. Anything
-# that pins the number breaks the next time the carousel is reordered.
+# The live background is whichever file carries "-live-" in its name, never a
+# fixed number: sort order decides the theme's default and gets reshuffled.
+#
+# It used to be a screenshot of the shader, which was a poor thing to hand
+# someone who installed the theme alone -- a frozen frame of the one thing that
+# is supposed to move. Now a real still from the film does all three jobs:
+# thumbnail in the picker, the marker that turns the rain on, and the frame you
+# are left looking at if the plugin is off.
 BACKGROUNDS="$HOME/.local/state/omarchy/current/theme/backgrounds"
 
 live_background() {
   local f
-  for f in "$BACKGROUNDS"/*live-rain.*; do
+  for f in "$BACKGROUNDS"/*-live-*; do
     [[ -f $f ]] || continue
     echo "$f"
     return 0
@@ -203,7 +205,7 @@ live_background() {
 }
 
 on_live_background() {
-  [[ $(readlink -f "$HOME/.local/state/omarchy/current/background" 2>/dev/null) == *live-rain.* ]]
+  [[ $(readlink -f "$HOME/.local/state/omarchy/current/background" 2>/dev/null) == *-live-* ]]
 }
 
 apply_wallpaper() {
@@ -471,7 +473,7 @@ Usage: omarchy-matrix <command>
   suspend                             Stand the pack down, keeping your settings
 
 Pieces:
-  wallpaper    Rain on the desktop (selects the live-rain background)
+  wallpaper    Rain on the desktop (selects the live background)
   screensaver  Rain when you go idle, instead of Omarchy's terminal one
   lock         Rain behind the password field when you lock
   boot         The screen before login (Plymouth). Needs sudo.

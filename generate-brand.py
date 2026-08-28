@@ -12,10 +12,11 @@
                         rain background with a terminal window and the palette
                         below it.
 
-Needs rsvg-convert and ImageMagick, plus backgrounds/1-live-rain.png (which
+Needs rsvg-convert and ImageMagick, plus the theme's -live- background (which
 generate-backgrounds.py produces).
 """
 
+import glob
 import os
 import random
 import subprocess
@@ -223,9 +224,9 @@ def main():
     subprocess.run(["magick", pu, "-strip", "-dither", "None", "-colors", "256", pu], check=True)
     print(f"  preview-unlock.png  {os.path.getsize(pu) // 1024} KB")
 
-    background = os.path.join(HERE, "backgrounds", "1-live-rain.png")
+    background = next(iter(sorted(glob.glob(os.path.join(HERE, "backgrounds", "*-live-*")))), "")
     if not os.path.exists(background):
-        print("  ! backgrounds/1-live-rain.png is missing: run generate-backgrounds.py first",
+        print("  ! the theme's -live- background is missing: run generate-backgrounds.py first",
               file=sys.stderr)
         return 1
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:

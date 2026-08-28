@@ -2,7 +2,7 @@
 """Generate the matrix theme's static backgrounds.
 
     ./generate-backgrounds.py                  regenerate every preset
-    ./generate-backgrounds.py --only 1-live-rain
+    ./generate-backgrounds.py --only 4-minimal
     ./generate-backgrounds.py --out /tmp/test.png --seed 99 --density 0.7
 
 What it paints is **a frame of the rain/matrix.frag shader**, not a rain of its
@@ -127,15 +127,19 @@ def build(seed, density, scale, output, minimal=False):
 
 
 # seed, density, glyph scale.
-# Only the live-rain frame is a real preset: it is the thumbnail shown in the
-# carousel and the marker that switches the rain shader on (see rain/). Use
-# --out for one-offs.
+# This no longer generates the live background. That job went to a still from
+# the film: handing somebody who installed only the theme a frozen screenshot of
+# the one thing meant to move was the worst first impression the pack had. What
+# is left here is atmosphere, plus --out for one-offs.
+#
+# Nothing generated here may carry "-live-" in its name: that substring is what
+# marks the background the rain shader watches for, and a second file matching
+# it would fight the real one.
 PRESETS = {
     # seed, density, scale, minimal
-    "1-live-rain": (11, 0.92, 1.0, False),
     # No mark and no logo: black, a few very dim columns of texture and one lit
     # streak. The idea is atmosphere, not a poster.
-    "1-minimal":   (29, 0.50, 1.0, True),
+    "4-minimal":   (29, 0.50, 1.0, True),
 }
 
 

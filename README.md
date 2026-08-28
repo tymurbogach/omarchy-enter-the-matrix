@@ -301,16 +301,33 @@ short pointer to it, for tools that look for that name.
 
 ## The backgrounds
 
-`0-red-blue-pill` is the default, so installing the theme on its own still
-leaves you with a wallpaper rather than a frozen screenshot of an animation you
-have not installed. `1-live-rain` is the live one — selecting it is what turns the desktop
-rain on — and the rest are stills.
+```
+0-live-pills.jpg   the default, and the live one
+1-neo-sleep.jpg
+2-morpheus.jpg
+3-sunglasses.jpg
+4-minimal.png
+```
+
+`0-live-pills` does three jobs at once: it is the thumbnail in the picker, it is
+the marker that switches the desktop rain on — the shader watches for `-live-`
+in the selected background's name — and it is the frame you are left looking at
+when the plugin is off. It is also the theme's default, so installing the theme
+on its own leaves you with a wallpaper rather than a screenshot.
+
+That last part is why it is a photograph. It used to be a still frame of the
+rain shader, which meant anyone installing the theme alone was handed a frozen
+picture of the one thing the theme is about making move.
+
+With the pack running you will not see the pills themselves, since the rain
+draws over them. `omarchy-matrix wallpaper off` steps to the next background and
+gives them back.
 
 > The stills are frames from *The Matrix* (1999), © Warner Bros. They are here
 > because this is a fan theme and they are what the theme is about. They are not
 > covered by this repository's MIT licence, which applies to the code. If you
-> would rather not carry them, delete `backgrounds/*.jpg`; nothing depends on
-> them.
+> would rather not carry them, delete `backgrounds/*.jpg` and pick your own — any
+> file with `-live-` in its name becomes the rain's marker.
 
 ## Credits
 
