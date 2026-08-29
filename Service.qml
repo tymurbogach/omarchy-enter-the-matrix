@@ -205,6 +205,13 @@ Item {
       color: "transparent"
       visible: root.wantWallpaper && root.rainIsBackground && !root.sessionLocked
 
+      // The rain starts from black every time the surface appears, rather than
+      // resuming wherever it happened to be. The MatrixRain lives inside this
+      // PanelWindow, which is never destroyed, so without this its clock
+      // survives from one showing to the next and the wallpaper comes up
+      // already at full pelt.
+      onVisibleChanged: if (visible) wallpaperRain.restart()
+
       // Bottom and not Background: within one layer the order depends on
       // creation order, and that is not a race we want to run against
       // omarchy.background. Bottom sits above the wallpaper and below every
@@ -237,9 +244,16 @@ Item {
       }
 
       MatrixRain {
+        id: wallpaperRain
         anchors.fill: parent
+        // The scanline is drawn in NATIVE pixels, so it needs this screen's
+        // ratio and not the one the shell happens to be attached to.
+        dpr: wallpaperPanel.modelData.devicePixelRatio
         // On mains it always rains; on battery, only while the desktop is
         // visible. Opening any window freezes it and the GPU drops to zero.
+        // Note this stops the clock without restarting it: a frozen wallpaper
+        // is meant to carry on where it left off, which is why restart() hangs
+        // off `visible` above and not off `running`.
         running: wallpaperPanel.visible && (!UPower.onBattery || wallpaperPanel.windowsHere === 0)
       }
     }
@@ -258,6 +272,10 @@ Item {
       color: "black"
       visible: root.screensaverActive && root.wantScreensaver && !root.sessionLocked
 
+      // Same as the wallpaper: every time the screensaver comes up it rains
+      // from nothing, not from wherever the last idle left it.
+      onVisibleChanged: if (visible) screensaverRain.restart()
+
       WlrLayershell.namespace: "matrix-rain-screensaver"
       WlrLayershell.layer: WlrLayer.Overlay
       // Exclusive while visible: the keyboard is needed so any key dismisses
@@ -266,7 +284,9 @@ Item {
       exclusionMode: ExclusionMode.Ignore
 
       MatrixRain {
+        id: screensaverRain
         anchors.fill: parent
+        dpr: screensaverPanel.modelData.devicePixelRatio
         running: screensaverPanel.visible
       }
 
