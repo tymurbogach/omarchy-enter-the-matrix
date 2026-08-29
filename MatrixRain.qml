@@ -32,7 +32,43 @@ Item {
   property color rainA: "#7EBB7E"
   property color rainB: "#0E3A12"
 
+  // Native pixels per logical pixel. The scanline is drawn against this rather
+  // than against logical px, so it stays two real pixels wide on any panel.
+  // A caller that knows its ShellScreen should pass that screen's ratio; this
+  // fallback is for one that does not, such as the lock.
+  property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
+
+  // --- the two clocks -----------------------------------------------------
+  // `elapsed` wraps at `period`, and the shader is built so that every column
+  // completes a whole number of falls in that time -- so the wrap is invisible.
+  // Without it `elapsed` grows without bound and the uniform is a float32: at
+  // 18 rows a second, a day of running time puts the step at an eighth of a
+  // row and the fall starts to judder.
+  //
+  // The price of that is that the whole field repeats exactly every `period`.
+  // With this many columns, each with its own cycle count and offset, it does
+  // not read as a loop; if it ever does, raise this rather than lower it.
+  property real period: 120
   property real elapsed: 0
+
+  // `birth` is the OTHER clock, and it exists because a cold start cannot be
+  // expressed in the wrapped one: anything keyed to `elapsed` would happen
+  // again at every wrap. This one counts from the moment the surface appeared
+  // and stops for good just past the shader's BIRTH_SPREAD, so the rain falls
+  // in from the top once and never again.
+  readonly property real birthMax: 3.0
+  property real birth: 0
+
+  // Start over: black screen, then the columns arrive from the top.
+  //
+  // Deliberately NOT tied to `running`. On battery the wallpaper's clock stops
+  // whenever a window covers the desktop, and there freezing and resuming is
+  // exactly what is wanted. What restarts the rain is the surface BECOMING
+  // VISIBLE, which only the caller knows about.
+  function restart() {
+    root.elapsed = 0
+    root.birth = 0
+  }
 
   Image {
     id: atlasImage
@@ -55,6 +91,9 @@ Item {
     property color colRainA: root.rainA
     property color colRainB: root.rainB
     property real cellH: root.cellHeight
+    property real dpr: root.dpr
+    property real period: root.period
+    property real birth: root.birth
     property variant atlas: atlasImage
   }
 
@@ -74,7 +113,9 @@ Item {
       accumulated += frameTime
       var step = 1 / Math.max(1, root.fps)
       if (accumulated >= step) {
-        root.elapsed += accumulated
+        root.elapsed = (root.elapsed + accumulated) % root.period
+        if (root.birth < root.birthMax)
+          root.birth = Math.min(root.birthMax, root.birth + accumulated)
         accumulated = 0
       }
     }
