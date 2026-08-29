@@ -45,10 +45,17 @@ Item {
   // 18 rows a second, a day of running time puts the step at an eighth of a
   // row and the fall starts to judder.
   //
-  // The price of that is that the whole field repeats exactly every `period`.
-  // With this many columns, each with its own cycle count and offset, it does
-  // not read as a loop; if it ever does, raise this rather than lower it.
-  property real period: 120
+  // The price is that the whole field repeats exactly every `period`, and that
+  // price is not negotiable: a rain that never repeated would need speeds that
+  // are not commensurate, and those leave the clock nowhere to wrap. So the
+  // repeat is pushed past anyone's attention span instead of being removed.
+  //
+  // An hour, and not two minutes, because two minutes was visible -- the same
+  // field came back while you were still looking at it. `k` in the shader
+  // scales with this, so speed (k*span/period) and cycle length (period/k) do
+  // not move: only the repeat does. Above an hour, float32 starts to quantise
+  // the fall.
+  property real period: 3600
   property real elapsed: 0
 
   // `birth` is the OTHER clock, and it exists because a cold start cannot be
@@ -56,7 +63,10 @@ Item {
   // again at every wrap. This one counts from the moment the surface appeared
   // and stops for good just past the shader's BIRTH_SPREAD, so the rain falls
   // in from the top once and never again.
-  readonly property real birthMax: 3.0
+  // Capped past the longest a column can wait to begin its first cycle, which
+  // is period/k for the slowest column. Beyond this the cold-start gate in the
+  // shader is 1 for ever, which is what keeps it out of the wrap.
+  readonly property real birthMax: 13.0
   property real birth: 0
 
   // Start over: black screen, then the columns arrive from the top.

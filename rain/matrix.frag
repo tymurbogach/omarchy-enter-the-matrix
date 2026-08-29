@@ -43,8 +43,6 @@ const float GLYPHS = 50.0;
 // One cycle is the screen plus this many rows, so a trail is always completely
 // gone before its column is allowed to start again.
 const float TAIL_MAX = 40.0;
-// How long the field takes to fill from black on a cold start, in seconds.
-const float BIRTH_SPREAD = 2.2;
 
 float hash11(float n) {
     return fract(sin(n) * 43758.5453);
@@ -63,15 +61,40 @@ void column(float cx, float span, out float head, out float tail,
     // The speed is quantised so that k whole cycles fit into exactly `period`
     // seconds. That is the entire trick behind wrapping the clock invisibly:
     // every column is periodic with `period`, so the wrap changes nothing.
-    float k = 8.0 + floor(hash11(cx * 1.31 + 0.7) * 23.0);
+    // A cycle therefore lasts period/k, whatever the screen is: `speed` scales
+    // with `span`, so the two cancel.
+    //
+    // The unavoidable consequence is that the WHOLE FIELD repeats every
+    // `period`, and there is no way round it in a shader with no state: a rain
+    // that never repeats needs speeds that are not commensurate, and those give
+    // the clock nowhere to wrap. So the repeat is pushed out of sight instead.
+    // `k` and `period` scale together -- speed is k*span/period and a cycle is
+    // period/k, so multiplying both by 30 leaves the rain looking identical and
+    // only moves the repeat from every 2 minutes to every hour. It also buys
+    // 601 distinct speeds instead of 21, and lets mod(cycle, k) run through
+    // hundreds of variants of a column before it comes back round.
+    //
+    // An hour is where this stops, not where it stops being nice: `travel` is
+    // computed in float32, and at period 3600 its quantum is 0.017 of a row.
+    // Doubling the period doubles that, and the fall eventually judders.
+    float k = 300.0 + floor(hash11(cx * 1.31 + 0.7) * 601.0);
     float speed = k * span / period;
-    // The column's offset, in SECONDS and not in rows. It is the same number
-    // that decides when the column is born on a cold start, which is why a
-    // newborn column's head is exactly on the top row and not halfway down.
-    float stagger = hash11(cx * 7.13 + 4.7) * BIRTH_SPREAD;
 
-    float travel = (iTime - stagger) * speed;
-    float cycle = floor(travel / span);   // floor is right for negative travel
+    // The offset is spread across the column's WHOLE run of k cycles, and that
+    // is not a detail to tune -- it is the one thing holding the field apart.
+    // Every cycle length divides `period` exactly, so any clustering of these
+    // offsets does not wash out: it comes back, in full, at every wrap.
+    //
+    // Written down because it shipped wrong. This used to be the cold start's
+    // stagger, which put every column within 2.2 s of every other, and the
+    // whole field then re-aligned every `period` -- the screen emptied almost
+    // to black and a single wave fell from the top again. Measured on a 20 s
+    // build: brightness 0.01506 at t=3.5 and 0.01507 at t=23.5, 0.00023 at
+    // t=20.5 and 0.00023 at t=40.5. A carbon copy, twice a minute.
+    float phi = hash11(cx * 7.13 + 4.7) * span * k;
+
+    float travel = iTime * speed + phi;
+    float cycle = floor(travel / span);
     head = travel - cycle * span;
 
     // Re-hashed on every cycle: the same column is never twice the same drop.
@@ -89,11 +112,19 @@ void column(float cx, float span, out float head, out float tail,
     // Roughly one cycle in five, the column simply does not fall. Columns that
     // rest are what stops the field reading as a machine.
     alive = step(0.20, hash12(vec2(cx + 9.1, c)));
-    // Until its turn comes round on a cold start, the column does not exist.
-    // `birth` is capped in QML just past BIRTH_SPREAD, so beyond that this term
-    // is always 1 and stops mattering -- which is what keeps a cold start from
-    // happening again at every wrap.
-    alive *= step(stagger, birth);
+
+    // The cold start, and the reason it is a gate rather than an offset: a
+    // column waits until it BEGINS a cycle, so it enters over the top edge
+    // instead of appearing halfway down. Because the offsets above are spread
+    // across a whole cycle, so is this wait -- which is what fills the screen
+    // gradually instead of in one wave, and costs nothing in synchrony.
+    //
+    // Measured against `birth` and never against iTime. `birth` counts from the
+    // moment the surface appeared and QML caps it past the longest possible
+    // wait (period/k for the slowest column), so from then on this term is 1
+    // for good and cannot fire a second time at a wrap.
+    float tFirst = (ceil(phi / span) * span - phi) / speed;
+    alive *= step(tFirst, birth);
 }
 
 void main() {
