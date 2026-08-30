@@ -405,6 +405,52 @@ enabled_locks() {
     jq -r '[.[] | select(.enabled and (.id | endswith(".lock"))) | .id] | sort | join(",")'
 }
 
+# A plugin rescan that is still in flight when the shell is told to go down
+# SEGFAULTS quickshell. The scan finishes mid-teardown, builds the plugin
+# services, and their IpcHandler asks the engine generation for the IPC registry
+# that the teardown has already destroyed:
+#
+#   __dynamic_cast (src_type=EngineGenerationExt, dst_type=IpcHandlerRegistry)
+#   IpcHandler::updateRegistration   ipchandler.cpp:318
+#   IpcHandler::onPostReload         ipchandler.cpp:278
+#   QQmlObjectCreator::finalize      <- shell.qml:300, comp.createObject()
+#   Process::onFinished              <- the plugin scanner exiting
+#
+# Read out of a core dump on 2026-08-30. It is quickshell's bug, open upstream
+# and not fixable from here -- quickshell-mirror/quickshell#972, same two lines.
+# Ours is the workload that walks into it: `suspend` disables two plugins,
+# removes the lock clone, prunes its backup and restarts the shell, all inside
+# one second. Fifteen coredumps in three days, every one of them a `theme set`
+# away from matrix.
+#
+# So let the registry stop moving first. This NARROWS the window; it cannot
+# close it, and it is deliberately incapable of blocking a theme change.
+settle_plugin_scan() {
+  local previous="" current="" steady=0 waited=0
+
+  # Nothing to observe before the watcher's own debounce has elapsed: it waits
+  # 150ms after the last file event before starting a rescan (shell.qml:61).
+  sleep 0.3
+
+  while ((waited < 40)); do # 6s ceiling
+    forget_plugin_list
+    current=$(plugin_list)
+    # `[]` is what a shell that is not answering yields; steadiness there means
+    # nothing. Three identical live answers is the registry having settled.
+    if [[ $current != "[]" && $current == "$previous" ]]; then
+      steady=$((steady + 1))
+      ((steady < 3)) || break
+    else
+      steady=0
+    fi
+    previous="$current"
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+
+  forget_plugin_list
+}
+
 # Swapping which plugin owns the lock leaves BOTH loaded in the running shell.
 # Quickshell then hands the `lock` IPC target to one of them and refuses the
 # other:
@@ -422,6 +468,7 @@ enabled_locks() {
 # already written down in CLAUDE.md, reaching the one piece where being wrong is
 # invisible until you lock the screen.
 restart_shell_for_lock() {
+  settle_plugin_scan
   echo "  restarting the shell so only one lock plugin is loaded"
   omarchy-restart-shell >/dev/null 2>&1 || return 1
 }

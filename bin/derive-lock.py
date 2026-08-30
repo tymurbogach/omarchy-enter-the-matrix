@@ -121,6 +121,65 @@ def rain_source():
     die(f"cannot find {RAIN_QML}; install the {PLUGIN_ID} plugin first")
 
 
+def stage_clone(target, plugin_id, rain):
+    """Build the clone in a staging directory and move it into place.
+
+    Writing into the live folder was the seam this closes. Saving ANY file under
+    ~/.config/omarchy/plugins/ wakes Omarchy's watcher -- an `inotifywait -m -r`
+    on that directory (PluginRegistry.qml:636) -- so copying six files in fired
+    six events, and `rm -rf` on the way out would fire one per file again. A
+    dot-prefixed name is skipped by the scanner on purpose
+    (localPluginIdForPath, PluginRegistry.qml:707), so everything below is
+    invisible until the two renames at the end. install.sh stages its own
+    plugins the same way; this is the lock catching up.
+
+    It also removes an ordering hazard rather than tiptoeing around it. The rain
+    files used to be copied in BEFORE LockView was patched, because a live
+    reload landing in between showed a lock whose atlas was not there yet:
+
+        QQuickImage at .../MatrixRain.qml[37:3]: Cannot open: .../glyphs.png
+
+    Nothing here is live until it is complete, so no order can be wrong.
+    """
+    staging = target.parent / f".{plugin_id}.staging"
+    retired = target.parent / f".{plugin_id}.retired"
+    shutil.rmtree(staging, ignore_errors=True)
+    shutil.rmtree(retired, ignore_errors=True)
+    staging.mkdir(parents=True)
+
+    # Always start from Omarchy's sources: that brings an old clone up to date
+    # and stops the patch from being applied twice on top of itself.
+    for source_file in SOURCE.iterdir():
+        if source_file.name == "manifest.json":
+            continue  # the clone's carries its own id and clonedFrom; keep it
+        shutil.copy2(source_file, staging / source_file.name)
+
+    shutil.copy2(target / "manifest.json", staging / "manifest.json")
+
+    for name in RAIN_FILES:
+        shutil.copy2(rain / name, staging / name)
+
+    lock_view = staging / "LockView.qml"
+    lock_view.write_text(patch(lock_view.read_text()))
+
+    # Validated BEFORE it goes live, for the same reason install.sh does it: a
+    # folder that fails validation must never be the one the shell picks up.
+    # Missing validator is not a reason to abort a derive -- but a failing one
+    # is, and the clone already in place stays exactly as it was.
+    if shutil.which("omarchy-plugin-validate"):
+        if subprocess.run(["omarchy-plugin-validate", str(staging)],
+                          capture_output=True).returncode != 0:
+            shutil.rmtree(staging, ignore_errors=True)
+            die(f"the derived lock does not pass Omarchy's validation.\n"
+                f"  Your current lock at {target} is untouched.")
+
+    # Two renames rather than `rm -rf target; mv staging target`: the delete
+    # would be one watcher event per file, which is the burst being avoided.
+    os.replace(target, retired)
+    os.replace(staging, target)
+    shutil.rmtree(retired, ignore_errors=True)
+
+
 def main():
     if not (SOURCE / "LockView.qml").is_file():
         die(f"cannot find Omarchy's lock at {SOURCE}")
@@ -142,29 +201,7 @@ def main():
             die("the lock clone did not appear after creating it")
         print(f"Cloned Omarchy's lock as {plugin_id}")
 
-    # Always start clean: Omarchy's sources are copied over the clone and only
-    # then patched. That brings an old clone up to date and stops the patch from
-    # being applied twice on top of itself.
-    for source_file in SOURCE.iterdir():
-        if source_file.name == "manifest.json":
-            continue  # the clone's carries its own id and clonedFrom; leave it
-        shutil.copy2(source_file, target / source_file.name)
-
-    # The rain's own files go in FIRST, before LockView is patched. Saving any
-    # file under ~/.config/omarchy/plugins/ hot-reloads the plugin, so writing
-    # the patched LockView while glyphs.png was still missing gave the shell a
-    # moment where the lock referenced an atlas that was not there yet:
-    #
-    #   QQuickImage at .../cyberdyne.lock/MatrixRain.qml[37:3]:
-    #     Cannot open: .../cyberdyne.lock/glyphs.png
-    #
-    # The following restart papered over it, but a lock that briefly renders
-    # without its glyphs is not something to leave to timing.
-    for name in RAIN_FILES:
-        shutil.copy2(rain / name, target / name)
-
-    lock_view = target / "LockView.qml"
-    lock_view.write_text(patch(lock_view.read_text()))
+    stage_clone(target, plugin_id, rain)
 
     subprocess.run(["omarchy-shell", "shell", "rescanPlugins"],
                    check=False, capture_output=True)
