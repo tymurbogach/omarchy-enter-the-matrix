@@ -63,9 +63,16 @@ Before claiming something works, check **the artefact as the user sees it**.
 That same session shipped a menu row with no icon and the raw id as its label,
 because only the action was tested.
 
-If you genuinely cannot verify it from here — a boot splash, for one — **say so**
-instead of assuming. Then verify everything you *can*: syntax, generated output,
-cross-references, a simulation of the merge.
+If you genuinely cannot verify it from here, **say so** instead of assuming.
+Then verify everything you *can*: syntax, generated output, cross-references, a
+simulation of the merge.
+
+**The boot splash is no longer on that list.** `bin/preview-plymouth.sh` runs
+the real thing — real script, real callbacks, real password dialog — in a
+window, and `grim` photographs it. No sudo, no reboot, and it cannot touch the
+machine's actual boot. What still needs a reboot is only whether `mkinitcpio`
+carried the theme in, and whether the DRM renderer agrees with the X11 one about
+the panel. Everything else is a screenshot away, so take it.
 
 Verifications that actually caught bugs in this repo, worth repeating:
 
@@ -74,6 +81,11 @@ Verifications that actually caught bugs in this repo, worth repeating:
 md5sum glyphs.png backgrounds/*.png
 ./rain/generate-atlas.py && ./generate-backgrounds.py
 md5sum glyphs.png backgrounds/*.png
+
+# The boot splash, as a picture rather than as a hope
+./bin/derive-plymouth.py --stage-only
+printf 'pause 3\nshot splash\n' > /tmp/s.sh
+./bin/preview-plymouth.sh /tmp/s.sh --out /tmp/shots
 
 # The lock patch still applies to the installed Omarchy
 python3 -c "import importlib.util as u; s=u.spec_from_file_location('d','bin/derive-lock.py'); \
@@ -243,6 +255,16 @@ root. Without it the plugin loads, answers IPC and opens its panel while
 occupying zero pixels -- and every non-visual check passes. Only a screenshot
 says otherwise.
 
+**Hyprland 0.56 took its dispatchers to a Lua API, and a stale selector fails
+SILENTLY.** `hyprctl dispatch focuswindow class:Plymouthd` is a Lua syntax
+error, `hl.dsp.focus` wants a direction rather than a window, and
+`hl.dsp.window.fullscreen()` acts on whatever *is* focused. That last one
+matters: a preview script that assumed focus had moved then drove `wtype`, and
+typed a test passphrase and its Return into the terminal the user was working
+in. **Never aim `wtype` at a window you have not confirmed is focused** — it has
+no target, it types wherever the compositor is pointing. `bin/preview-plymouth.sh`
+sends keys down plymouthd's own pty instead, which nothing else can receive.
+
 **A summoned panel only takes the keyboard on the first summon after the shell
 starts.** `omarchy-shell shell summon <id>` maps the panel, but a later summon
 in the same shell process leaves the keys going to whatever had focus -- Escape
@@ -304,8 +326,80 @@ the extensions file claims.
 `if has($k) then .[$k] else true end` instead.
 
 **Plymouth draws at the panel's NATIVE resolution**, not the logical one. A point
-size chosen for 1080p is tiny on a 3072 px panel, which is why
-`derive-plymouth.py` computes it at derive time.
+size chosen for 1080p is tiny on a 3072 px panel. `derive-plymouth.py` used to
+work the size out at derive time from `hyprctl`; it does not any more. The
+script measures its own text at boot — render a probe, read `GetWidth()` back,
+scale from there — which is right on every panel, survives docking, and needs no
+calibration constant. `Window.GetWidth()` in the X11 preview is half the panel's,
+so a baked size would also have made every preview a lie.
+
+**In the initramfs, `Image.Text`'s font FAMILY is ignored. Only the size
+survives.** The mkinitcpio hook copies exactly three font files, under fixed
+names, and `label-freetype` resolves a family by shelling out to
+`/usr/bin/fc-match` — which is not in the initramfs. So `"DejaVu Serif 30"`
+renders as a serif on your desktop and as the theme's mono font at boot, with
+nothing to warn you. Anything whose exact shape matters must arrive as a PNG.
+`bin/preview-plymouth.sh` reproduces all three restrictions, which is the only
+reason this was found before shipping.
+
+**plymouthd SEGFAULTS when it can resolve no font at all.** Nothing checks that
+`FT_New_Face` found a file. That is why `derive-plymouth.py` asserts the family
+resolves, and why the preview has to populate `/usr/share/fonts/Plymouth*.ttf`
+rather than merely hiding fc-match.
+
+**A number and a sprite object cannot share a name in a Plymouth script.**
+`global.mx_caps = -1` early in the file, then `mx_caps.image = Image.Text(...)`
+later: the second assignment goes to a number, does nothing, and the sprite
+draws nothing — no error, no log line, no clue. Cost an hour. Suffix the state
+(`mx_caps_state`) or rename the object.
+
+**`Image()` on a file that is not there still tests as true**, and Plymouth does
+NOT abort the script when you then `Scale()` it — it carries on. So a guard has
+to ask `Image("x.png").GetWidth() > 0`, and a missing asset otherwise gives you
+a password prompt with nothing to type into.
+
+**plymouthd blocks on a pty nobody drains.** It announces "redirecting debug
+output to /dev/pts/N" and does that even with `--debug-file`; if the master end
+is not being read, the daemon stops part way through with no error anywhere.
+That trace is also the only place a `.script` syntax error is ever reported.
+
+**A block glyph for the passphrase reads as a progress bar, however much air
+you put between the blocks.** The mask was `▊` and not `█` for exactly that
+reason -- seven-eighths of a cell, so the characters would not butt together --
+and it did not work, because the progress readout lives in the SAME row and was
+also made of blocks. A boot went `solid bar` (typing) -> `[░░░░] 0%` -> `[███░]
+42%`, and the eye read all three as one meter behaving oddly. What separates the
+two is the GLYPH, not the spacing: dots for the passphrase, blocks for the
+track. And `░` beside `█` is its own version of the same mistake -- one is a
+dither pattern and the other is solid ink, so an empty bar and a half-full one
+do not look like the same object. The track is now one image drawn twice, at two
+opacities.
+
+**A missing glyph draws NOTHING -- not `.notdef`, not a box.** The guard against
+this was written the other way round first, on the assumption that freetype
+would give back a hollow rectangle; it does not. It inks zero pixels and
+advances the cell, so a font without the mask gives you a passphrase prompt that
+does not react as you type, which at 7am on an encrypted disk is
+indistinguishable from a dead keyboard. `keyline_assets()` therefore asks the
+PICTURE, at both ends: it measures the mask's ink
+(`magick ... -alpha extract -format "%[fx:mean]"`) against a full block's and
+dies below 1 % (nothing drawn) or above 60 % (block-shaped). Measured on
+JetBrains Mono, for calibration: `·` 3 %, `•` 6 %, `▪` 11 %, `*` 12 %, `●` 38 %,
+`■` 46 %, `▊` 75 %, `█` 100 %.
+
+**A preview scenario cannot reach the bullets or the progress bar.** Three
+separate things get in the way, and all three were hit here:
+`send` goes down plymouthd's pty, but the daemon counts passphrase keystrokes
+from the RENDERER, so nothing ever becomes a bullet; `display_normal_callback`
+starts Omarchy's fake progress the moment `password_shown` is set, which
+repaints over the dialog at 50 fps; and in `--mode=boot` plymouthd feeds real
+boot progress into `Plymouth.SetBootProgressFunction` whether or not anything is
+booting, which overwrites any percent you set. What works is a **doctored copy
+of the staged theme** -- `preview-plymouth.sh --stage DIR` takes any directory --
+with a probe appended that calls `mx_password_callback` and `mx_progress`
+directly from `refresh_callback`, re-asserting on every frame, and out-registers
+the boot progress callback with a no-op. The probe only CALLS the drawing code,
+so the pictures are still of the real thing.
 
 **`omarchy plymouth current` cannot see our boot theme.** It identifies a theme
 by comparing `logo.png` inside Omarchy's *own* folder, and ours installs
@@ -377,7 +471,12 @@ failure in any one of them is a failure to ship.
    For the lock this means a **screenshot**, not a status query: bring up
    `omarchy-shell lock preview` and `grim` it. For the widget it means a
    screenshot of the bar **and** of the open panel: an icon that occupies zero
-   pixels answers every other check correctly. Every non-visual check passed
+   pixels answers every other check correctly. For the boot splash it means
+   `bin/preview-plymouth.sh` — the typed line, the passphrase dialog with a
+   handful of dots in it, and the progress track at 0 %, part way and full, all
+   photographed. Neither the bullets nor the track can be reached by a scenario
+   on its own: see the trap below for the doctored stage that gets you there. It used
+   to be the one piece that shipped unseen; it no longer has that excuse. Every non-visual check passed
    while the machine was in fact locking to Omarchy's blurred wallpaper, and the
    image was the only thing that said so.
 4. **Toggle each piece off and back on, one at a time**, checking each time that

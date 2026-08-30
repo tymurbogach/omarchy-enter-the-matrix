@@ -85,39 +85,79 @@ and what `omarchy plymouth set-by-theme` lets a theme change is three things:
 background colour, text colour and **one still PNG**. No animation fits through
 that door.
 
-`bin/derive-plymouth.py` starts from your machine's `omarchy.script` and
-replaces the static logo with the four lines from the start of the film, typed
-out:
+`bin/derive-plymouth.py` starts from your machine's `omarchy.script` and turns
+it into Neo's monitor. Upper left, one line at a time, the screen clearing
+between them, a block cursor blinking at the end:
 
 ```
-Wake up, Neo...
-The Matrix has you...
-Follow the white rabbit.
-Knock, knock, Neo.
+Wake up, Neo...█
 ```
 
-The password dialog, the progress bar and the boot messages are Omarchy's,
-untouched. It installs as a **separate** theme at
-`/usr/share/plymouth/themes/omarchy-matrix/`, never overwriting its own: going
-back is `omarchy plymouth reset`. The `post-update.d` hook derives it again
-after every `omarchy update`.
+```
+The Matrix has you...█        Follow the white rabbit.█       Knock, knock, Neo.█
+```
 
-Three details that explain the design:
+And in the middle, where Omarchy puts its dialog, the passphrase — as a
+terminal line rather than a rounded box. The disk's own prompt above it, dimmed;
+one dot per character typed; the same block cursor as the line above;
+`[ CAPS LOCK ]` underneath when it is on, which Omarchy's dialog does not tell
+you:
 
+```
+              Please enter passphrase for disk nvme0n1p2 (cryptroot)
+
+                          > ••••••••█
+```
+
+Once it is answered, the boot's progress takes that row — on the same grid, so
+the dots, the blocks and the digits are all one monospace line:
+
+```
+                      ████████▒▒▒▒▒▒▒▒▒▒▒▒  42%
+```
+
+One track, drawn twice: the whole of it dimmed, and the part that is done,
+opaque, on top. That matters more than it sounds. It was `[████░░░░░░░░] 42%`,
+and `░` is a dither pattern where `█` is solid ink — so an empty bar and a
+half-full one looked like two unrelated widgets, and the passphrase, then still
+drawn in blocks, looked like a third. The boot messages are Omarchy's,
+untouched. It installs as a **separate**
+theme at `/usr/share/plymouth/themes/omarchy-matrix/`, never overwriting its
+own: going back is `omarchy plymouth reset`. The `post-update.d` hook derives it
+again after every `omarchy update`.
+
+Details that explain the design, each of them forced by something:
+
+- **Nothing is a pixel count.** Every size is measured at boot: the script
+  renders a probe string, reads its width back and scales from there. Plymouth
+  draws at the panel's *native* resolution, so anything worked out at derive
+  time from `hyprctl` is wrong the moment you dock to another screen.
 - **The step table is generated in Python** and reaches the `.script` with every
-  text already literal, so the script needs no `SubString`, no `Length` and no
-  string concatenation — code you cannot test without booting the machine.
-- **The point size is worked out at derive time**, from the panel's *native*
-  width. Plymouth draws at native resolution, not the logical one: a size chosen
-  for 1080p comes out tiny on a 3072 px screen.
+  text already literal, so the script needs no `SubString` and no `Length`.
+- **The passphrase line and the progress track are PNGs, cropped one cell at a
+  time.** In the initramfs there is no `fc-match`, and `label-freetype` resolves
+  font families by shelling out to it — so at boot a per-call font *family* is
+  ignored and only the size survives. Anything whose exact shape matters has to
+  arrive as pixels. It also means a keystroke and a percent each cost one
+  `Image.Crop`, not a text render. Both are rendered at the same point size and
+  font, which is what puts them on one grid.
 - **`logo.png` is still loaded, just invisible.** Its box is what
-  `omarchy.script` uses to place the password field, and we do not want to move
-  it.
+  `omarchy.script` uses to place the dialog, and we do not want to move it.
+- **Omarchy's password callback is not rewritten, it is out-registered.** Ours
+  is registered after it, and the last registration wins. And if the generated
+  PNG is ever missing, ours is not registered at all and Omarchy's own dialog —
+  padlock, box and bullets — comes up instead, whole.
+
+You do not have to reboot to see any of it. `bin/preview-plymouth.sh` runs the
+real splash in a window, through Plymouth's own X11 renderer, inside a user
+namespace that needs no `sudo` and cannot touch your actual boot — down to
+hiding `label-pango` and every font but the three the initramfs would have.
 
 > **If your disk is encrypted**, Plymouth is also what asks for your passphrase.
-> That is why the patch is additive and touches none of the password callbacks.
-> If anything goes wrong: `omarchy plymouth reset` from a running system, or
-> `plymouth.enable=0` on the kernel line from your boot loader.
+> That is why the patch adds a callback rather than editing one, and why the
+> pack falls back to Omarchy's dialog rather than to no dialog. If anything goes
+> wrong: `omarchy plymouth reset` from a running system, or `plymouth.enable=0`
+> on the kernel line from your boot loader.
 
 ## What it touches on your system
 
