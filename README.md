@@ -10,7 +10,7 @@ digital rain on the desktop, as the screensaver, and behind the lock.
 One line, both halves:
 
 ```bash
-omarchy theme install https://github.com/tymurbogach/omarchy-matrix &&
+omarchy theme install https://github.com/tymurbogach/omarchy-enter-the-matrix &&
   ~/.config/omarchy/themes/matrix/install.sh
 ```
 
@@ -341,7 +341,7 @@ it gets regenerated, so editing in it loses the change. Keep a working copy
 elsewhere:
 
 ```bash
-git clone https://github.com/tymurbogach/omarchy-matrix ~/dev/omarchy-matrix
+git clone https://github.com/tymurbogach/omarchy-enter-the-matrix ~/dev/omarchy-matrix
 # edit, commit and push there, then:
 cd ~/.config/omarchy/themes/matrix && git pull && ./install.sh
 ```

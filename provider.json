@@ -20,7 +20,7 @@
   "//ipc": "The IpcHandler target the service registers; `omarchy-shell <ipc> ...`.",
   "ipc": "matrix",
   "accent": "#60c76b",
-  "repoUrl": "https://github.com/tymurbogach/omarchy-matrix",
+  "repoUrl": "https://github.com/tymurbogach/omarchy-enter-the-matrix",
 
   "plugin": {
     "id": "matrix.rain",
