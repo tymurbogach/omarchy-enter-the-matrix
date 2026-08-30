@@ -191,19 +191,15 @@ one more time.
 The nine seams the 2026-08-28 clean-room test turned up are closed. What is
 below came out of closing them.
 
-1. **`derive-lock.py` copies into the live lock clone file by file**, and the
-   journal shows six reloads of the lock plugin per derive. It is the same seam
-   `install.sh` had, in the one plugin where being briefly wrong is invisible
-   until you lock the screen. Stage the clone and move it into place.
-2. **`widget/Panel.qml` still writes the CLI's name down.** Every other file
+1. **`widget/Panel.qml` still writes the CLI's name down.** Every other file
    asks `provider.json`; the widget cannot, because it would need the CLI to
    find it. Either it reads `~/.local/share/omarchy-matrix/provider.json`
    directly with a `FileView`, or that stays the provider's one line -- decide,
    and write down which.
-3. **`~/.local/share/omarchy-matrix/` is a bootstrap constant in three files**
+2. **`~/.local/share/omarchy-matrix/` is a bootstrap constant in three files**
    (the CLI, `bin/provider.py`, `uninstall.sh`). It cannot come from the file it
    is used to find, but three copies of it is two too many.
-4. **The widget's panel does not say what a stood-down piece would do.** It
+3. **The widget's panel does not say what a stood-down piece would do.** It
    ticks nothing and explains why at the top, which is right, but a switch that
    is on-but-stood-down currently reads exactly like one that is off.
 
@@ -295,6 +291,33 @@ answering IPC while the new one paints. Symptom: the IPC reports `false` for a
 property you just set to `true`, and the journal shows errors on a line that no
 longer exists in the file. Fix: `omarchy restart shell`. `rescanPlugins` is not
 always enough.
+
+**A plugin rescan still in flight when the shell is restarted SEGFAULTS
+quickshell.** The scan finishes mid-teardown, builds the plugin services, and
+their `IpcHandler` asks the engine generation for an IPC registry the teardown
+has already freed — `__dynamic_cast` on a dead `EngineGenerationExt`,
+`ipchandler.cpp:318`, reached from `Process::onFinished` (the scanner exiting)
+through `shell.qml:300`'s `createObject`. It is
+[quickshell#972](https://github.com/quickshell-mirror/quickshell/issues/972),
+open, and **not fixable from here**; it is present in 0.3.0 and 0.3.1 alike, so
+do not go looking for the package that "broke" it.
+
+What made it ours is the workload: `suspend` disables two plugins, removes the
+lock clone, prunes its backup and restarts the shell, all inside one second.
+Fifteen coredumps in three days, every one a `theme set` away from matrix.
+`settle_plugin_scan` now waits for `listPlugins` to answer the same thing three
+times before any lock restart. That NARROWS the race — it does not close it, and
+nothing here can. The shell was going to restart anyway, so the visible symptom
+was only a dirty exit and a crash notification; do not mistake that for it being
+harmless to leave, because a segfault during teardown bites differently on a
+different day.
+
+The cheap way to keep the window shut: **never write into a live plugin folder.**
+Omarchy watches `~/.config/omarchy/plugins` with `inotifywait -m -r`
+(`PluginRegistry.qml:636`) and ignores dot-prefixed entries
+(`localPluginIdForPath`, `:707`), so staging in `.<id>.staging` and renaming into
+place is invisible until it is complete. `rm -rf` on the live folder is the same
+burst in reverse — rename it to `.<id>.retired` first and delete that.
 
 **`omarchy refresh shell` rewrites `shell.json` wholesale**, and that is where
 enabled plugins and the bar layout are recorded. There is no post-refresh hook.

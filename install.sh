@@ -84,8 +84,15 @@ stage_plugin() { # <id> <source subdir> <file>...
     exit 1
   fi
 
-  rm -rf "$dest"
+  # `rm -rf "$dest"` fires one watcher event per file deleted -- the same burst
+  # this staging exists to avoid, just on the way out instead of on the way in.
+  # Renaming the live folder to a dot-prefixed name is a single event the
+  # scanner ignores, and the removal after the swap is invisible.
+  local retired="$PLUGINS_DIR/.$id.retired"
+  rm -rf "$retired"
+  [[ ! -e $dest ]] || mv "$dest" "$retired"
   mv "$staging" "$dest"
+  rm -rf "$retired"
 }
 
 echo "· plugin $PLUGIN_ID"
