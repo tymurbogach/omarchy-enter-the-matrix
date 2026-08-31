@@ -60,6 +60,22 @@
       "Knock, knock, Neo."
     ],
     "//color": "The typed line's colour, as Plymouth wants it: r, g, b in 0..1.",
-    "color": [0.0, 1.0, 0.255]
+    "color": [0.0, 1.0, 0.255],
+    "//dialogColor": [
+      "The passphrase box, a different colour from the lines on purpose: in the",
+      "film the terminal runs green and the boxed prompt is an ice blue.",
+      "",
+      "MEASURED, not chosen. Sampled off the frames themselves -- #75C8D9 is the",
+      "box's mid-tone, and the close-ups run brighter at #A8D9E4 and #D5F9FA.",
+      "What matters is that BLUE sits above green here (B 217 > G 200 > R 117);",
+      "the first guess at this was a mint #7FFFE0, green-dominant, and it read",
+      "as the wrong colour immediately beside the real thing.",
+      "",
+      "Omit it and the box takes `color`, so an older provider is unaffected."
+    ],
+    "dialogColor": [0.459, 0.784, 0.851],
+    "//titles": "On the box's rule, the way an old window manager captioned one.",
+    "boxTitle": "enter password",
+    "progressTitle": "booting"
   }
 }

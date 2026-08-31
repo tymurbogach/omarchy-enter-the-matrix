@@ -66,27 +66,56 @@ COLOUR = PROVIDER["plymouth"]["color"]
 # ...and the same colour as ImageMagick wants it, for the generated PNGs.
 COLOUR_HEX = "".join(f"{round(channel * 255):02X}" for channel in COLOUR)
 
+# The boxed prompt is a different colour from the lines, on purpose: in the film
+# the terminal runs green and the boxed prompt is a pale aqua. A provider that
+# does not say gets the one colour, so nothing older changes shape.
+DIALOG_COLOUR = PROVIDER["plymouth"].get("dialogColor", COLOUR)
+DIALOG_HEX = "".join(f"{round(channel * 255):02X}" for channel in DIALOG_COLOUR)
+BOX_TITLE = PROVIDER["plymouth"].get("boxTitle", "enter password")
+PROGRESS_TITLE = PROVIDER["plymouth"].get("progressTitle", "booting")
+
+# The family Plymouth is told about in the .plymouth. It decides which single
+# TTF the mkinitcpio hook copies into the initramfs, and therefore what the few
+# things still drawn as TEXT come out in -- the disk's own prompt and the caps
+# lock label. Everything whose shape matters is a PNG instead; see FONT_FILE.
 FONT = "JetBrainsMono Nerd Font"
-CURSOR = "█"                # full block: the terminal cursor
-BLANK = " "                 # a cleared line. NOT "", which has no image
-# One typed character of the passphrase. A dot, and NOT any kind of block.
+
+# ...and the face the splash is actually drawn in, as a FILE, out of the theme's
+# own fonts/ directory rather than out of fc-match.
 #
-# This was `▊` -- seven-eighths of a cell, chosen over `█` precisely so the
-# characters would not butt together into one solid green bar. It did not work,
-# and the reason is worth keeping: the progress readout lives in the SAME row
-# and is also made of blocks, so a boot went `solid bar` (typing) -> `empty
-# bracketed bar` -> `filling bar`, and the eye read all three as one meter
-# behaving strangely. What separates the passphrase from the progress is the
-# GLYPH, not the gap between glyphs.
-MASK = "•"
+# Naming a family here instead would be a trap: at derive time fc-match may not
+# have it, and when it misses it does not fail -- it returns `monospace`, and the
+# splash comes out in the wrong face with nothing anywhere to say so. A file in
+# the theme cannot miss. It is also why the typed lines are baked: at boot there
+# is no fc-match at all, so a per-call family is ignored outright.
+FONT_FILE = "fonts/TerminessNerdFont-Regular.ttf"
+
+BLOCK = "█"                 # full block: the progress track is a row of these
+# One typed character of the passphrase. A dash, and NOT any kind of block.
+#
+# This was `▊` first -- seven-eighths of a cell, chosen over `█` precisely so the
+# characters would not butt together into one solid bar. It did not work, and the
+# reason is worth keeping: the progress readout lives in the SAME row and is also
+# made of blocks, so a boot went `solid bar` (typing) -> `empty track` ->
+# `filling track`, and the eye read all three as one meter behaving strangely.
+# What separates the passphrase from the progress is the GLYPH, not the gap.
+#
+# Then it was `•`, which worked. It is a dash now because that is what the film's
+# boxed prompt shows, and a dash is further still from a block: 4.4 % of one in
+# Terminus, against the dot's 6 %.
+MASK = "-"
+# The progress readout's characters, as one strip to crop cells out of. Baked
+# for the same reason everything else here is: at boot the font is whatever the
+# initramfs happens to hold, and digits in a face that does not match the box
+# they sit inside is exactly the kind of seam this design exists to close.
+ATLAS = "0123456789% "
 
 # --- the animation, in frames of the 50 fps refresh omarchy.script assumes ---
 FPS = 50
 FRAMES_PER_CHAR = 5         # -> 10 keystrokes a second
-BLINK = 30                  # frames per half-blink of the cursor
-OPEN_BLINKS = 2             # the cursor alone, before the first letter
-HOLD_BLINKS = 4             # once a line is complete
-GAP_BLINKS = 2              # cleared screen, before the next line
+OPEN_PAUSE = 60             # black, before the first letter
+HOLD_PAUSE = 120            # once a line is complete
+GAP_PAUSE = 60              # cleared screen, before the next line
 #
 # At 10 keystrokes a second the four lines take 22 s, and the storyboard plays
 # ONCE -- `mx_advance` returns for good at the last step, it does not loop. Only
@@ -106,9 +135,19 @@ GAP_BLINKS = 2              # cleared screen, before the next line
 TEXT_X = 0.055              # left margin of Neo's terminal
 TEXT_Y = 0.085              # and how far down it starts
 TEXT_WIDTH = 0.42           # what the longest line takes up
-KEY_WIDTH = 0.46            # the passphrase line, all 23 cells of it
-KEY_CELLS = 21              # blocks shown for a passphrase, at most
+KEY_CELLS = 21              # dashes shown for a passphrase, at most
 PROMPT_WIDTH = 0.42         # the disk's own prompt, when it fits
+
+# --- the box ----------------------------------------------------------------
+# The film's prompt is a framed panel with a caption on its top rule. It is one
+# baked PNG per caption rather than a frame plus text composed at boot: Plymouth
+# has no blit, and two images that have to line up are two images that can drift.
+#
+# Its interior is wide enough for BOTH phases, so the panel never changes size
+# between asking for the passphrase and reporting progress -- 21 dashes, and
+# 20 track blocks + a gap + 4 digits, is 25 either way.
+BOX_WIDTH = 0.46            # of the window
+BOX_CELLS = 26              # interior width, in cells: 25 of content and air
 
 # --- the progress track -----------------------------------------------------
 # Not a fraction of the window: it is measured in CELLS of the passphrase line,
@@ -142,58 +181,52 @@ def available_font():
     return FONT if FONT.lower() in output.lower() else "monospace"
 
 
-def font_file(family):
-    """The file behind a family, for ImageMagick. Deliberately resolved the same
-    way the mkinitcpio hook resolves it, so the PNG this script generates and
-    the text Plymouth renders at boot come out of the same TTF."""
-    try:
-        return subprocess.run(["fc-match", "-f", "%{file}", family],
-                              capture_output=True, text=True, check=True).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
-        return ""
-
-
 def literal(text):
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def storyboard():
-    """The typing, already resolved into steps.
+    """The typing, already resolved into steps: which line, how much of it, and
+    for how many frames.
 
-    Generated here rather than inside the Plymouth script on purpose: that way
-    the .script needs no SubString, no Length and no string slicing. Every step
-    carries its literal text and how many frames it lasts.
+    Generated here rather than inside the Plymouth script on purpose -- that way
+    the .script needs no SubString, no Length and no string slicing. It used to
+    carry every step's literal text; now a step is two integers, because the
+    drawing is one Crop of a picture that already exists.
 
     The film's shape, not a terminal's: a line types, holds, and the screen
     CLEARS before the next one. They do not pile up.
+
+    NOTHING BLINKS. The block cursor that used to trail every step is gone, and
+    that is what makes the rest of this cheap: with nothing after the text, the
+    first N characters of a line are exactly the first N cells of its image, so
+    typing is a crop and needs no font at boot at all.
+
+    A step with 0 characters shown is a held blank -- the pause before the first
+    line, and the cleared screen between them.
     """
-    steps = []
-    for blink in range(OPEN_BLINKS):                    # a cursor, on black
-        steps.append((CURSOR if blink % 2 == 0 else BLANK, BLINK))
+    steps = [(0, 0, OPEN_PAUSE)]
     for index, phrase in enumerate(LINES):
         for n in range(1, len(phrase) + 1):
-            steps.append((phrase[:n] + CURSOR, FRAMES_PER_CHAR))
-        for blink in range(HOLD_BLINKS):
-            steps.append((phrase + (BLANK if blink % 2 else CURSOR), BLINK))
+            steps.append((index, n, FRAMES_PER_CHAR))
+        steps.append((index, len(phrase), HOLD_PAUSE))
         if index != len(LINES) - 1:
-            for blink in range(GAP_BLINKS):
-                steps.append((CURSOR if blink % 2 == 0 else BLANK, BLINK))
+            steps.append((index, 0, GAP_PAUSE))
     return steps
 
 
-def percent_labels():
-    """`  0%` .. `100%`, one per whole percent.
+def percent_cells():
+    """`  0%` .. `100%` as indices into the digit atlas, four per percent.
 
-    A table, for the same reason the storyboard is one: no string can be built
-    up inside the .script. And `update_progress_bar` is called from the 50 fps
-    refresh, so redrawing on anything finer than a whole percent would be a
-    hundred wasted Image.Text calls a second.
-
-    Padded to PCT_CELLS so the label's width never changes: the track, the gap
-    and the digits are one centred group, and a group that changes width would
-    slide sideways as the boot progressed.
+    A table, for the same reason the storyboard is one: no string is ever built
+    up inside the .script. The atlas is ATLAS, so a digit's index is its own
+    value, `%` is 10 and a space is 11.
     """
-    return [f"{percent:>{PCT_CELLS - 1}}%" for percent in range(101)]
+    rows = []
+    for percent in range(101):
+        label = f"{percent:>{PCT_CELLS - 1}}%"
+        rows.append([ATLAS.index(character) for character in label])
+    return rows
 
 
 TYPING = string.Template("""
@@ -205,20 +238,26 @@ TYPING = string.Template("""
 # the password dialog below measures itself against, and moving that would move
 # Omarchy's own geometry with it.
 #
-# Every size here is measured, not assumed. mx_fit() renders a probe string and
-# reads its width back, which is exact whatever the panel's resolution and
-# whatever label-freetype decides a "size" means. Nothing in this file is a
-# pixel count that came from the machine it was generated on.
+# The four lines are PICTURES, one per line, baked at derive time in the theme's
+# own face. At boot there is no fc-match, so a font family asked for by name is
+# ignored and every Image.Text comes out in whatever single TTF the initramfs
+# holds -- which is no way to choose a typeface. Typing is therefore a Crop: N
+# characters of a monospace line is the first N cells of its picture, exact at
+# any panel size, and it costs no text rendering at all.
+#
+# Nothing here is a pixel count. Sizes come from the window and from ratios
+# measured at derive time, never from the machine this was generated on.
 
-global.mx_r = $R;
-global.mx_g = $G;
-global.mx_b = $B;
+global.mx_r = $R;   # the box's colour. The only things still drawn as TEXT are
+global.mx_g = $G;   # the disk's own prompt and the caps label -- both of them
+global.mx_b = $B;   # belong to the box, so both take its colour.
 global.mx_font = "$FONT";
 global.mx_w = Window.GetWidth();
 global.mx_h = Window.GetHeight();
 
 # Ask the font how big it really is at a known size, then scale to the width we
-# actually want. 40 is arbitrary and cancels out.
+# actually want. 40 is arbitrary and cancels out. Still needed for the prompt
+# and the caps label, which are the only text left.
 fun mx_fit(text, target) {
   probe = Image.Text(text, 1, 1, 1, 1, global.mx_font + " 40");
   width = probe.GetWidth();
@@ -228,39 +267,49 @@ fun mx_fit(text, target) {
   return size;
 }
 
-global.mx_size = mx_fit($WIDEST, global.mx_w * $TEXT_WIDTH);
-global.mx_face = global.mx_font + " " + global.mx_size;
-global.mx_x = Math.Int(global.mx_w * $TEXT_X);
-global.mx_y = Math.Int(global.mx_h * $TEXT_Y);
+# One cell for all four lines: they were rendered at one point size in one
+# monospace face, so scaling each to its own character count keeps them on a
+# single grid. $LINE_ASPECT is a RATIO measured at derive time -- the line's
+# height over one cell's width -- so it survives any panel.
+global.mx_cell_w = global.mx_w * $TEXT_WIDTH / $WIDEST_CELLS;
+global.mx_line_h = Math.Int(global.mx_cell_w * $LINE_ASPECT);
+$LINE_LOAD
 
 global.mx_steps = $STEPS;
 $TABLE
 
 global.mx_step = 0;
 global.mx_frame = 0;
-global.mx_painted = "";
+global.mx_painted = -1;
 
 mx.sprite = Sprite();
+# The left edge never moves: the line grows rightwards from a fixed column, the
+# way a terminal does. Centring it would shuffle the whole line sideways on
+# every keystroke.
+mx.sprite.SetPosition(Math.Int(global.mx_w * $TEXT_X),
+                      Math.Int(global.mx_h * $TEXT_Y), 10000);
+mx.sprite.SetOpacity(0);
 
-fun mx_paint(index) {
-  text = global.mx_txt[index];
-  if (text == global.mx_painted) return;
-  global.mx_painted = text;
-
-  image = Image.Text(text, global.mx_r, global.mx_g, global.mx_b, 1, global.mx_face);
-  # The left edge never moves: the line grows rightwards from a fixed column,
-  # which is what a terminal does. Centring it would make every character
-  # shuffle the whole line sideways.
-  mx.sprite.SetImage(image);
-  mx.sprite.SetPosition(global.mx_x, global.mx_y, 10000);
+fun mx_paint(step) {
+  if (step == global.mx_painted) return;
+  global.mx_painted = step;
+  shown = global.mx_shown[step];
+  if (shown < 1) {
+    # A held blank: the pause before the first line, and between them.
+    mx.sprite.SetOpacity(0);
+    return;
+  }
+  mx.sprite.SetImage(global.mx_img[global.mx_line[step]].Crop(
+    0, 0, Math.Int(shown * global.mx_cell_w), global.mx_line_h));
+  mx.sprite.SetOpacity(1);
 }
 
 fun mx_tick() {
-  mx_caret_tick();
+  mx_caps_tick();
 
   if (global.mx_step >= global.mx_steps) return;
 
-  if (global.mx_painted == "") {
+  if (global.mx_painted == -1) {
     mx_paint(0);
     return;
   }
@@ -279,39 +328,23 @@ fun mx_tick() {
 # Defined here because refresh_callback below calls it on every frame, and it
 # has to exist before the first one. The dialog it drives is set up at the end
 # of this file, where `entry` finally has a position to hang off.
+#
 # MIND the names. A global holding a number and an object holding sprites
 # cannot share an identifier: `global.mx_caps = -1` followed by
 # `mx_caps.image = ...` further down assigns to a number, silently does
 # nothing, and the sprite draws nothing with no error anywhere. Hence the
 # _state suffix, and why the progress track's numbers are mx_bar_* while its
-# sprites are mx_track / mx_fill / mx_pct -- no name is ever both.
-global.mx_caret_on = 0;
-global.mx_caret_frame = 0;
-global.mx_caret_lit = 1;
+# sprites are mx_track / mx_fill -- no name is ever both.
+global.mx_dialog_on = 0;
 global.mx_bullets = -1;
 global.mx_caps_state = -1;
 global.mx_percent = -1;
-
-fun mx_caret_tick() {
-  if (global.mx_caret_on == 0) return;
-  global.mx_caret_frame++;
-  if (global.mx_caret_frame < $BLINK) return;
-  global.mx_caret_frame = 0;
-  if (global.mx_caret_lit == 1) {
-    global.mx_caret_lit = 0;
-    mx_caret.sprite.SetOpacity(0);
-  } else {
-    global.mx_caret_lit = 1;
-    mx_caret.sprite.SetOpacity(1);
-  }
-  mx_caps_tick();
-}
 """)
 
 
 DIALOG = string.Template("""
 #----------------------------------------- $NAME dialog $RULE
-# The passphrase, as a terminal line instead of a rounded box.
+# The passphrase, as the film's framed panel rather than a rounded box.
 #
 # Omarchy's own dialog is NOT rewritten. Its callbacks are registered further
 # up this file; ours are registered below, and the last registration wins. So
@@ -323,36 +356,53 @@ DIALOG = string.Template("""
 # It hangs off `entry.y`, which is Omarchy's own idea of where a dialog goes.
 # That is deliberate: the middle of the screen should stay where Omarchy puts
 # it, whatever Omarchy decides that is.
+#
+# ONE panel, two captions. The passphrase and the progress readout are never on
+# screen together, so they share the frame as well as the row -- swapping a
+# whole baked image rather than composing a frame and a caption, because
+# Plymouth has no blit and two images that must line up are two images that can
+# drift. It also means the boot never cuts from a framed panel to a bare bar,
+# which is the "three unrelated widgets taking turns" this design exists to
+# avoid.
 
-global.mx_key_h = 0;
-global.mx_cell = 0;
+global.mx_box_w = Math.Int(global.mx_w * $BOX_WIDTH);
+global.mx_box_h = Math.Int(global.mx_box_w * $BOX_ASPECT);
 
+mx_box.key = Image("box-key.png");
+mx_box.bar = Image("box-bar.png");
+mx_box.key_scaled = mx_box.key.Scale(global.mx_box_w, global.mx_box_h);
+mx_box.bar_scaled = mx_box.bar.Scale(global.mx_box_w, global.mx_box_h);
+
+global.mx_box_x = Math.Int((global.mx_w - global.mx_box_w) / 2);
+global.mx_box_y = entry.y;
+
+mx_box.sprite = Sprite();
+mx_box.sprite.SetPosition(global.mx_box_x, global.mx_box_y, 10000);
+mx_box.sprite.SetOpacity(0);
+
+# The interior grid. All three of these are FRACTIONS OF THE BOX'S WIDTH,
+# measured when the box was drawn, so they scale with it and no pixel count ever
+# crosses from the machine that derived this to the one that boots it.
+#
+# Everything inside is scaled to a whole number of these cells and rendered at
+# one point size, which is what puts the dashes, the track and the digits on a
+# single monospace grid instead of three that nearly agree.
+global.mx_cell = global.mx_box_w * $BOX_CELL_FRAC;
+global.mx_in_x = global.mx_box_x + Math.Int(global.mx_box_w * $BOX_PAD_FRAC);
+global.mx_in_y = global.mx_box_y + Math.Int(global.mx_box_w * $BOX_ROW_FRAC);
+global.mx_in_h = Math.Int(global.mx_cell * $CELL_ASPECT);
+
+# The passphrase: one image of $KEY_CELLS dashes, revealed a cell at a time.
 mx_key.image = Image("keyline.png");
-# Scaled to the width we want, once, at start-up. Every crop below comes off
-# THIS image, so the cell width divides it exactly and the blocks never drift.
-mx_key.scaled = mx_key.image.Scale(
-  Math.Int(global.mx_w * $KEY_WIDTH),
-  Math.Int(mx_key.image.GetHeight() * global.mx_w * $KEY_WIDTH / mx_key.image.GetWidth()));
-global.mx_key_h = mx_key.scaled.GetHeight();
-global.mx_cell = mx_key.scaled.GetWidth() / $CELLS_TOTAL;
-
-# Centred on a passphrase of average length rather than on the full 21 blocks:
-# centring the maximum would leave every real passphrase hanging left of middle.
-global.mx_key_x = Math.Int((global.mx_w - (2 + 12) * global.mx_cell) / 2);
-global.mx_key_y = entry.y;
-
+mx_key.scaled = mx_key.image.Scale(Math.Int($KEY_CELLS * global.mx_cell), global.mx_in_h);
 mx_key.sprite = Sprite();
-mx_key.sprite.SetPosition(global.mx_key_x, global.mx_key_y, 10001);
+mx_key.sprite.SetPosition(global.mx_in_x, global.mx_in_y, 10001);
 mx_key.sprite.SetOpacity(0);
 
-mx_caret.image = Image("caret.png");
-mx_caret.scaled = mx_caret.image.Scale(global.mx_cell, global.mx_key_h);
-mx_caret.sprite = Sprite(mx_caret.scaled);
-mx_caret.sprite.SetPosition(global.mx_key_x, global.mx_key_y, 10002);
-mx_caret.sprite.SetOpacity(0);
-
-# The disk's own prompt, dimmed, above the line. Sized off a string of about
-# the length these actually run to.
+# The disk's own prompt, dimmed, above the panel. It is the one thing here that
+# cannot be baked -- LUKS writes it at boot -- so it stays text, in whatever
+# face the initramfs holds. That is defensible: it is the system talking, not
+# the theme.
 global.mx_prompt_size = mx_fit($PROMPT_PROBE, global.mx_w * $PROMPT_WIDTH);
 global.mx_prompt_face = global.mx_font + " " + global.mx_prompt_size;
 global.mx_prompt_shown = "";
@@ -365,54 +415,39 @@ mx_caps.image = Image.Text($CAPS_TEXT, global.mx_r, global.mx_g, global.mx_b, 1,
 mx_caps.sprite = Sprite(mx_caps.image);
 mx_caps.sprite.SetPosition(
   Math.Int((global.mx_w - mx_caps.image.GetWidth()) / 2),
-  global.mx_key_y + global.mx_key_h + Math.Int(global.mx_prompt_size * 1.1),
+  global.mx_box_y + global.mx_box_h + Math.Int(global.mx_prompt_size * 0.6),
   10001);
 mx_caps.sprite.SetOpacity(0);
 
-# The progress track, in the same row the passphrase uses -- the two are never
-# on screen together, so they share the row AND the grid: the track is scaled to
-# a whole number of the dialog's own cells, and the digits are sized to four
-# more of them. Dots, blocks and numbers therefore sit on one monospace grid,
-# which is what stops the row reading as three unrelated widgets.
+# The progress track, inside the same panel and on the same grid.
 #
 # ONE image, drawn by TWO sprites: the whole track at $TRACK_ALPHA underneath,
 # and the part that is done, opaque, cropped over it. That is deliberate -- an
 # empty track has to be the same object as a full one, merely unlit. The old
-# readout spelt `[████░░░░]`, where `░` is a dither pattern and `█` is solid
-# ink, so 0% and 50% looked like two different things.
-global.mx_bar_count = 101;
-$BAR_TABLE
-
+# readout spelt `[####....]`, where the empty half was a dither pattern and the
+# full half was solid ink, so 0% and 50% looked like two different things.
 mx_track.image = Image("bar.png");
-mx_track.scaled = mx_track.image.Scale(
-  Math.Int($BAR_CELLS * global.mx_cell),
-  Math.Int(mx_track.image.GetHeight() * $BAR_CELLS * global.mx_cell / mx_track.image.GetWidth()));
-global.mx_bar_h = mx_track.scaled.GetHeight();
-# The cell of the SCALED track, which is what every crop below is measured in.
-# Not global.mx_cell: the two images are rendered at the same point size and the
-# same font, but they go through different Scale() calls, and rounding there
-# would put the crops a pixel or two out over twenty cells.
-global.mx_bar_cell = mx_track.scaled.GetWidth() / $BAR_CELLS;
-
-# The group -- track, gap, digits -- centred as a unit.
-global.mx_bar_x = Math.Int(
-  (global.mx_w - ($BAR_CELLS + $BAR_GAP_CELLS + $PCT_CELLS) * global.mx_bar_cell) / 2);
-
+mx_track.scaled = mx_track.image.Scale(Math.Int($BAR_CELLS * global.mx_cell), global.mx_in_h);
 mx_track.sprite = Sprite(mx_track.scaled);
-mx_track.sprite.SetPosition(global.mx_bar_x, global.mx_key_y, 10001);
+mx_track.sprite.SetPosition(global.mx_in_x, global.mx_in_y, 10001);
 mx_track.sprite.SetOpacity(0);
 
 mx_fill.sprite = Sprite();
-mx_fill.sprite.SetPosition(global.mx_bar_x, global.mx_key_y, 10002);
+mx_fill.sprite.SetPosition(global.mx_in_x, global.mx_in_y, 10002);
 mx_fill.sprite.SetOpacity(0);
 
-# The digits, vertically centred against the track rather than sharing its top
-# edge: Image.Text hands back a full line box, and a block glyph does not fill
-# one, so aligning the tops would sit the numbers noticeably high.
-global.mx_pct_size = mx_fit(global.mx_bar_text[100], $PCT_CELLS * global.mx_bar_cell);
-global.mx_pct_face = global.mx_font + " " + global.mx_pct_size;
-mx_pct.sprite = Sprite();
-mx_pct.sprite.SetOpacity(0);
+# The digits, cropped out of a baked strip rather than typeset. Image.Text would
+# put them in the initramfs's font -- a different face from the panel they sit
+# inside, and the one seam a reader would actually notice.
+mx_digits.image = Image("digits.png");
+mx_digits.scaled = mx_digits.image.Scale(Math.Int($ATLAS_CELLS * global.mx_cell),
+                                         global.mx_in_h);
+$PCT_TABLE
+$PCT_SPRITES
+
+fun mx_pct_show(on) {
+$PCT_SHOW
+}
 
 fun mx_bar_show(on) {
   # The fill is never turned on from here, only off: mx_progress owns it,
@@ -424,18 +459,20 @@ fun mx_bar_show(on) {
   mx_fill.sprite.SetOpacity(0);
   if (on == 0) {
     mx_track.sprite.SetOpacity(0);
-    mx_pct.sprite.SetOpacity(0);
+    mx_pct_show(0);
   } else {
+    mx_box.sprite.SetImage(mx_box.bar_scaled);
+    mx_box.sprite.SetOpacity(1);
     mx_track.sprite.SetOpacity($TRACK_ALPHA);
-    mx_pct.sprite.SetOpacity(1);
+    mx_pct_show(1);
   }
 }
 
 fun mx_prompt_show(text) {
   if (text != global.mx_prompt_shown) {
     global.mx_prompt_shown = text;
-    # Dimmed with alpha rather than a darker green: it stays the same hue as
-    # the rest, which is what makes it read as one terminal.
+    # Dimmed with alpha rather than a darker colour: it stays the same hue as
+    # the panel, which is what makes it read as one thing.
     image = Image.Text(text, global.mx_r, global.mx_g, global.mx_b, 0.55,
                        global.mx_prompt_face);
     # A LUKS prompt naming a device by UUID can be far wider than the screen,
@@ -447,14 +484,17 @@ fun mx_prompt_show(text) {
     mx_prompt.sprite.SetImage(image);
     mx_prompt.sprite.SetPosition(
       Math.Int((global.mx_w - image.GetWidth()) / 2),
-      global.mx_key_y - Math.Int(global.mx_prompt_size * 2.2),
+      global.mx_box_y - Math.Int(global.mx_prompt_size * 1.8),
       10001);
   }
   mx_prompt.sprite.SetOpacity(1);
 }
 
+# Driven from mx_tick() on every frame. It used to hang off the caret's blink;
+# with the caret gone it needs a driver of its own, and a flag of its own to say
+# the panel is up.
 fun mx_caps_tick() {
-  if (global.mx_caret_on == 0) return;
+  if (global.mx_dialog_on == 0) return;
   state = Plymouth.GetCapslockState();
   if (state == global.mx_caps_state) return;
   global.mx_caps_state = state;
@@ -466,13 +506,13 @@ fun mx_caps_tick() {
 }
 
 fun mx_hide_dialog() {
-  global.mx_caret_on = 0;
+  global.mx_dialog_on = 0;
   global.mx_bullets = -1;
   global.mx_caps_state = -1;
   mx_key.sprite.SetOpacity(0);
-  mx_caret.sprite.SetOpacity(0);
   mx_prompt.sprite.SetOpacity(0);
   mx_caps.sprite.SetOpacity(0);
+  mx_box.sprite.SetOpacity(0);
 }
 
 fun mx_password_callback(prompt, bullets) {
@@ -483,24 +523,26 @@ fun mx_password_callback(prompt, bullets) {
   hide_progress_bar();
   mx_bar_show(0);
 
+  mx_box.sprite.SetImage(mx_box.key_scaled);
+  mx_box.sprite.SetOpacity(1);
   mx_prompt_show(prompt);
 
   shown = bullets;
-  if (shown > $CELLS) shown = $CELLS;
+  if (shown > $KEY_CELLS) shown = $KEY_CELLS;
   if (shown != global.mx_bullets) {
     global.mx_bullets = shown;
-    width = (2 + shown) * global.mx_cell;
-    mx_key.sprite.SetImage(mx_key.scaled.Crop(0, 0, width, global.mx_key_h));
-    mx_caret.sprite.SetX(global.mx_key_x + width);
+    if (shown < 1) {
+      # Crop() to zero width is not worth trusting, and an empty field is what
+      # "nothing typed yet" should look like anyway.
+      mx_key.sprite.SetOpacity(0);
+    } else {
+      mx_key.sprite.SetImage(
+        mx_key.scaled.Crop(0, 0, Math.Int(shown * global.mx_cell), global.mx_in_h));
+      mx_key.sprite.SetOpacity(1);
+    }
   }
-  mx_key.sprite.SetOpacity(1);
 
-  # Restart the blink on every keystroke, the way a real cursor does: it should
-  # be solid while you type, not winking mid-word.
-  global.mx_caret_on = 1;
-  global.mx_caret_frame = 0;
-  global.mx_caret_lit = 1;
-  mx_caret.sprite.SetOpacity(1);
+  global.mx_dialog_on = 1;
   mx_caps_tick();
 }
 
@@ -531,24 +573,18 @@ fun mx_progress(fraction) {
     mx_fill.sprite.SetOpacity(0);
   } else {
     mx_fill.sprite.SetImage(
-      mx_track.scaled.Crop(0, 0, Math.Int(filled * global.mx_bar_cell), global.mx_bar_h));
+      mx_track.scaled.Crop(0, 0, Math.Int(filled * global.mx_cell), global.mx_in_h));
     mx_fill.sprite.SetOpacity(1);
   }
 
-  image = Image.Text(global.mx_bar_text[percent], global.mx_r, global.mx_g, global.mx_b,
-                     1, global.mx_pct_face);
-  mx_pct.sprite.SetImage(image);
-  mx_pct.sprite.SetPosition(
-    global.mx_bar_x + Math.Int(($BAR_CELLS + $BAR_GAP_CELLS) * global.mx_bar_cell),
-    global.mx_key_y + Math.Int((global.mx_bar_h - image.GetHeight()) / 2),
-    10001);
+$PCT_PAINT
 }
 
 # Only take the dialog over if there is something to draw it with.
 #
 # Tested by deleting keyline.png from a staged theme: Plymouth does NOT abort
 # the script over Scale() on an image that failed to load, it carries on. So
-# without this guard the prompt appeared with no line, no dots and no cursor
+# without this guard the prompt appeared with no field, no dashes and no panel
 # -- you could still type your passphrase, but with nothing on screen to say
 # so, which on an encrypted disk at 7am is its own kind of broken.
 #
@@ -556,91 +592,136 @@ fun mx_progress(fraction) {
 # there still hands back something that tests as true, and the first version of
 # this guard let the broken case straight through.
 #
-# BOTH images, not just the passphrase line. Taking the password callback over
+# EVERY asset, not just the passphrase line. Taking the password callback over
 # also takes the progress readout over -- mx_normal_callback hides Omarchy's
-# rounded bar -- so a missing bar.png would leave a boot with no progress of any
-# kind, and nothing to say why.
+# rounded bar -- so a missing bar.png, or missing digits, or a missing panel
+# would leave a boot with no progress of any kind and nothing to say why.
 #
 # With it, a theme missing its assets falls back to Omarchy's own dialog:
 # registered further up, never unregistered, and whole.
-if (mx_key.image.GetWidth() > 0 && mx_track.image.GetWidth() > 0) {
+if (mx_key.image.GetWidth() > 0 && mx_track.image.GetWidth() > 0 &&
+    mx_digits.image.GetWidth() > 0 && mx_box.key.GetWidth() > 0 &&
+    mx_box.bar.GetWidth() > 0) {
   Plymouth.SetDisplayPasswordFunction(mx_password_callback);
   Plymouth.SetDisplayNormalFunction(mx_normal_callback);
 }
 """)
 
 
-def typing_block(font):
+def typing_block(font, metrics):
     steps = storyboard()
     table = "\n".join(
-        f"global.mx_txt[{i}] = {literal(text)}; global.mx_dur[{i}] = {duration};"
-        for i, (text, duration) in enumerate(steps))
-    widest = max(LINES, key=len) + CURSOR
+        f"global.mx_line[{i}] = {line}; global.mx_shown[{i}] = {shown}; "
+        f"global.mx_dur[{i}] = {frames};"
+        for i, (line, shown, frames) in enumerate(steps))
+
+    # One Image() and one Scale() per line, at start-up, never again. Each is
+    # scaled to its OWN character count times the shared cell, which is what
+    # keeps four pictures of different lengths on one grid.
+    load = "\n".join(
+        f'global.mx_img[{i}] = Image("line{i}.png").Scale('
+        f"Math.Int({cells} * global.mx_cell_w), global.mx_line_h);"
+        for i, cells in enumerate(metrics["LINE_CELLS"]))
+
     name = PROVIDER["displayName"]
     return TYPING.substitute(
         NAME=name, RULE="-" * max(1, 35 - len(name)), CLI=CLI, FONT=font,
-        R=COLOUR[0], G=COLOUR[1], B=COLOUR[2],
-        WIDEST=literal(widest), TEXT_WIDTH=TEXT_WIDTH,
-        TEXT_X=TEXT_X, TEXT_Y=TEXT_Y,
-        STEPS=len(steps), TABLE=table, BLINK=BLINK)
+        R=DIALOG_COLOUR[0], G=DIALOG_COLOUR[1], B=DIALOG_COLOUR[2],
+        TEXT_X=TEXT_X, TEXT_Y=TEXT_Y, TEXT_WIDTH=TEXT_WIDTH,
+        WIDEST_CELLS=metrics["WIDEST_CELLS"], LINE_ASPECT=metrics["LINE_ASPECT"],
+        LINE_LOAD=load, STEPS=len(steps), TABLE=table)
 
 
-def dialog_block():
-    table = "\n".join(f"global.mx_bar_text[{i}] = {literal(row)};"
-                      for i, row in enumerate(percent_labels()))
+# The four cells of the progress readout. The TABLES and the SPRITES are
+# deliberately on different prefixes -- mx_pd_* against mx_pct_* -- because a
+# global holding a number and an object holding sprites cannot share a name:
+# the second assignment goes to the number, silently does nothing, and the
+# sprite draws nothing with no error anywhere. It cost an hour once already.
+PCT_NAMES = ("a", "b", "c", "d")
+
+
+def dialog_block(metrics):
+    rows = percent_cells()
+    table = "\n".join(
+        " ".join(f"global.mx_pd_{PCT_NAMES[cell]}[{percent}] = {index};"
+                 for cell, index in enumerate(row))
+        for percent, row in enumerate(rows))
+
+    offset = BAR_CELLS + BAR_GAP_CELLS
+    sprites = "\n".join(
+        f"mx_pct_{n}.sprite = Sprite();\n"
+        f"mx_pct_{n}.sprite.SetPosition(global.mx_in_x + "
+        f"Math.Int(({offset + i}) * global.mx_cell), global.mx_in_y, 10001);\n"
+        f"mx_pct_{n}.sprite.SetOpacity(0);"
+        for i, n in enumerate(PCT_NAMES))
+
+    show = ("  if (on == 0) {\n"
+            + "".join(f"    mx_pct_{n}.sprite.SetOpacity(0);\n" for n in PCT_NAMES)
+            + "  } else {\n"
+            + "".join(f"    mx_pct_{n}.sprite.SetOpacity(1);\n" for n in PCT_NAMES)
+            + "  }")
+
+    paint = "\n".join(
+        f"  mx_pct_{n}.sprite.SetImage(mx_digits.scaled.Crop("
+        f"Math.Int(global.mx_pd_{n}[percent] * global.mx_cell), 0, "
+        f"Math.Int(global.mx_cell), global.mx_in_h));"
+        for n in PCT_NAMES)
+
     name = PROVIDER["displayName"]
     return DIALOG.substitute(
         NAME=name, RULE="-" * max(1, 28 - len(name)),
-        KEY_WIDTH=KEY_WIDTH, CELLS=KEY_CELLS, CELLS_TOTAL=KEY_CELLS + 2,
+        BOX_WIDTH=BOX_WIDTH, BOX_ASPECT=metrics["BOX_ASPECT"],
+        BOX_CELL_FRAC=metrics["BOX_CELL_FRAC"],
+        BOX_PAD_FRAC=metrics["BOX_PAD_FRAC"],
+        BOX_ROW_FRAC=metrics["BOX_ROW_FRAC"],
+        CELL_ASPECT=metrics["CELL_ASPECT"],
+        KEY_CELLS=KEY_CELLS, BAR_CELLS=BAR_CELLS, BAR_GAP_CELLS=BAR_GAP_CELLS,
+        PCT_CELLS=PCT_CELLS, ATLAS_CELLS=len(ATLAS), TRACK_ALPHA=TRACK_ALPHA,
         PROMPT_WIDTH=PROMPT_WIDTH,
         PROMPT_PROBE=literal("Please enter passphrase for disk nvme0n1p2 (cryptroot):"),
         PROMPT_FALLBACK=literal("Passphrase required to unlock this disk"),
         CAPS_TEXT=literal("[ CAPS LOCK ]"),
-        BAR_CELLS=BAR_CELLS, BAR_GAP_CELLS=BAR_GAP_CELLS, PCT_CELLS=PCT_CELLS,
-        TRACK_ALPHA=TRACK_ALPHA,
-        BAR_TABLE=table)
+        PCT_TABLE=table, PCT_SPRITES=sprites, PCT_SHOW=show, PCT_PAINT=paint)
 
 
-def keyline_assets(target, font_path):
-    """`> ` and twenty-one dots as one image, the cursor, and the progress track.
+def splash_assets(target, font_path):
+    """Everything the splash draws, baked to PNG here rather than typeset there.
 
-    PNGs rather than Image.Text for the same reason the rain would have needed
-    one: at boot there is no fc-match, so a per-call font FAMILY is ignored and
-    only the size survives. Anything whose exact shape matters has to arrive as
-    pixels. It also means neither the passphrase nor the track costs any text
-    rendering at all -- a keystroke and a percent are each one Crop of an image
-    that already exists.
+    At boot there is no fc-match, so `label-freetype` ignores any font family
+    asked for by name and renders everything in the one TTF the mkinitcpio hook
+    put in the initramfs. A theme therefore cannot choose a typeface through
+    Image.Text -- it can only choose one through pixels. So the four lines, the
+    passphrase field, the progress track, its digits and the panel around them
+    all arrive as pictures, and the only text left at boot is the disk's own
+    prompt and the caps label, which are the system's words rather than ours.
 
-    One image for `> ` and the dots, so the two cannot drift apart: the line is
-    monospace, so its width divides into 23 equal cells by construction. That is
-    asserted below rather than assumed. The track is rendered separately but at
-    the SAME point size and font, so both come out on the same grid.
+    It buys two more things. Typing costs no rendering at all -- N characters is
+    one Crop of a picture that already exists -- and every element is scaled to
+    a whole number of ONE cell, so the dashes, the blocks and the digits land on
+    a single grid instead of three that nearly agree.
 
-    Nothing here glows. The bloom was here, on the passphrase line only, and it
-    made the middle of the screen a different material from the line typed above
-    it -- which was half of what made a boot look like three unrelated widgets
-    taking turns. The other half was the glyph, see MASK.
+    Returns the metrics the two templates need, all of them RATIOS. Not one
+    pixel count crosses from this machine to the one that boots.
     """
     if not shutil.which("magick"):
-        die("ImageMagick is not installed, so the passphrase line cannot be "
-            "generated.\n  Install it (`omarchy pkg add imagemagick`) and run "
-            "this again.")
+        die("ImageMagick is not installed, so the splash cannot be generated.\n"
+            "  Install it (`omarchy pkg add imagemagick`) and run this again.")
+    if not Path(font_path).is_file():
+        die(f"the splash's font is missing: {font_path}\n"
+            f"  It ships with the theme, in {FONT_FILE}. Re-install the theme.")
 
-    line = "> " + MASK * KEY_CELLS
-    cells = KEY_CELLS + 2
-    size = 120                      # generous: it is only ever scaled DOWN
+    size = 120                      # generous: everything is only scaled DOWN
 
     def render(text, colour, out):
-        command = ["magick", "-background", "none", "-fill", colour]
-        if font_path:
-            command += ["-font", font_path]
-        command += ["-pointsize", str(size), f"label:{text}",
-                    "-background", "none", "-flatten", "-strip", str(out)]
-        subprocess.run(command, check=True)
+        subprocess.run(
+            ["magick", "-background", "none", "-fill", colour,
+             "-font", str(font_path), "-pointsize", str(size), f"label:{text}",
+             "-background", "none", "-flatten", "-strip", str(out)], check=True)
 
     def measure(path):
-        return int(subprocess.run(["identify", "-format", "%w", str(path)],
-                                  capture_output=True, text=True, check=True).stdout)
+        out = subprocess.run(["identify", "-format", "%w %h", str(path)],
+                             capture_output=True, text=True, check=True).stdout
+        return tuple(int(n) for n in out.split())
 
     def ink(path):
         """How much of the image the glyphs actually cover, 0..1."""
@@ -648,39 +729,64 @@ def keyline_assets(target, font_path):
             ["magick", str(path), "-alpha", "extract", "-format", "%[fx:mean]",
              "info:"], capture_output=True, text=True, check=True).stdout)
 
-    keyline = target / "keyline.png"
-    caret = target / "caret.png"
-    track = target / "bar.png"
-    render(line, f"#{COLOUR_HEX}", keyline)
-    # The cursor is the same green as everything else now. It used to be a
-    # paler #C9FFD5, which read as a third colour on a screen that only has two.
-    render(CURSOR, f"#{COLOUR_HEX}", caret)
-    render(CURSOR * BAR_CELLS, f"#{COLOUR_HEX}", track)
+    # --- the typed lines ----------------------------------------------------
+    line_cells = [len(line) for line in LINES]
+    for index, line in enumerate(LINES):
+        render(line, f"#{COLOUR_HEX}", target / f"line{index}.png")
+    sizes = [measure(target / f"line{index}.png") for index in range(len(LINES))]
 
-    # Is the font really monospace? Not answered by "does the width divide by
-    # 23" -- rendering rounds, and the first attempt at this rejected a
-    # perfectly good JetBrains Mono over a single pixel. The question that
-    # actually matters is whether `> ` occupies the same room as two masks, so
-    # ask exactly that: same glyph count, one with the prompt, one without.
-    reference = target / ".cells.png"
-    render(MASK * cells, f"#{COLOUR_HEX}", reference)
-    drift = abs(measure(keyline) - measure(reference))
-    mask_ink = ink(reference)
-    reference.unlink()
-    if drift > cells:
-        die(f"`> ` and two masks differ by {drift} px over {cells} cells: the "
-            f"font resolved for the splash ({font_path or 'unknown'}) is not "
-            f"monospace, so the cursor would not sit where the dots end.")
+    # Is the face really monospace? The whole typewriter rests on it: a crop of
+    # N cells is only the first N characters if every character is one cell.
+    # Asked of the PICTURES, per line, because that is what will be cropped.
+    units = [w / c for (w, _), c in zip(sizes, line_cells)]
+    if max(units) - min(units) > 1:
+        die(f"the splash's font ({font_path}) is not monospace: its cell "
+            f"measures between {min(units):.1f} and {max(units):.1f} px across "
+            f"the four lines,\n  so a half-typed line would be cropped mid-glyph.")
+    heights = {h for _, h in sizes}
+    if len(heights) != 1:
+        die(f"the four lines came out {sorted(heights)} px tall. They are drawn "
+            f"by one sprite at one height,\n  so they have to agree.")
+    line_cell = sum(units) / len(units)
+    line_height = sizes[0][1]
+
+    # --- what goes inside the panel -----------------------------------------
+    render(MASK * KEY_CELLS, f"#{DIALOG_HEX}", target / "keyline.png")
+    render(BLOCK * BAR_CELLS, f"#{DIALOG_HEX}", target / "bar.png")
+    render(ATLAS, f"#{DIALOG_HEX}", target / "digits.png")
+
+    inside = {"keyline.png": KEY_CELLS, "bar.png": BAR_CELLS,
+              "digits.png": len(ATLAS)}
+    cells = {}
+    for name, count in inside.items():
+        w, h = measure(target / name)
+        cells[name] = (w / count, h)
+    widths = [c for c, _ in cells.values()]
+    if max(widths) - min(widths) > 1:
+        die("the dashes, the track and the digits came out on different cell "
+            "widths\n  ({}), so they would not share a grid.".format(
+                ", ".join(f"{n} {c:.1f}px" for n, (c, _) in cells.items())))
+    cell = sum(widths) / len(widths)
+
+    # One height for all three, so one aspect describes them and the row cannot
+    # sit a pixel high. Padded rather than assumed equal: `label:` hands back a
+    # line box, and whether a row of blocks and a row of digits produce the same
+    # one is a property of the font, not something to take on trust.
+    row_height = max(h for _, h in cells.values())
+    for name in inside:
+        subprocess.run(["magick", str(target / name), "-background", "none",
+                        "-gravity", "north",
+                        "-extent", f"{measure(target / name)[0]}x{row_height}",
+                        "-strip", str(target / name)], check=True)
 
     # And is what it drew actually a mask? Two ways for that to go wrong, and
     # neither says anything at the time. Ask the PICTURE rather than the font:
     # measure how much of its cell the mask inks, against a full block.
     #
-    # Measured here with JetBrains Mono, which is what the numbers below are
-    # calibrated against:
+    # Measured in Terminus, which is what ships with the theme:
     #
-    #   missing glyph  0%      ·  3%     ▪ 11%     •  6%
-    #   *             12%      ● 38%     ■ 46%     ▊ 75%     █ 100%
+    #   missing glyph  0%      -  4.4%    .  3%      *  12%
+    #   #             46%      @  38%     block 100%
     #
     # TOO LITTLE, and the font has no MASK at all. It does not draw .notdef --
     # no box, no warning -- it draws NOTHING and advances the cell, so you get a
@@ -689,30 +795,107 @@ def keyline_assets(target, font_path):
     #
     # TOO MUCH, and whatever it drew is block-shaped, which puts the row of
     # solid rectangles back and undoes the entire point of MASK (see its
-    # comment). 75% is the old `▊` this replaced; 46% is a `■`, which is still
-    # legible as a character.
-    block_ink = ink(track)
+    # comment). Cascadia Code was rejected here while choosing the face: its
+    # dashes touch, and a row of them reads as a rule rather than as characters.
+    block_ink = ink(target / "bar.png")
+    mask_ink = ink(target / "keyline.png") * KEY_CELLS / BAR_CELLS
     if block_ink > 0:
         share = mask_ink / block_ink
         if share < 0.01:
-            die(f"the mask glyph {MASK!r} draws nothing in "
-                f"{font_path or 'the resolved font'}.\n"
+            die(f"the mask glyph {MASK!r} draws nothing in {font_path}.\n"
                 f"  That font has no {MASK!r}, and freetype renders a missing "
                 f"glyph as blank rather than as a box --\n"
                 f"  so the passphrase prompt would not react as you typed. Pick "
                 f"a MASK the font actually has.")
         if share > 0.6:
             die(f"the mask glyph {MASK!r} inks {share:.0%} of a full block in "
-                f"{font_path or 'the resolved font'}.\n"
+                f"{font_path}.\n"
                 f"  A row of that reads as a progress bar rather than as typed "
                 f"characters, which is the\n"
                 f"  one thing this design exists to avoid. Pick a lighter MASK.")
 
-    return measure(keyline) / cells
+    # --- the panel ----------------------------------------------------------
+    interior = BOX_CELLS * cell
+    pad = cell                      # a cell of air either side of the content
+    box_w = int(interior + pad * 2)
+    rule_y = int(size * 0.55)       # the top rule, where the caption sits
+    stroke = max(2, int(size * 0.045))
+    block = int(size * 0.30)        # the caption's little square widgets
+
+    # The panel is sized to its CONTENT, not to the point size: a fixed multiple
+    # of `size` gave a box with the row of dashes stranded in the top third and
+    # a hand's width of nothing under it.
+    box_h = rule_y + int(row_height * 1.55)
+
+    # ...and the row is centred on the INK, not on the line box. `label:` returns
+    # a full line box with room for ascenders and descenders, and a dash inks a
+    # band across the middle of it -- so centring the box leaves the only thing
+    # anyone can see sitting noticeably high. Measured off the track, because
+    # blocks fill their cell and are therefore the honest extent of the row; the
+    # dashes share a baseline with them, so they land where they should.
+    trimmed = subprocess.run(["magick", str(target / "bar.png"), "-format", "%@",
+                              "info:"], capture_output=True, text=True,
+                             check=True).stdout
+    ink_h, ink_y = (int(n) for n in re.match(
+        r"\d+x(\d+)\+\d+\+(\d+)", trimmed).groups())
+    content_y = rule_y + int(((box_h - rule_y) - ink_h) / 2) - ink_y
+
+    for name, caption in (("box-key.png", BOX_TITLE),
+                          ("box-bar.png", PROGRESS_TITLE)):
+        render(caption, f"#{DIALOG_HEX}", target / ".caption.png")
+        caption_w = measure(target / ".caption.png")[0] * 62 // 100
+        subprocess.run(["magick", str(target / ".caption.png"), "-resize",
+                        f"{caption_w}x", "-strip", str(target / ".caption.png")],
+                       check=True)
+        gap = int(size * 0.45)
+        left = (box_w - caption_w) // 2
+        # The frame is drawn as five strokes rather than as a rectangle with a
+        # hole knocked in it. Knocking the hole is what this did first, with
+        # `-compose clear` over a `-draw rectangle`, and it silently did
+        # nothing: `-draw` takes its colour from `-fill`, and `-fill none` means
+        # "do not fill" rather than "erase". The rule came out straight through
+        # the caption, which is only visible by looking.
+        #
+        # The alternative -- painting the gap in the background colour -- is
+        # worse than it sounds: the background belongs to Omarchy's theme, so
+        # our guess at it would show as a patch on any other.
+        bottom, right = box_h - stroke, box_w - stroke
+        subprocess.run([
+            "magick", "-size", f"{box_w}x{box_h}", "xc:none",
+            "-stroke", f"#{DIALOG_HEX}", "-strokewidth", str(stroke),
+            "-fill", "none",
+            "-draw", f"line {stroke},{rule_y} {left - gap},{rule_y}",
+            "-draw", f"line {left + caption_w + gap},{rule_y} {right},{rule_y}",
+            "-draw", f"line {stroke},{rule_y} {stroke},{bottom}",
+            "-draw", f"line {right},{rule_y} {right},{bottom}",
+            "-draw", f"line {stroke},{bottom} {right},{bottom}",
+            "-stroke", "none", "-fill", f"#{DIALOG_HEX}",
+            "-draw", f"rectangle {pad},{rule_y - block // 2} "
+                     f"{pad + block},{rule_y + block // 2}",
+            "-draw", f"rectangle {pad + block * 1.4},{rule_y - block // 2} "
+                     f"{pad + block * 2.4},{rule_y + block // 2}",
+            "-draw", f"rectangle {box_w - pad - block * 2.2},{rule_y - block // 2} "
+                     f"{box_w - pad},{rule_y + block // 2}",
+            "-strip", str(target / name)], check=True)
+        subprocess.run([
+            "magick", str(target / name), str(target / ".caption.png"),
+            "-geometry", f"+{left}+{rule_y - measure(target / '.caption.png')[1] // 2}",
+            "-composite", "-strip", str(target / name)], check=True)
+    (target / ".caption.png").unlink(missing_ok=True)
+
+    return {
+        "WIDEST_CELLS": max(line_cells),
+        "LINE_ASPECT": round(line_height / line_cell, 4),
+        "LINE_CELLS": line_cells,
+        "BOX_ASPECT": round(box_h / box_w, 4),
+        "BOX_CELL_FRAC": round(cell / box_w, 6),
+        "BOX_PAD_FRAC": round(pad / box_w, 6),
+        "BOX_ROW_FRAC": round(content_y / box_w, 6),
+        "CELL_ASPECT": round(row_height / cell, 4),
+    }
 
 
-
-def patch(text):
+def patch(text, font, metrics):
     # 1. The logo stops being visible but is still loaded: its box places the
     #    password dialog.
     anchor = "logo.sprite.SetOpacity(1);"
@@ -722,7 +905,7 @@ def patch(text):
     text = text.replace(
         anchor,
         "logo.sprite.SetOpacity(0);  # the line is typed by mx_tick(), below\n"
-        + typing_block(available_font()))
+        + typing_block(font, metrics))
 
     # 2. Hook the typing onto the 50 fps refresh that already exists.
     anchor = "fun refresh_callback() {"
@@ -746,10 +929,10 @@ def patch(text):
 
     # Appended, not spliced: there is no anchor to get wrong, and by the end of
     # the file `entry` exists to hang the dialog off.
-    return text + dialog_block()
+    return text + dialog_block(metrics)
 
 
-def stage(target, colours):
+def stage(target, colours, theme_dir):
     background, foreground, logo = colours
     if not (SOURCE / "omarchy.script").is_file():
         die(f"cannot find Omarchy's Plymouth at {SOURCE}")
@@ -771,8 +954,19 @@ def stage(target, colours):
                             "+level-colors", f"#{foreground},#{foreground}", str(path)],
                            check=True)
 
+    # Two different fonts, and the difference is the point.
+    #
+    # `font` is a FAMILY, and all it does is decide which single TTF the
+    # mkinitcpio hook copies into the initramfs -- which is what the disk's own
+    # prompt and the caps label come out in, and what stops plymouthd
+    # segfaulting when it can resolve nothing at all.
+    #
+    # `face` is a FILE, out of the theme, and it is what the splash is actually
+    # drawn in: every picture below is baked from it here, because at boot a
+    # font asked for by name is ignored.
     font = available_font()
-    cell = keyline_assets(target, font_file(font))
+    face = theme_dir / FONT_FILE
+    metrics = splash_assets(target, face)
 
     r, g, b = (int(background[i:i + 2], 16) / 255 for i in (0, 2, 4))
     script = (target / "omarchy.script").read_text()
@@ -782,7 +976,7 @@ def stage(target, colours):
     script = re.sub(r"^Window\.SetBackgroundBottomColor.*$",
                     f"Window.SetBackgroundBottomColor({r:.3f}, {g:.3f}, {b:.3f});",
                     script, count=1, flags=re.M)
-    script = patch(script)
+    script = patch(script, font, metrics)
 
     (target / f"{THEME}.script").write_text(script)
     (target / "omarchy.script").unlink()
@@ -805,7 +999,7 @@ ConsoleLogBackgroundColor=0x{background}
 MonospaceFont={font} 16
 Font={font} 16
 """)
-    return font, cell
+    return font, face
 
 
 def theme_colour(key, theme_dir):
@@ -829,11 +1023,13 @@ def main():
 
     staging = Path(tempfile.mkdtemp(prefix=f"{SLUG}-plymouth."))
     try:
-        font, cell = stage(staging, colours)
+        font, face = stage(staging, colours, theme_dir)
         steps = storyboard()
-        seconds = sum(duration for _, duration in steps) / FPS
+        seconds = sum(frames for _, _, frames in steps) / FPS
         print(f"  {THEME}: {len(steps)} steps, {seconds:.1f}s of typing")
-        print(f"  font {font!r}; every size measured at boot, none baked in")
+        print(f"  drawn in {face.name}, baked to PNG; {font!r} only for the "
+              f"disk's own prompt")
+        print(f"  every size measured at boot, none baked in")
 
         if stage_only:
             out = Path.home() / f".cache/{CLI}/plymouth"

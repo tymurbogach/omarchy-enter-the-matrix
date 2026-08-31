@@ -372,10 +372,26 @@ so a baked size would also have made every preview a lie.
 survives.** The mkinitcpio hook copies exactly three font files, under fixed
 names, and `label-freetype` resolves a family by shelling out to
 `/usr/bin/fc-match` — which is not in the initramfs. So `"DejaVu Serif 30"`
-renders as a serif on your desktop and as the theme's mono font at boot, with
-nothing to warn you. Anything whose exact shape matters must arrive as a PNG.
-`bin/preview-plymouth.sh` reproduces all three restrictions, which is the only
-reason this was found before shipping.
+renders as a serif on your desktop and as `/usr/share/fonts/Plymouth.ttf` at
+boot, with nothing to warn you. Anything whose exact shape matters must arrive
+as a PNG. `bin/preview-plymouth.sh` reproduces all three restrictions, which is
+the only reason this was found before shipping.
+
+**But `Font=` in the .plymouth DOES decide which TTF that is**, and the note
+above used to obscure it by saying a family "comes out as the theme's mono
+font". That was only true because `stage()` writes the same family into both
+`Font=` and `MonospaceFont=`, making the two files identical. The hook resolves
+`Font=` with `fc-match` and copies that one file in as `Plymouth.ttf`
+(`/usr/lib/initcpio/install/plymouth`), which is exactly what `label-freetype`
+falls back to. So the boot has one text face and the theme chooses it — it just
+cannot choose a SECOND one, or vary it per call.
+
+**A font family named at derive time is a silent dependency.** `fc-match` does
+not fail when it misses; it returns `monospace`. Name a family the installing
+machine does not have and the splash is baked in the wrong face with nothing
+anywhere to say so. That is why the splash's own face ships in `fonts/` as a
+file, and why `available_font()`'s fallback is only ever allowed to affect the
+disk's prompt, never a picture.
 
 **plymouthd SEGFAULTS when it can resolve no font at all.** Nothing checks that
 `FT_New_Face` found a file. That is why `derive-plymouth.py` asserts the family
@@ -415,12 +431,28 @@ this was written the other way round first, on the assumption that freetype
 would give back a hollow rectangle; it does not. It inks zero pixels and
 advances the cell, so a font without the mask gives you a passphrase prompt that
 does not react as you type, which at 7am on an encrypted disk is
-indistinguishable from a dead keyboard. `keyline_assets()` therefore asks the
+indistinguishable from a dead keyboard. `splash_assets()` therefore asks the
 PICTURE, at both ends: it measures the mask's ink
 (`magick ... -alpha extract -format "%[fx:mean]"`) against a full block's and
-dies below 1 % (nothing drawn) or above 60 % (block-shaped). Measured on
-JetBrains Mono, for calibration: `·` 3 %, `•` 6 %, `▪` 11 %, `*` 12 %, `●` 38 %,
-`■` 46 %, `▊` 75 %, `█` 100 %.
+dies below 1 % (nothing drawn) or above 60 % (block-shaped). Measured in
+Terminus, which is the face that ships: `-` 4.4 %, `·` 3 %, `•` 6 %, `▪` 11 %,
+`*` 12 %, `●` 38 %, `■` 46 %, `▊` 75 %, `█` 100 %.
+
+That guard is also what rejected a candidate face while choosing one. Cascadia
+Code's dashes touch each other, so a row of them draws a continuous rule rather
+than a row of characters — and it is not monospace either, which the cell-drift
+check catches. Neither is visible in a font sample; both are obvious in a
+picture of the actual line.
+
+**`-draw` takes its colour from `-fill`, so `-fill none` draws NOTHING rather
+than erasing.** The panel's top rule is broken where its caption sits, and the
+first version knocked that hole through with `-compose clear` over a
+`-draw rectangle`. It silently did nothing: the rule came out straight through
+the letters. `-compose` governs `-draw image`, not `-draw rectangle`. The frame
+is five `line` strokes now, with the gap simply not drawn — and painting the gap
+in the background colour would have been its own bug, since the background
+belongs to Omarchy's theme and our guess at it would show as a patch on any
+other.
 
 **A preview scenario cannot reach the bullets or the progress bar.** Three
 separate things get in the way, and all three were hit here:
@@ -435,6 +467,15 @@ with a probe appended that calls `mx_password_callback` and `mx_progress`
 directly from `refresh_callback`, re-asserting on every frame, and out-registers
 the boot progress callback with a no-op. The probe only CALLS the drawing code,
 so the pictures are still of the real thing.
+
+**The preview probe bypasses the asset guard, so it cannot test the fallback.**
+The doctored stage calls `mx_password_callback` straight from `refresh_callback`,
+which is the whole point of it -- but the `if (... GetWidth() > 0)` that decides
+whether to register that callback never runs. Delete an asset and preview with
+the probe and you get a half-drawn dialog of ours, which looks exactly like the
+fallback being broken. It is not: use `plymouth ask-for-password` in the
+scenario, with NO probe, and Omarchy's own dialog comes up whole. Photographed
+both ways.
 
 **`omarchy plymouth current` cannot see our boot theme.** It identifies a theme
 by comparing `logo.png` inside Omarchy's *own* folder, and ours installs
