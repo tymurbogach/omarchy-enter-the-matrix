@@ -33,7 +33,9 @@ that door.
 
 `bin/derive-plymouth.py` starts from your machine's `omarchy.script` and turns
 it into Neo's monitor. Upper left, one line at a time, the screen clearing
-between them, in the theme's green:
+between them, in the theme's own `green` -- taken from colors.toml rather than
+repeated in provider.json, so the pack has one green rather than two that drift
+apart:
 
 ```
 Wake up, Neo...
@@ -112,7 +114,10 @@ Details that explain the design, each of them forced by something:
 - **The colours are measured, not chosen.** The panel's ice blue was sampled off
   the frames themselves. The first guess was a mint green-cyan, and beside the
   real thing it was obviously the wrong colour: what matters is that blue sits
-  above green.
+  above green. The lines are not sampled at all -- they take the theme's own
+  accent, which is one fewer hex to keep in step. The shader's phosphor
+  `#00FF41` was what they used first, and at this size on black it reads as
+  glare rather than as a monitor.
 - **`logo.png` is still loaded, just invisible.** Its box is what
   `omarchy.script` uses to place the dialog, and we do not want to move it.
 - **Omarchy's password callback is not rewritten, it is out-registered.** Ours

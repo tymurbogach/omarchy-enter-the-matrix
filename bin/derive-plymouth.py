@@ -60,16 +60,25 @@ CLI = PROVIDER["cli"]
 THEME = PROVIDER["plymouth"]["theme"]
 TARGET = Path("/usr/share/plymouth/themes") / THEME
 
-# What is typed out at boot, in order, and in the provider's colour.
+# What is typed out at boot, in order.
 LINES = PROVIDER["plymouth"]["lines"]
-COLOUR = PROVIDER["plymouth"]["color"]
-# ...and the same colour as ImageMagick wants it, for the generated PNGs.
-COLOUR_HEX = "".join(f"{round(channel * 255):02X}" for channel in COLOUR)
+
+# The typed lines take the THEME's `green` -- its accent, out of colors.toml at
+# derive time. Repeating the hex in provider.json would work today and drift the
+# first time the palette moved.
+#
+# Not the phosphor #00FF41 the shader's heads use: on a black screen, at the
+# size these lines are drawn, that reads as glare rather than as a monitor. And
+# not `foreground` either, which is the theme's text colour and comes out sage.
+# A provider that wants something else says so with `color`.
+COLOUR = PROVIDER["plymouth"].get("color")
+COLOUR_HEX = ("".join(f"{round(channel * 255):02X}" for channel in COLOUR)
+              if COLOUR else None)
 
 # The boxed prompt is a different colour from the lines, on purpose: in the film
 # the terminal runs green and the boxed prompt is a pale aqua. A provider that
 # does not say gets the one colour, so nothing older changes shape.
-DIALOG_COLOUR = PROVIDER["plymouth"].get("dialogColor", COLOUR)
+DIALOG_COLOUR = PROVIDER["plymouth"].get("dialogColor") or COLOUR or [1, 1, 1]
 DIALOG_HEX = "".join(f"{round(channel * 255):02X}" for channel in DIALOG_COLOUR)
 BOX_TITLE = PROVIDER["plymouth"].get("boxTitle", "enter password")
 PROGRESS_TITLE = PROVIDER["plymouth"].get("progressTitle", "booting")
@@ -684,7 +693,7 @@ def dialog_block(metrics):
         PCT_TABLE=table, PCT_SPRITES=sprites, PCT_SHOW=show, PCT_PAINT=paint)
 
 
-def splash_assets(target, font_path):
+def splash_assets(target, font_path, line_hex):
     """Everything the splash draws, baked to PNG here rather than typeset there.
 
     At boot there is no fc-match, so `label-freetype` ignores any font family
@@ -732,7 +741,7 @@ def splash_assets(target, font_path):
     # --- the typed lines ----------------------------------------------------
     line_cells = [len(line) for line in LINES]
     for index, line in enumerate(LINES):
-        render(line, f"#{COLOUR_HEX}", target / f"line{index}.png")
+        render(line, f"#{line_hex}", target / f"line{index}.png")
     sizes = [measure(target / f"line{index}.png") for index in range(len(LINES))]
 
     # Is the face really monospace? The whole typewriter rests on it: a crop of
@@ -933,7 +942,7 @@ def patch(text, font, metrics):
 
 
 def stage(target, colours, theme_dir):
-    background, foreground, logo = colours
+    background, foreground, accent, logo = colours
     if not (SOURCE / "omarchy.script").is_file():
         die(f"cannot find Omarchy's Plymouth at {SOURCE}")
     if not Path(logo).is_file():
@@ -966,7 +975,7 @@ def stage(target, colours, theme_dir):
     # font asked for by name is ignored.
     font = available_font()
     face = theme_dir / FONT_FILE
-    metrics = splash_assets(target, face)
+    metrics = splash_assets(target, face, COLOUR_HEX or accent)
 
     r, g, b = (int(background[i:i + 2], 16) / 255 for i in (0, 2, 4))
     script = (target / "omarchy.script").read_text()
@@ -1019,6 +1028,7 @@ def main():
 
     colours = (theme_colour("background", theme_dir),
                theme_colour("foreground", theme_dir),
+               theme_colour("green", theme_dir),
                theme_dir / "unlock.png")
 
     staging = Path(tempfile.mkdtemp(prefix=f"{SLUG}-plymouth."))
