@@ -338,6 +338,14 @@ one in charge. The settings were true, the theme was ours, and nothing was
 happening. `is_active` now asks whether the plugin is enabled, whether the lock
 clone is the enabled lock, and whether the screensaver flag is set.
 
+**There are TWO background directories and only one is the theme's.**
+`~/.config/omarchy/themes/<theme>/backgrounds/` is the carousel the theme ships.
+`~/.config/omarchy/backgrounds/<theme>/` is where the *user* drops extras, and it
+does not exist until they do. `omarchy-theme-set:78` searches both, which is why
+the second one looks authoritative when you go hunting and is in fact usually
+absent. Verifying "did my new backgrounds land?" against the second path reports
+a failure that is not there.
+
 **A theme installed from git may not ship any `.lua`** — nor `alacritty.toml`,
 `foot.ini`, `ghostty.conf`, `kitty.conf` or `vscode.json`
 (`omarchy-theme-set:142`). Lua runs code inside the compositor. That is why this
