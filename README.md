@@ -11,7 +11,7 @@ One line, both halves:
 
 ```bash
 omarchy theme install https://github.com/tymurbogach/omarchy-enter-the-matrix &&
-  ~/.config/omarchy/themes/matrix/install.sh
+  ~/.config/omarchy/themes/enter-the-matrix/install.sh
 ```
 
 The first command is the **theme** — colours, backgrounds and the boot mark —
@@ -28,136 +28,75 @@ like it should work — the manifest is at the root — but it installs the whol
 repository as the plugin and skips the CLI, the hooks and the bar widget, which
 is most of the pack.
 
-The desktop rain is one more background in the carousel, `1-live-rain`.
-`omarchy-matrix wallpaper on` selects it for you. Mind that `omarchy theme set`
-rotates to the theme's next background, so re-applying the theme takes you off
-the rain — come back with that same command, or from the bar.
+> **Installed this before it was renamed?** Run `omarchy-matrix-uninstall` first.
+> The repo used to be `omarchy-matrix`, so the theme installed under the name
+> `matrix`; it is `enter-the-matrix` now, and the old install is a separate one
+> that will not be picked up or replaced.
 
 ## The pieces
 
-Each one switches on and off separately, from the **Matrix icon on your bar**
-(with a ✓ each) or from the command line:
+Five switches, each one on and off on its own, from the **Matrix icon on your
+bar** or from the command line:
 
 ```bash
-omarchy-matrix status
-omarchy-matrix wallpaper off
+omarchy-matrix status            # what is on right now
+omarchy-matrix wallpaper off     # any piece: wallpaper screensaver lock boot widget
 omarchy-matrix boot on
+omarchy-matrix doctor            # assert everything again
 ```
 
-| Piece | What it is | How it is done |
-|---|---|---|
-| `wallpaper` | Rain on the desktop | A layer of the plugin's own at `WlrLayer.Bottom`: above the wallpaper, below every window, with `mask: Region {}` so clicks reach the desktop. **Omarchy's background is not touched.** Shows while the `1-live-rain` background is selected. On mains it always rains; on battery, only while no window is on the active workspace. |
-| `screensaver` | Rain when you go idle, behaving like Omarchy's own: hides the pointer, the mouse does not dismiss it, any key does | The same layer at `WlrLayer.Overlay`, using the `idle.screensaver` timing from your `shell.json`. It sets the native `screensaver-off` flag so Omarchy does not also open its terminal screensaver. |
-| `lock` | Rain behind the password field | One of the two derived pieces. See below. |
-| `boot` | The screen before login, typing out the four lines from the film | The other derived piece. See below. Needs a password and rebuilds the initramfs, so it never applies on its own. |
+| Piece | What it is |
+|---|---|
+| `wallpaper` | Rain on the desktop, above the wallpaper and below every window. Clicks go through it, and Omarchy's own background is not touched. On mains it always rains; on battery, only while no window is on the active workspace. |
+| `screensaver` | Rain when you go idle, on your `shell.json` idle timing. It behaves like Omarchy's own: the pointer is hidden, the mouse does not dismiss it, any key does. |
+| `lock` | Rain behind the password field. |
+| `boot` | The screen before login, typing out the four lines from the film. Needs your password and rebuilds the initramfs, so it never applies on its own. |
+| `widget` | The Matrix icon on the bar: the four switches above with a ✓ each, plus Repair and Uninstall. |
 
-The first three are **the same shader**, instantiated three times. That is the
-whole point: the screensaver used to be `ttfx` inside a terminal — a different
-program drawing a different rain — and there was no way to make all three match.
+The desktop rain is one more background in the carousel, `1-live-rain`.
+`omarchy-matrix wallpaper on` selects it for you.
 
-The last two are the same problem solved the same way: `lock` and `boot` are the
-two pieces Omarchy gives no way to configure, and both are handled by
-**deriving** its code rather than shipping a copy.
+The first three are the same shader, drawn three times. That is the point: the
+screensaver used to be a different program drawing a different rain, and there
+was no way to make all three match. The last two are the two pieces Omarchy
+gives no way to configure, and both are handled by **deriving** its code rather
+than shipping a frozen copy of it — the lock starts from your machine's
+`LockView.qml`, the splash from your machine's `omarchy.script`, and a
+`post-update.d` hook derives both again after every `omarchy update`, so
+Omarchy's fixes keep arriving. [DESIGN.md](DESIGN.md) explains why, at length.
 
-## The lock
-
-A `WlSessionLock` is exclusive by protocol: nothing may draw inside its surface
-but itself. So raining there means replacing the lock plugin, and there is no
-way around that.
-
-What is **not** done is publishing a frozen copy. That plugin carries the PAM
-and fingerprint flows, and an old copy is the last one you want.
-`bin/derive-lock.py` always starts from **your** Omarchy's `LockView.qml` and
-applies one minimal change: it drops the blurred wallpaper and puts the rain
-there. The other ~200 lines are yours. A `post-update.d` hook derives it again
-after every `omarchy update`, so Omarchy's fixes keep arriving.
-
-If the block to replace does not appear exactly once, the script **aborts and
-tells you** rather than leaving things half done.
-
-Try it without locking yourself out: `omarchy-shell lock preview`. To go back to
-Omarchy's: `omarchy-matrix lock off`.
-
-## The boot splash
-
-Omarchy's splash is a script theme too (`omarchy.script`, `ModuleName=script`),
-and what `omarchy plymouth set-by-theme` lets a theme change is three things:
-background colour, text colour and **one still PNG**. No animation fits through
-that door.
-
-`bin/derive-plymouth.py` starts from your machine's `omarchy.script` and turns
-it into Neo's monitor. Upper left, one line at a time, the screen clearing
-between them, a block cursor blinking at the end:
-
-```
-Wake up, Neo...█
-```
-
-```
-The Matrix has you...█        Follow the white rabbit.█       Knock, knock, Neo.█
-```
-
-And in the middle, where Omarchy puts its dialog, the passphrase — as a
-terminal line rather than a rounded box. The disk's own prompt above it, dimmed;
-one dot per character typed; the same block cursor as the line above;
-`[ CAPS LOCK ]` underneath when it is on, which Omarchy's dialog does not tell
-you:
-
-```
-              Please enter passphrase for disk nvme0n1p2 (cryptroot)
-
-                          > ••••••••█
-```
-
-Once it is answered, the boot's progress takes that row — on the same grid, so
-the dots, the blocks and the digits are all one monospace line:
-
-```
-                      ████████▒▒▒▒▒▒▒▒▒▒▒▒  42%
-```
-
-One track, drawn twice: the whole of it dimmed, and the part that is done,
-opaque, on top. That matters more than it sounds. It was `[████░░░░░░░░] 42%`,
-and `░` is a dither pattern where `█` is solid ink — so an empty bar and a
-half-full one looked like two unrelated widgets, and the passphrase, then still
-drawn in blocks, looked like a third. The boot messages are Omarchy's,
-untouched. It installs as a **separate**
-theme at `/usr/share/plymouth/themes/omarchy-matrix/`, never overwriting its
-own: going back is `omarchy plymouth reset`. The `post-update.d` hook derives it
-again after every `omarchy update`.
-
-Details that explain the design, each of them forced by something:
-
-- **Nothing is a pixel count.** Every size is measured at boot: the script
-  renders a probe string, reads its width back and scales from there. Plymouth
-  draws at the panel's *native* resolution, so anything worked out at derive
-  time from `hyprctl` is wrong the moment you dock to another screen.
-- **The step table is generated in Python** and reaches the `.script` with every
-  text already literal, so the script needs no `SubString` and no `Length`.
-- **The passphrase line and the progress track are PNGs, cropped one cell at a
-  time.** In the initramfs there is no `fc-match`, and `label-freetype` resolves
-  font families by shelling out to it — so at boot a per-call font *family* is
-  ignored and only the size survives. Anything whose exact shape matters has to
-  arrive as pixels. It also means a keystroke and a percent each cost one
-  `Image.Crop`, not a text render. Both are rendered at the same point size and
-  font, which is what puts them on one grid.
-- **`logo.png` is still loaded, just invisible.** Its box is what
-  `omarchy.script` uses to place the dialog, and we do not want to move it.
-- **Omarchy's password callback is not rewritten, it is out-registered.** Ours
-  is registered after it, and the last registration wins. And if the generated
-  PNG is ever missing, ours is not registered at all and Omarchy's own dialog —
-  padlock, box and bullets — comes up instead, whole.
-
-You do not have to reboot to see any of it. `bin/preview-plymouth.sh` runs the
-real splash in a window, through Plymouth's own X11 renderer, inside a user
-namespace that needs no `sudo` and cannot touch your actual boot — down to
-hiding `label-pango` and every font but the three the initramfs would have.
+Try the lock without locking yourself out: `omarchy-shell lock preview`. See the
+boot splash without rebooting: `bin/preview-plymouth.sh`.
 
 > **If your disk is encrypted**, Plymouth is also what asks for your passphrase.
-> That is why the patch adds a callback rather than editing one, and why the
-> pack falls back to Omarchy's dialog rather than to no dialog. If anything goes
-> wrong: `omarchy plymouth reset` from a running system, or `plymouth.enable=0`
-> on the kernel line from your boot loader.
+> The pack adds a callback rather than editing one, and falls back to Omarchy's
+> own dialog rather than to no dialog. If anything goes wrong:
+> `omarchy plymouth reset` from a running system, or `plymouth.enable=0` on the
+> kernel line from your boot loader.
+
+## Worth knowing
+
+> **`omarchy theme set` rotates to the *next* background**, so re-applying the
+> theme takes you off the rain. Come back with `omarchy-matrix wallpaper on`, or
+> from the bar.
+
+> **With "stay awake" on, the screensaver never comes up.** The pack respects the
+> same switch Omarchy's idle service does
+> (`~/.local/state/omarchy/indicators/stay-awake`): with it set there is no
+> screensaver, neither ours nor theirs.
+
+> **Careful with Omarchy's own toggle.** The `screensaver` piece uses the native
+> `screensaver-off` flag, so `omarchy toggle screensaver` (SUPER → Toggle →
+> Screensaver) turns it off underneath while `enter-the-matrix.json` still says
+> yes. `omarchy-matrix doctor` puts them back in agreement.
+
+> **`omarchy refresh shell` turns the rain off.** That command rewrites
+> `shell.json` wholesale, and that is where Omarchy records which plugins are
+> enabled and what sits on your bar. There is no hook to attach to afterwards.
+> Recover with `omarchy-matrix doctor`. It brings back the rain plugin, the lock
+> clone and the bar icon — not the rest of your `shell.json`; your other plugins
+> and your bar layout come back from Omarchy's own backup,
+> `~/.config/omarchy/shell.json.bak.<timestamp>`.
 
 ## What it touches on your system
 
@@ -166,36 +105,59 @@ extending. **Nothing** under `/usr/share/omarchy/`, nor `hyprland.lua`, nor the
 background, nor the bar:
 
 ```
-~/.config/omarchy/plugins/matrix.rain/     the plugin
-~/.config/omarchy/plugins/matrix.control/  the bar widget
-~/.config/omarchy/matrix.json              which pieces are on
-~/.config/omarchy/hooks/{theme-set,post-update}.d/matrix
-~/.config/omarchy/shell.json               one entry in the bar layout
+~/.config/omarchy/plugins/matrix.rain/       the plugin
+~/.config/omarchy/plugins/matrix.control/    the bar widget
+~/.config/omarchy/enter-the-matrix.json      which pieces are on
+~/.config/omarchy/hooks/{theme-set,post-update}.d/enter-the-matrix
+~/.config/omarchy/shell.json                 one entry in the bar layout
 ~/.local/bin/{omarchy-matrix,derive-lock.py,derive-plymouth.py,provider.py}
 ~/.local/share/omarchy-matrix/provider.json
-~/.config/omarchy/plugins/<username>.lock  only while `lock` is on
-/usr/share/plymouth/themes/omarchy-matrix/ only while `boot` is on
+~/.config/omarchy/plugins/<username>.lock    only while `lock` is on
+/usr/share/plymouth/themes/omarchy-matrix/   only while `boot` is on
 ```
 
 The last two are the derived pieces, and neither overwrites the original:
 `omarchy.lock` and Plymouth's `omarchy` theme stay where they were.
 
-"Only while it is on" is meant literally, including for the one path outside
-your home directory: `omarchy-matrix boot off` hands the splash back **and**
-removes that directory. Turning a piece off leaves nothing behind, whether or
-not you ever run `uninstall.sh`.
+"Only while it is on" is meant literally, including for the one path outside your
+home directory: `omarchy-matrix boot off` hands the splash back **and** removes
+that directory. Turning a piece off leaves nothing behind, whether or not you
+ever run `uninstall.sh`.
 
-Removing it is **Uninstall**, at the bottom of the bar widget's panel, or
-`./uninstall.sh`. It takes all of it back — both plugins, the lock clone, the
-CLI, the hooks, the boot splash and the theme directory itself — and leaves
-Omarchy's own lock, screensaver and splash in charge again.
+## Automatic
+
+| When | What happens |
+|---|---|
+| `omarchy theme set enter-the-matrix` | Whatever you had on comes back |
+| `omarchy theme set <other>` | The pack stands down, keeping your settings |
+| `omarchy update` | The lock and the boot splash are derived again from the updated sources |
+
+Standing down means: the plugin is disabled, the bar icon goes, Omarchy's
+screensaver returns, and **the lock clone is deleted** — with
+`omarchy plugin remove`, which is what re-enables Omarchy's own; merely disabling
+it would leave you with no lock enabled at all. Your settings are untouched:
+going back restores exactly what you had.
+
+`boot` is the exception and does not stand down: the Plymouth splash belongs to
+the system, not to the theme. Its ✓ asks the system which theme is really
+installed, so it never lies either.
+
+While the pack is stood down the widget **ticks nothing** and
+`omarchy-matrix status` says why. The ✓ means "this is happening now", not "you
+have it configured" — which is why the Background tick goes out the moment you
+pick another background from the carousel.
+
+## Uninstall
+
+**Uninstall**, at the bottom of the bar widget's panel, or `./uninstall.sh`. It
+takes all of it back — both plugins, the lock clone, the CLI, the hooks, the boot
+splash and the theme directory itself — and leaves Omarchy's own lock,
+screensaver and splash in charge again.
 
 The theme has to go somewhere, and it goes back to **the one you were using
-before you picked this one**. The `theme-set` hook writes that down every time
-you leave, because Omarchy overwrites `current/theme.name` before any hook runs
-and afterwards nobody knows. If there is nothing recorded — you installed the
-pack and never switched away — it asks, and falls back to the first stock theme
-when there is no terminal to ask on.
+before you picked this one**. The `theme-set` hook writes that down every time you
+leave, because Omarchy overwrites `current/theme.name` before any hook runs and
+afterwards nobody knows. If there is nothing recorded, it asks.
 
 Pass `--keep-theme` if you want the colours and backgrounds to stay behind as an
 ordinary Omarchy theme.
@@ -207,160 +169,6 @@ ordinary Omarchy theme.
 > after. If you already did it the other way round, `install.sh` leaves a copy of
 > the uninstaller on your PATH as `omarchy-matrix-uninstall` for exactly this.
 
-> **With "stay awake" on, the screensaver never comes up.** The pack respects
-> the same switch Omarchy's idle service does
-> (`~/.local/state/omarchy/indicators/stay-awake`): with it set there is no
-> screensaver, neither ours nor theirs.
-
-> **Careful with Omarchy's own toggle.** The `screensaver` piece uses the native
-> `screensaver-off` flag, so `omarchy toggle screensaver` (SUPER → Toggle →
-> Screensaver) turns it off underneath and `matrix.json` still says yes.
-> `omarchy-matrix doctor` puts them back in agreement.
-
-> **`omarchy refresh shell` turns the rain off.** That command rewrites
-> `shell.json` wholesale, and that is where Omarchy records which plugins are
-> enabled and what sits on your bar. There is no hook to attach to afterwards.
-> Recover with `omarchy-matrix doctor`, or by re-applying the theme — the
-> `theme-set` hook does it for you. Tested: it brings back the rain plugin, the
-> lock clone and the bar icon. It does **not** bring back the rest of your
-> `shell.json` — your other plugins and your bar layout are Omarchy's backup to
-> restore, `~/.config/omarchy/shell.json.bak.<timestamp>`.
-
-## Automatic
-
-| When | What happens |
-|---|---|
-| `omarchy theme set matrix` | Whatever you had on comes back |
-| `omarchy theme set <other>` | The pack stands down, keeping your settings |
-| `omarchy update` | The lock and the boot splash are derived again from the updated sources |
-
-Standing down means: the plugin is disabled, Omarchy's screensaver returns, and
-**the lock clone is deleted** — with `omarchy plugin remove`, which is what
-re-enables Omarchy's own; merely disabling it would leave you with no lock
-enabled at all. Your settings are untouched: going back to matrix restores
-exactly what you had.
-
-`boot` is the exception and does not stand down: the Plymouth splash belongs to
-the system, not to the theme. Its ✓ asks the system which theme is really
-installed, so it never lies either.
-
-While the pack is stood down, the widget **ticks nothing** and `omarchy-matrix
-status` says why. The ✓ means "this is happening now", not "you have it
-configured" — which is why the Background tick goes out the moment you pick
-another background from the carousel, and comes back with
-`omarchy-matrix wallpaper on`.
-
-## What is inside
-
-| | |
-|---|---|
-| `colors.toml` | The palette. Semantic, not `color0..15`. Includes the Hyprland border colours, which go through the template. |
-| `shell.{bar,menu,launcher,notifications}.toml` | Shell section overrides: they give the bar and the cards some relief, which otherwise all paint the same black. |
-| `backgrounds/` | The carousel. `0-neo-sleep` is the default, so installing only the theme still gives you a wallpaper. `1-live-rain` is a still frame of the shader: thumbnail, marker and fallback in one — selecting it is what turns the desktop rain on. The rest are film stills. |
-| `unlock.png`, `preview-unlock.png` | The static boot mark, for anyone installing the theme without the pack. With the pack, `logo.png` goes invisible and the lines are typed instead. |
-| `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glyphs.png` | The plugin. |
-| `widget/` | The bar widget: one icon, four switches, Repair and Uninstall. |
-| `provider.json` | The only file that names this provider — slug, plugin ids, Plymouth theme, the lines typed at boot. Everything else is machinery. |
-| `bin/` | `omarchy-matrix` (the switch CLI), the two derivers and `provider.py`. |
-| `hooks/` | The self-repair on theme change and update. |
-| `rain/` | The shader sources: `matrix.frag` and the atlas generator. |
-| `generate-backgrounds.py`, `generate-brand.py` | Regenerate the PNGs. Neither is an untouchable binary. |
-
-### About the borders
-
-The theme sets the border **colour** (`hyprland_active_border`, flat green) but
-not its thickness or the rounding: `omarchy theme install` **rejects any `.lua`**
-from a theme that came from git, because Lua runs code inside the compositor.
-That is Omarchy's decision, not a bug. Borders keep the stock thickness.
-
-If you want the thin frame, it belongs in your `~/.config/hypr/looknfeel.lua`:
-
-```lua
-hl.config({
-  general = { border_size = 1 },
-  decoration = {
-    rounding = 2,
-    shadow = { enabled = true, range = 14, color = "rgba(00FF4130)",
-               color_inactive = "rgba(00000000)" },
-  },
-})
-```
-
-### The palette
-
-Everything is green except the red, which is reserved for errors. What sets it
-apart from any other green theme is that each ANSI slot sits on a **different
-rung of luminance**, so in `nvim` or `bat` the syntactic roles stay apart instead
-of blurring into one smear. Minimum contrast against the background: 5.2.
-
-The hue axis is **126°**, which is where the rain itself lives (120°). That
-matters more than it sounds: the palette used to sit at 135–158°, drifting into
-mint and teal while the wallpaper stayed true green, and the mismatch is the
-kind the eye notices without being able to name. Saturation is held at 42–52%
-— the rain's own trail is 25% — so the interface accompanies the wallpaper
-instead of competing with it.
-
-And the accent is not the border. `#60C76B` marks what the eye should find;
-window frames, selections and card edges run dimmer, around 4.3:1 against the
-surface they sit on. A border delimits; it does not need to shout.
-
-| | | |
-|---|---|---|
-| `cyan` | `#92D9BB` | mint · 12.1 |
-| `yellow` | `#B6CF7D` | lime · 11.4 |
-| `green` | `#60C76B` | the hero · 9.3 |
-| `magenta` | `#4FC482` | jade · 9.0 |
-| `orange` | `#81B851` | olive · 8.4 |
-| `blue` | `#319B4A` | emerald · 5.5 |
-| `red` | `#D85A63` | errors · 5.2 |
-
-### Regenerating
-
-```bash
-./generate-backgrounds.py               # the backgrounds
-./generate-backgrounds.py --out /tmp/x.png --seed 42 --density 0.7
-./generate-brand.py                     # unlock, preview-unlock and preview
-./rain/generate-atlas.py                # the shader's glyph atlas
-
-# recompile the shader (qsb is not on PATH; qt6-shadertools puts it here)
-/usr/lib/qt6/bin/qsb --glsl 300es,330 --hlsl 50 --msl 12 \
-    -o matrix.frag.qsb rain/matrix.frag
-```
-
-Those `qsb` targets are the ones the shipped `matrix.frag.qsb` was built with —
-GLSL 300 es and 330, HLSL 50, MSL 12. Using different ones silently produces a
-different set of shader variants.
-
-Needs ImageMagick, `rsvg-convert`, Python 3, the Noto Sans CJK JP font and
-`qt6-shadertools` for `qsb`.
-
-## Working on the pack
-
-`~/.config/omarchy/themes/matrix` is what `omarchy theme install` puts there and
-it gets regenerated, so editing in it loses the change. Keep a working copy
-elsewhere:
-
-```bash
-git clone https://github.com/tymurbogach/omarchy-enter-the-matrix ~/dev/omarchy-matrix
-# edit, commit and push there, then:
-cd ~/.config/omarchy/themes/matrix && git pull && ./install.sh
-```
-
-That is a detour, but it is exactly the path anyone installing the pack takes,
-so mistakes surface on your machine rather than on theirs.
-
-Editing `Service.qml` can skip the detour by copying it straight into
-`~/.config/omarchy/plugins/matrix.rain/`, but **finish with `omarchy restart
-shell`**: hot reloads can leave two instances alive, the old one still answering
-IPC while the new one paints, and the symptom is maddening.
-
-## Contributing
-
-`CLAUDE.md` holds the working agreement for this repo: the rules, the two-clone
-workflow, and a list of traps that each cost real debugging time. Read it before
-changing anything — several of them are invisible from the code. `AGENTS.md` is a
-short pointer to it, for tools that look for that name.
-
 ## The backgrounds
 
 ```
@@ -369,35 +177,43 @@ short pointer to it, for tools that look for that name.
 2-neo-sleep.jpg
 3-morpheus.jpg
 4-sunglasses.jpg
-5-minimal.png
+5-hotel-corridor.jpg
+6-green-street.jpg
+7-the-office.jpg
 ```
 
 The rain has an entry of its own, and it is the only one with `-live-` in its
-name: that substring, not a fixed filename or a position in the list, is what
-the shader watches for. Everything else is an ordinary wallpaper and stays one
-when you pick it.
+name: that substring, not a fixed filename or a position in the list, is what the
+shader watches for. Everything else is an ordinary wallpaper and stays one when
+you pick it.
 
 The default is a photograph rather than the rain frame, so installing the theme
 without the pack leaves you with a wallpaper instead of a frozen picture of the
 one thing the theme is about making move.
 
-> `omarchy theme set` rotates to the *next* background, so re-applying the theme
-> does not put you back on the default — that only happens on a first install,
-> when there is no selection to advance from.
+> `0-pills.jpg`, `2-neo-sleep.jpg`, `3-morpheus.jpg` and `4-sunglasses.jpg` are
+> frames from *The Matrix* (1999), © Warner Bros. They are here because this is a
+> fan theme and they are what the theme is about. They are not covered by this
+> repository's MIT licence, which applies to the code. If you would rather not
+> carry them, delete those four and pick your own — any file with `-live-` in its
+> name becomes the rain's marker.
 
-> The stills are frames from *The Matrix* (1999), © Warner Bros. They are here
-> because this is a fan theme and they are what the theme is about. They are not
-> covered by this repository's MIT licence, which applies to the code. If you
-> would rather not carry them, delete `backgrounds/*.jpg` and pick your own — any
-> file with `-live-` in its name becomes the rain's marker.
+## More
+
+- **[DESIGN.md](DESIGN.md)** — why the lock and the boot splash are derived
+  rather than copied, what is in each file, the palette, and how to regenerate
+  the assets.
+- **[CLAUDE.md](CLAUDE.md)** — the working agreement for this repo: the rules,
+  the two-clone workflow, and a list of traps that each cost real debugging time.
+  Read it before changing anything. `AGENTS.md` is a short pointer to it.
 
 ## Credits
 
 The rain shader started from [`matrix.frag` in
 bjarneo/quickshell](https://github.com/bjarneo/quickshell) (MIT). It swaps the
 original's procedural blocks for an atlas of the real halfwidth katakana — the
-very ones `ttfx matrix` uses, the effect behind Omarchy's screensaver — and
-keeps its colours.
+very ones `ttfx matrix` uses, the effect behind Omarchy's screensaver — and keeps
+its colours.
 
 ## Licence
 

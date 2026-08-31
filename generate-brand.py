@@ -12,8 +12,9 @@
                         rain background with a terminal window and the palette
                         below it.
 
-Needs rsvg-convert and ImageMagick, plus the theme's -live- background (which
-generate-backgrounds.py produces).
+Needs rsvg-convert and ImageMagick, plus the theme's -live- background, which is
+committed in backgrounds/ rather than generated -- generate-backgrounds.py has
+not produced it since the live background stopped being a fresh render.
 """
 
 import glob
@@ -226,7 +227,8 @@ def main():
 
     background = next(iter(sorted(glob.glob(os.path.join(HERE, "backgrounds", "*-live-*")))), "")
     if not os.path.exists(background):
-        print("  ! the theme's -live- background is missing: run generate-backgrounds.py first",
+        print("  ! no backgrounds/*-live-* found. That file is committed, not "
+              "generated: restore it from git rather than regenerating it.",
               file=sys.stderr)
         return 1
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:

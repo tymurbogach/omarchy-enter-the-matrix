@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Generate the matrix theme's static backgrounds.
+"""Paint a still frame of the rain, as a one-off.
 
-    ./generate-backgrounds.py                  regenerate every preset
-    ./generate-backgrounds.py --only 4-minimal
+    ./generate-backgrounds.py --out /tmp/test.png
     ./generate-backgrounds.py --out /tmp/test.png --seed 99 --density 0.7
+
+It generates NOTHING on its own any more, and that is deliberate: it used to
+carry a preset table, and the last entry in it (`5-minimal`) painted a field
+that stopped a third of the way down the screen. Every background the theme
+ships is now committed -- the stills and `1-live-rain.png` alike -- so an
+argument-less run had one job left, and it was to overwrite a file somebody had
+deliberately removed. `--out` is required.
 
 What it paints is **a frame of the rain/matrix.frag shader**, not a rain of its
 own: the same glyphs, the same colours, the same head-at-the-bottom geometry.
@@ -77,7 +83,7 @@ def streak(draw, cx, head, length, size, y_scale, dim=1.0):
                     f"text {x},{y + y_scale} '{ch}'")
 
 
-def build(seed, density, scale, output, minimal=False):
+def build(seed, density, scale, output):
     random.seed(seed)
     size = int(CELL_H * 0.62 * scale)
     # Glyphs are anchored on their baseline, so they have to be pushed down
@@ -92,23 +98,9 @@ def build(seed, density, scale, output, minimal=False):
         # Every column gets its own head and length, like the shader's per-column
         # hashes. The head may fall off the bottom: then only the tail end shows,
         # and that is what sells the falling.
-        if minimal:
-            # Every head near the top: the rain has only just entered frame and
-            # the bottom two thirds stay black. That is composition -- thinly
-            # scattering the same streaks over the whole screen only gave faint
-            # noise with nowhere to look.
-            head = random.randint(1, max(2, int(rows * 0.38)))
-            length = random.randint(10, 24)
-        else:
-            head = random.randint(0, rows + 12)
-            length = random.randint(16, 38)
-        streak(draw, cx, head, length, size, y_scale,
-               dim=0.85 if minimal else 1.0)
-
-    if minimal:
-        # One streak at full brightness, falling further than the rest. That is
-        # what reads; everything else is texture.
-        streak(draw, int(columns * 0.41), int(rows * 0.58), 26, size, y_scale)
+        head = random.randint(0, rows + 12)
+        length = random.randint(16, 38)
+        streak(draw, cx, head, length, size, y_scale)
 
     with tempfile.NamedTemporaryFile("w", suffix=".mvg", delete=False) as fh:
         fh.write("\n".join(draw) + "\n")
@@ -126,46 +118,19 @@ def build(seed, density, scale, output, minimal=False):
     print(f"  {output}  {os.path.getsize(output) // 1024} KB")
 
 
-# seed, density, glyph scale.
-# This no longer generates the live background. That job went to a still from
-# the film: handing somebody who installed only the theme a frozen screenshot of
-# the one thing meant to move was the worst first impression the pack had. What
-# is left here is atmosphere, plus --out for one-offs.
-#
-# Nothing generated here may carry "-live-" in its name: that substring is what
-# marks the background the rain shader watches for, and a second file matching
-# it would fight the real one.
-PRESETS = {
-    # seed, density, scale, minimal
-    # No mark and no logo: black, a few very dim columns of texture and one lit
-    # streak. The idea is atmosphere, not a poster.
-    "5-minimal":   (29, 0.50, 1.0, True),
-}
-
-
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--only", help="regenerate only this preset")
-    p.add_argument("--out", help="output path (a one-off, outside the theme)")
+    p.add_argument("--out", required=True,
+                   help="output path -- required; this writes nowhere by default")
     p.add_argument("--seed", type=int)
     p.add_argument("--density", type=float)
     p.add_argument("--scale", type=float, default=1.0)
     args = p.parse_args()
 
-    if args.out:
-        build(args.seed if args.seed is not None else 11,
-              args.density if args.density is not None else 0.9,
-              args.scale, args.out)
-        return
-
-    target = os.path.join(os.path.dirname(os.path.abspath(__file__)), "backgrounds")
-    os.makedirs(target, exist_ok=True)
-    presets = PRESETS if not args.only else {args.only: PRESETS[args.only]}
-    print(f"Generating {len(presets)} background(s) at {W}x{H}:")
-    for name, (seed, density, scale, minimal) in presets.items():
-        build(seed, density, scale,
-              os.path.join(target, name + ".png"), minimal)
+    build(args.seed if args.seed is not None else 11,
+          args.density if args.density is not None else 0.9,
+          args.scale, args.out)
 
 
 if __name__ == "__main__":

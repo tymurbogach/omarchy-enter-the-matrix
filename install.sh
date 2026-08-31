@@ -38,6 +38,20 @@ eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCEN
 mapfile -t PLUGIN_FILES < <(jq -r '.plugin.files[]' "$PROVIDER")
 mapfile -t WIDGET_FILES < <(jq -r '.widget.files[]' "$PROVIDER")
 
+# `omarchy theme install` names the theme's folder after the REPO -- basename of
+# the URL with `omarchy-` stripped (omarchy-theme-install) -- and the slug in
+# provider.json has to be that same name, because pack_in_effect() compares the
+# slug against ~/.local/state/omarchy/current/theme.name. Renaming the repo
+# without renaming the slug is silent: everything installs, and then every piece
+# stands down forever because the pack never considers itself the current theme.
+# Written down after exactly that happened.
+here_name=$(basename "$HERE")
+if [[ $HERE == "$HOME/.config/omarchy/themes/"* && $here_name != "$SLUG" ]]; then
+  echo "this theme is installed as '$here_name' but provider.json says '$SLUG'." >&2
+  echo "The folder name comes from the repo name; the two have to agree." >&2
+  exit 1
+fi
+
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 PLUGIN_DIR="$PLUGINS_DIR/$PLUGIN_ID"
 BIN_DIR="$HOME/.local/bin"

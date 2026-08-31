@@ -1,4 +1,4 @@
-# CLAUDE.md — omarchy-matrix
+# CLAUDE.md — omarchy-enter-the-matrix
 
 A theme **and** a shell plugin for Omarchy 4, published from one repo. This file
 is the working agreement for anyone — human or agent — changing it.
@@ -77,10 +77,13 @@ the panel. Everything else is a screenshot away, so take it.
 Verifications that actually caught bugs in this repo, worth repeating:
 
 ```bash
-# Regenerate and prove nothing moved: these must come out byte-identical
-md5sum glyphs.png backgrounds/*.png
-./rain/generate-atlas.py && ./generate-backgrounds.py
-md5sum glyphs.png backgrounds/*.png
+# Regenerate and prove nothing moved: this must come out byte-identical.
+# Only the atlas is regenerated -- generate-backgrounds.py needs --out and
+# writes nowhere by default, so no background is reproducible from source any
+# more; they are all committed stills.
+md5sum glyphs.png
+./rain/generate-atlas.py
+md5sum glyphs.png
 
 # The boot splash, as a picture rather than as a hope
 ./bin/derive-plymouth.py --stage-only
@@ -92,7 +95,7 @@ python3 -c "import importlib.util as u; s=u.spec_from_file_location('d','bin/der
 m=u.module_from_spec(s); s.loader.exec_module(m); m.patch((m.SOURCE/'LockView.qml').read_text())"
 
 # The pack installs from a clean clone, the way a stranger gets it
-git clone https://github.com/tymurbogach/omarchy-matrix /tmp/check
+git clone https://github.com/tymurbogach/omarchy-enter-the-matrix /tmp/check
 omarchy-plugin-validate /tmp/check
 ```
 
@@ -150,9 +153,9 @@ step in the middle that says "now re-apply the theme". A piece that only works
 while the others are on is not a layer, it is a fork.
 
 **Picking another theme stands everything down.** Nothing rains, nothing is
-ticked, no plugin is left enabled. `matrix.json` is kept, so coming back to
-matrix restores exactly what was there. `boot` is the one documented exception:
-Plymouth belongs to the system, not to the theme.
+ticked, no plugin is left enabled. `enter-the-matrix.json` is kept, so coming
+back to the theme restores exactly what was there. `boot` is the one documented
+exception: Plymouth belongs to the system, not to the theme.
 
 **Off must remove, not merely deactivate.** If a piece wrote something, its `off`
 takes it back — including anything outside `$HOME`. It is not enough for
@@ -212,18 +215,19 @@ There are two clones with different jobs:
 | Where | For what |
 |---|---|
 | `~/dev/omarchy-matrix` | The working copy. **Edit and commit here.** |
-| `~/.config/omarchy/themes/matrix` | What `omarchy theme install` puts there. It gets regenerated — editing here loses the change. |
+| `~/.config/omarchy/themes/enter-the-matrix` | What `omarchy theme install` puts there. It gets regenerated — editing here loses the change. |
 
 ```bash
 cd ~/dev/omarchy-matrix && git commit && git push
-cd ~/.config/omarchy/themes/matrix && git pull && ./install.sh
+cd ~/.config/omarchy/themes/enter-the-matrix && git pull && ./install.sh
 ```
 
 A detour, deliberately: it is the exact path anyone installing the pack takes, so
 mistakes surface here rather than on their machine.
 
-Renaming or adding a background needs `omarchy theme set matrix` afterwards — the
-state directory only picks up new filenames when the theme is re-applied.
+Renaming or adding a background needs `omarchy theme set enter-the-matrix`
+afterwards — the state directory only picks up new filenames when the theme is
+re-applied.
 
 ### Commit messages explain the WHY
 
@@ -473,7 +477,7 @@ Then the one that actually decides whether this is publishable: **install the
 pack the way a stranger does, on a machine that has never seen it.** Reading the
 diff is not this test. Neither is `./install.sh` from the working copy — that
 path runs with `~/.local/bin` already warm, the hooks already in place and a
-`matrix.json` full of yesterday's answers.
+`enter-the-matrix.json` full of yesterday's answers.
 
 Six phases, in order. Each is verified as the user sees it (Rule 2), and a
 failure in any one of them is a failure to ship.
@@ -483,8 +487,11 @@ failure in any one of them is a failure to ship.
    in `~/.local/bin`, `~/.local/share/omarchy-matrix/`,
    `/usr/share/plymouth/themes/omarchy-matrix/`, the `matrix.control` entry in
    `shell.json`'s bar layout, any marker block left inside `omarchy-menu.jsonc`
-   by an older install, `~/.config/omarchy/matrix.json`, the theme directory, and
-   the `~/.local/state/omarchy/toggles/screensaver-off` flag.
+   by an older install, `~/.config/omarchy/enter-the-matrix.json`, the theme
+   directory, and the `~/.local/state/omarchy/toggles/screensaver-off` flag.
+   The repo was called `omarchy-matrix` until 2026-08-31, so a machine that saw
+   an older install also has `~/.config/omarchy/matrix.json`,
+   `~/.config/omarchy/themes/matrix/` and `hooks/*.d/matrix` under the old name.
    Prove it is gone before going on: `omarchy-matrix` must be *command not
    found*. Leave the user's own hooks alone — `theme-set.d` holds more than ours.
 2. **Install from the published URL**, never from the working copy, following the

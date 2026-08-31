@@ -2,3 +2,6 @@
 .fila*.png
 *.nitido.png
 __pycache__/
+
+# Agent worktrees and settings: not part of the theme
+.claude/
