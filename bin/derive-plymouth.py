@@ -208,14 +208,20 @@ PROMPT_WIDTH = 0.42         # sizes the CAPS LOCK label; the disk's own prompt
                             # this was named for is no longer drawn
 
 # --- the box ----------------------------------------------------------------
-# The film's prompt is a framed panel with a caption on its top rule. It is one
-# baked PNG per caption rather than a frame plus text composed at boot: Plymouth
-# has no blit, and two images that have to line up are two images that can drift.
+# The film's prompt is a framed panel with a filled title band across its top.
+# It is one baked PNG per caption rather than a frame plus text composed at
+# boot: Plymouth has no blit, and two images that have to line up are two
+# images that can drift.
 #
 # Its interior is wide enough for BOTH phases, so the panel never changes size
 # between asking for the passphrase and reporting progress -- 21 dashes, and
 # 20 track blocks + a gap + 4 digits, is 25 either way.
-BOX_WIDTH = 0.46            # of the window
+#
+# 0.58, not the 0.46 this started at: every element inside the panel that is
+# drawn LIVE rather than baked -- the dashes, the track, the digits -- is
+# sized off `mx_cell`, which is a fraction of this. Widening it is what makes
+# those bigger along with the panel, without touching their own fractions.
+BOX_WIDTH = 0.58            # of the window
 BOX_CELLS = 26              # interior width, in cells: 25 of content and air
 
 # --- the progress track -----------------------------------------------------
@@ -482,7 +488,7 @@ global.mx_box_w = Math.Int(global.mx_w * $BOX_WIDTH);
 global.mx_box_h = Math.Int(global.mx_box_w * $BOX_ASPECT);
 
 global.mx_box_x = Math.Int((global.mx_w - global.mx_box_w) / 2);
-global.mx_box_lift = Math.Int(global.mx_h * 0.15);
+global.mx_box_lift = Math.Int(global.mx_h * 0.20);
 global.mx_box_y = entry.y - global.mx_box_lift;
 
 # BOX_ASPECT is derive-time -- baked from THIS machine's font metrics, never
@@ -1183,7 +1189,14 @@ def splash_assets(target, font_path, line_hex):
         # Dark on the band, not the panel's usual light-on-dark -- the band
         # is what inverts, the way the reference's title bar does.
         render(caption, f"#{BAND_INK_HEX}", target / ".caption.png")
-        caption_w = measure(target / ".caption.png")[0] * 62 // 100
+        # Sized to the BAND's height, not to a fraction of its own natural
+        # width: the old `* 62 // 100` scaled the caption against itself, so
+        # it stayed the same small size while the band grew around it over
+        # two passes of this function. 0.75 of band_h leaves the padding the
+        # corner widgets get too, and reads close to the reference's own
+        # caption, which very nearly fills the band top to bottom.
+        caption_w, natural_h = measure(target / ".caption.png")
+        caption_w = int(caption_w * (band_h * 0.75) / natural_h)
         subprocess.run(["magick", str(target / ".caption.png"), "-resize",
                         f"{caption_w}x", "-strip", str(target / ".caption.png")],
                        check=True)
