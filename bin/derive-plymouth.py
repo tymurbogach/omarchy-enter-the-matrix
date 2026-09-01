@@ -217,11 +217,14 @@ PROMPT_WIDTH = 0.42         # sizes the CAPS LOCK label; the disk's own prompt
 # between asking for the passphrase and reporting progress -- 21 dashes, and
 # 20 track blocks + a gap + 4 digits, is 25 either way.
 #
-# 0.58, not the 0.46 this started at: every element inside the panel that is
-# drawn LIVE rather than baked -- the dashes, the track, the digits -- is
-# sized off `mx_cell`, which is a fraction of this. Widening it is what makes
-# those bigger along with the panel, without touching their own fractions.
-BOX_WIDTH = 0.58            # of the window
+# Every element inside the panel that is drawn LIVE rather than baked -- the
+# dashes, the track, the digits -- is sized off `mx_cell`, a fraction of this,
+# so this scales the whole panel and its contents together. It went 0.46 ->
+# 0.58 to fix contents that looked small, which was the wrong knob: the
+# caption's own scale and the panel's internal proportions were the actual
+# problem, and both are fixed below. With those right, 0.40 is enough panel --
+# 0.58 was simply too big on a real screen.
+BOX_WIDTH = 0.40            # of the window
 BOX_CELLS = 26              # interior width, in cells: 25 of content and air
 
 # --- the progress track -----------------------------------------------------
@@ -504,8 +507,12 @@ if (global.mx_box_h > global.mx_box_room) global.mx_box_h = global.mx_box_room;
 
 mx_box.key = Image("box-key.png");
 mx_box.bar = Image("box-bar.png");
+mx_box.granted = Image("box-granted.png");
+mx_box.denied = Image("box-denied.png");
 mx_box.key_scaled = mx_box.key.Scale(global.mx_box_w, global.mx_box_h);
 mx_box.bar_scaled = mx_box.bar.Scale(global.mx_box_w, global.mx_box_h);
+mx_box.granted_scaled = mx_box.granted.Scale(global.mx_box_w, global.mx_box_h);
+mx_box.denied_scaled = mx_box.denied.Scale(global.mx_box_w, global.mx_box_h);
 
 mx_box.sprite = Sprite();
 mx_box.sprite.SetPosition(global.mx_box_x, global.mx_box_y, 10000);
@@ -530,27 +537,6 @@ mx_key.sprite = Sprite();
 mx_key.sprite.SetPosition(global.mx_in_x, global.mx_in_y, 10001);
 mx_key.sprite.SetOpacity(0);
 
-# The one-shot feedback -- ACCESS GRANTED and ACCESS DENIED -- drawn in this
-# SAME row, at this same height, and centred on the PANEL rather than pinned to
-# mx_in_x: neither is built cell by cell like the row above it, each is one
-# label scaled by its own aspect, so it is not generally $KEY_CELLS cells wide.
-mx_granted.image = Image("granted.png");
-mx_granted.scaled = mx_granted.image.Scale(Math.Int(global.mx_in_h * $GRANTED_ASPECT), global.mx_in_h);
-# The image goes to the CONSTRUCTOR, not a later SetImage(): unlike mx_key or
-# mx_fill, this content never changes, so there is no crop to redraw later.
-mx_granted.sprite = Sprite(mx_granted.scaled);
-mx_granted.sprite.SetPosition(
-  global.mx_box_x + Math.Int((global.mx_box_w - mx_granted.scaled.GetWidth()) / 2),
-  global.mx_in_y, 10002);
-mx_granted.sprite.SetOpacity(0);
-
-mx_denied.image = Image("denied.png");
-mx_denied.scaled = mx_denied.image.Scale(Math.Int(global.mx_in_h * $DENIED_ASPECT), global.mx_in_h);
-mx_denied.sprite = Sprite(mx_denied.scaled);
-mx_denied.sprite.SetPosition(
-  global.mx_box_x + Math.Int((global.mx_box_w - mx_denied.scaled.GetWidth()) / 2),
-  global.mx_in_y, 10002);
-mx_denied.sprite.SetOpacity(0);
 
 # The disk's own prompt used to be drawn here too, dimmed, above the panel --
 # but the panel now has its own caption baked into its band ("enter
@@ -638,18 +624,21 @@ fun mx_caps_tick() {
 }
 
 # Driven from mx_tick() on every frame, same as mx_caps_tick(). Counts down
-# whichever of the two one-shot feedback images is up, and hands its row back
-# when the count runs out: to the progress track for GRANTED, to the (already
-# cleared, by mx_password_callback) passphrase field for DENIED.
+# whichever one-shot flash is up, and hands the BAND back when the count runs
+# out -- to `enter password` for DENIED, to the progress caption (which also
+# starts the real track) for GRANTED. The flash lives in the band itself now,
+# not as text layered over the content row: GRANTED/DENIED and "enter
+# password"/the progress title were two captions saying the same thing in two
+# places, and the band is the one that already exists for exactly this.
 fun mx_feedback_tick() {
   if (global.mx_denied_frames > 0) {
     global.mx_denied_frames = global.mx_denied_frames - 1;
-    if (global.mx_denied_frames == 0) mx_denied.sprite.SetOpacity(0);
+    if (global.mx_denied_frames == 0) mx_box.sprite.SetImage(mx_box.key_scaled);
   }
   if (global.mx_granted_frames > 0) {
     global.mx_granted_frames = global.mx_granted_frames - 1;
     if (global.mx_granted_frames == 0) {
-      mx_granted.sprite.SetOpacity(0);
+      mx_box.sprite.SetImage(mx_box.bar_scaled);
       mx_bar_show(1);
     }
   }
@@ -661,7 +650,6 @@ fun mx_hide_dialog() {
   global.mx_caps_state = -1;
   global.mx_denied_frames = 0;
   mx_key.sprite.SetOpacity(0);
-  mx_denied.sprite.SetOpacity(0);
   mx_caps.sprite.SetOpacity(0);
   mx_box.sprite.SetOpacity(0);
 }
@@ -674,9 +662,6 @@ fun mx_password_callback(prompt, bullets) {
   hide_progress_bar();
   mx_bar_show(0);
 
-  mx_box.sprite.SetImage(mx_box.key_scaled);
-  mx_box.sprite.SetOpacity(1);
-
   shown = bullets;
   if (shown > $KEY_CELLS) shown = $KEY_CELLS;
 
@@ -684,7 +669,6 @@ fun mx_password_callback(prompt, bullets) {
     # Typing resumed while the DENIED flash was still up: cut it short rather
     # than sit in front of what the user is typing right now.
     global.mx_denied_frames = 0;
-    mx_denied.sprite.SetOpacity(0);
   }
 
   if (global.mx_dialog_on == 1 && shown == 0 && global.mx_bullets > 0 &&
@@ -694,8 +678,11 @@ fun mx_password_callback(prompt, bullets) {
     # prompt and bullets back at 0, and there is nothing else here to tell
     # that apart from the user backspacing the field to nothing by hand.
     global.mx_denied_frames = $DENIED_HOLD;
-    mx_denied.sprite.SetOpacity(1);
+    mx_box.sprite.SetImage(mx_box.denied_scaled);
+  } else {
+    mx_box.sprite.SetImage(mx_box.key_scaled);
   }
+  mx_box.sprite.SetOpacity(1);
 
   if (shown != global.mx_bullets) {
     global.mx_bullets = shown;
@@ -705,11 +692,11 @@ fun mx_password_callback(prompt, bullets) {
       mx_key.sprite.SetOpacity(0);
     } else {
       # Centred as a GROUP, not left-anchored -- the reference shows the
-      # dashes centred in the box, the same as GRANTED/DENIED are, and a
-      # field anchored at mx_in_x instead left a typed passphrase stranded
-      # off to one side of a box wide enough for KEY_CELLS characters. It
-      # re-centres on every keystroke, so the block grows outward from its
-      # own middle rather than sliding as a whole.
+      # dashes centred in the box, and a field anchored at mx_in_x instead
+      # left a typed passphrase stranded off to one side of a box wide
+      # enough for KEY_CELLS characters. It re-centres on every keystroke,
+      # so the block grows outward from its own middle rather than sliding
+      # as a whole.
       key_w = Math.Int(shown * global.mx_cell);
       mx_key.sprite.SetPosition(
         global.mx_box_x + Math.Int((global.mx_box_w - key_w) / 2),
@@ -732,11 +719,10 @@ fun mx_normal_callback() {
   progress_bar.sprite.SetOpacity(0);
   mx_hide_dialog();
   if (global.password_shown == 1) {
-    # ACCESS GRANTED first, in the passphrase's own row -- mx_feedback_tick()
-    # hands the row to the real progress track once $GRANTED_HOLD runs out.
-    mx_box.sprite.SetImage(mx_box.bar_scaled);
+    # ACCESS GRANTED in the band itself -- mx_feedback_tick() hands it to the
+    # progress caption, and starts the real track, once $GRANTED_HOLD runs out.
+    mx_box.sprite.SetImage(mx_box.granted_scaled);
     mx_box.sprite.SetOpacity(1);
-    mx_granted.sprite.SetOpacity(1);
     global.mx_granted_frames = $GRANTED_HOLD;
   }
 }
@@ -803,8 +789,8 @@ $PCT_PAINT
 # registered further up, never unregistered, and whole.
 if (mx_key.image.GetWidth() > 0 && mx_track.image.GetWidth() > 0 &&
     mx_digits.image.GetWidth() > 0 && mx_box.key.GetWidth() > 0 &&
-    mx_box.bar.GetWidth() > 0 && mx_granted.image.GetWidth() > 0 &&
-    mx_denied.image.GetWidth() > 0) {
+    mx_box.bar.GetWidth() > 0 && mx_box.granted.GetWidth() > 0 &&
+    mx_box.denied.GetWidth() > 0) {
   Plymouth.SetDisplayPasswordFunction(mx_password_callback);
   Plymouth.SetDisplayNormalFunction(mx_normal_callback);
 }
@@ -908,7 +894,6 @@ def dialog_block(metrics):
         BOX_PAD_FRAC=metrics["BOX_PAD_FRAC"],
         BOX_ROW_FRAC=metrics["BOX_ROW_FRAC"],
         CELL_ASPECT=metrics["CELL_ASPECT"],
-        GRANTED_ASPECT=metrics["GRANTED_ASPECT"], DENIED_ASPECT=metrics["DENIED_ASPECT"],
         DENIED_HOLD=DENIED_HOLD, GRANTED_HOLD=GRANTED_HOLD,
         KEY_CELLS=KEY_CELLS, BAR_CELLS=BAR_CELLS, BAR_GAP_CELLS=BAR_GAP_CELLS,
         PCT_CELLS=PCT_CELLS, ATLAS_CELLS=len(ATLAS), TRACK_ALPHA=TRACK_ALPHA,
@@ -1046,16 +1031,6 @@ def splash_assets(target, font_path, line_hex):
     render(BLOCK * BAR_CELLS, f"#{DIALOG_HEX}", target / "bar.png")
     render(ATLAS, f"#{DIALOG_HEX}", target / "digits.png")
 
-    # The one-shot feedback. Neither is built from repeated glyphs on a shared
-    # cell the way the row above is -- each is one label, scaled at boot to fill
-    # the row's height by its OWN aspect, the same way the caption below scales
-    # by width. All caps, like the digits: no descenders to throw the vertical
-    # weight off against a row that has none either.
-    render(GRANTED_TEXT, f"#{DIALOG_HEX}", target / "granted.png")
-    render(DENIED_TEXT, f"#{DIALOG_HEX}", target / "denied.png")
-    granted_w, granted_h = measure(target / "granted.png")
-    denied_w, denied_h = measure(target / "denied.png")
-
     inside = {"keyline.png": KEY_CELLS, "bar.png": BAR_CELLS,
               "digits.png": len(ATLAS)}
     cells = {}
@@ -1118,17 +1093,6 @@ def splash_assets(target, font_path, line_hex):
     # --- the panel ----------------------------------------------------------
     interior = BOX_CELLS * cell
     pad = cell                      # a cell of air either side of the content
-
-    # Scaled to the row's height, same as it will be at boot -- if it is wider
-    # than the row has to give, better to fail here than to run off the panel's
-    # edge on a screen nobody is going to reboot to check.
-    for label, text, (w, h) in (("grantedText", GRANTED_TEXT, (granted_w, granted_h)),
-                                ("deniedText", DENIED_TEXT, (denied_w, denied_h))):
-        scaled_w = row_height * w / h
-        if scaled_w > interior * 0.95:
-            die(f"{label} {text!r} is {scaled_w:.0f}px wide at the panel's row "
-                f"height, and only {interior * 0.95:.0f}px fits.\n"
-                f"  Shorten it in provider.json.")
     box_w = int(interior + pad * 2)
     stroke = max(2, int(size * 0.045))
     # The corner widgets, and the band's own proportions -- both MEASURED off
@@ -1185,7 +1149,9 @@ def splash_assets(target, font_path, line_hex):
     zoom_w = int(block * 1.8)       # the right widget: wider than tall
 
     for name, caption in (("box-key.png", BOX_TITLE),
-                          ("box-bar.png", PROGRESS_TITLE)):
+                          ("box-bar.png", PROGRESS_TITLE),
+                          ("box-granted.png", GRANTED_TEXT),
+                          ("box-denied.png", DENIED_TEXT)):
         # Dark on the band, not the panel's usual light-on-dark -- the band
         # is what inverts, the way the reference's title bar does.
         render(caption, f"#{BAND_INK_HEX}", target / ".caption.png")
@@ -1246,8 +1212,6 @@ def splash_assets(target, font_path, line_hex):
         "BOX_PAD_FRAC": round(pad / box_w, 6),
         "BOX_ROW_FRAC": round(content_y / box_w, 6),
         "CELL_ASPECT": round(row_height / cell, 4),
-        "GRANTED_ASPECT": round(granted_w / granted_h, 4),
-        "DENIED_ASPECT": round(denied_w / denied_h, 4),
     }
 
 

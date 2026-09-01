@@ -117,25 +117,29 @@
     ],
     "dialogColor": [0.698, 0.867, 0.898],
     "//titles": [
-      "On the box's rule, the way an old window manager captioned one.",
-      "progressTitle also captions the ACCESS GRANTED flash: they share one",
-      "panel (the bar takes the passphrase field's own row), so one caption."
+      "In the panel's filled title band, the way an old window manager",
+      "captioned a window. The panel wears one of FOUR of these at a time --",
+      "these two, and the grantedText/deniedText below -- and swaps the whole",
+      "baked band rather than composing a frame and a caption at boot."
     ],
     "boxTitle": "enter password",
     "progressTitle": "RTF CONTROL",
 
     "//grantedDenied": [
-      "The one-shot feedback shown in the passphrase field's own row.",
+      "The one-shot feedback, worn by the title band itself -- not layered",
+      "over the content row underneath it. Both were tried in that row first,",
+      "under a band that still said `enter password` or the progress title, and",
+      "that is two captions saying the same thing in two places at once.",
       "",
-      "ACCESS GRANTED plays once, in the progress box, the moment the",
-      "passphrase is accepted -- then the panel hands that row to the real",
-      "progress track for the rest of boot.",
+      "ACCESS GRANTED plays once, the moment the passphrase is accepted, then",
+      "the band hands over to progressTitle and the real progress track.",
       "",
-      "ACCESS DENIED plays in the password box when Plymouth re-asks for a",
-      "passphrase. That is a HEURISTIC, not a real signal: the script API never",
-      "tells a rejected passphrase apart from the user backspacing the field to",
-      "nothing by hand, because both look exactly like a fresh",
-      "display_password_callback with bullets back at 0. See derive-plymouth.py."
+      "ACCESS DENIED plays when Plymouth re-asks for a passphrase, then the band",
+      "hands back to boxTitle. That is a HEURISTIC, not a real signal: the",
+      "script API never tells a rejected passphrase apart from the user",
+      "backspacing the field to nothing by hand, because both look exactly like",
+      "a fresh display_password_callback with bullets back at 0. See",
+      "derive-plymouth.py."
     ],
     "grantedText": "ACCESS GRANTED",
     "deniedText": "ACCESS DENIED"
