@@ -368,6 +368,18 @@ scale from there — which is right on every panel, survives docking, and needs 
 calibration constant. `Window.GetWidth()` in the X11 preview is half the panel's,
 so a baked size would also have made every preview a lie.
 
+**A derive-time aspect ratio can run the panel off the bottom of a real
+screen, and BOX_ASPECT alone cannot know that.** It is baked from this
+machine's font metrics; the panel's vertical anchor (`entry.y`, Omarchy's own
+idea of where its dialog goes) is boot-time and can sit low enough that there
+is not BOX_ASPECT's worth of room under it. Caught by photographing the real
+render at this panel's own resolution with `bin/preview-plymouth.sh`, not by
+the math -- the box simply had no bottom border in the shot. Two fixes, not
+one: the panel is lifted a fixed fraction of the screen height off `entry.y`
+rather than sitting exactly on it, AND the height is clamped against
+`Window.GetHeight()` at boot, because the lift is still a guess about a
+screen the deriver has never seen.
+
 **In the initramfs, `Image.Text`'s font FAMILY is ignored. Only the size
 survives.** The mkinitcpio hook copies exactly three font files, under fixed
 names, and `label-freetype` resolves a family by shelling out to
@@ -438,6 +450,15 @@ dies below 1 % (nothing drawn) or above 60 % (block-shaped). Measured in
 Terminus, which is the face that ships: `-` 4.4 %, `·` 3 %, `•` 6 %, `▪` 11 %,
 `*` 12 %, `●` 38 %, `■` 46 %, `▊` 75 %, `█` 100 %.
 
+The same trap bites the typed LINES, and the mask's guard does not cover them: a
+whole line inks plenty with one character missing from the middle, so it comes
+out spelt wrong and passes every check. An accent is the realistic way to hit it
+-- a face that has `e` says nothing about whether it has an accented one, and
+the reboot lines open with a deja vu. `splash_assets()` therefore renders every
+character in use as ONE strip and measures the ink per cell (`-crop {cell}x{h}
++repage -format "%[fx:mean] "` gives all of them in a single magick call, which
+the monospace assertion above makes safe).
+
 That guard is also what rejected a candidate face while choosing one. Cascadia
 Code's dashes touch each other, so a row of them draws a continuous rule rather
 than a row of characters — and it is not monospace either, which the cell-drift
@@ -476,6 +497,42 @@ the probe and you get a half-drawn dialog of ours, which looks exactly like the
 fallback being broken. It is not: use `plymouth ask-for-password` in the
 scenario, with NO probe, and Omarchy's own dialog comes up whole. Photographed
 both ways.
+
+**There are only TWO Plymouth exits, and `halt` is not one of them.**
+`plymouth-halt.service`, `plymouth-poweroff.service` and
+`plymouth-kexec.service` all run `plymouthd --mode=shutdown`; only
+`plymouth-reboot.service` differs (`grep ExecStart
+/usr/lib/systemd/system/plymouth-*.service`). `script.so` knows `shutdown`,
+`reboot`, `updates`, `system-upgrade` and `firmware-upgrade` -- there is no
+`halt` string in it to match. So a halt cannot be told apart from a power off
+from inside a `.script`, and a `halt` key in `provider.json` would be
+configuration that never runs.
+
+**plymouthd feeds boot progress on the way OUT too, and a sprite that turns
+itself on will draw on an empty screen.** `Plymouth.SetBootProgressFunction` is
+called in `--mode=shutdown` and `--mode=reboot` exactly as in `--mode=boot`, so
+`update_progress_bar` -> `mx_progress` runs at shutdown. Nothing on an exit ever
+asks for a passphrase, so `mx_bar_show(1)` is never reached and the panel is
+never shown -- but `mx_progress` owned the fill's opacity (it is the only thing
+that knows how wide the crop should be) and lit it anyway. The result,
+photographed: ONE cyan cell floating in the middle of a black screen with no
+panel and no track behind it. It had been there since before the exit lines
+existed and nobody had looked, because every earlier shot was cropped to the
+typed line at the top.
+
+`global.mx_bar_on` now gates `mx_progress`, and it clears the fill rather than
+merely skipping it, so a percent arriving after the readout is hidden cannot
+leave the last crop lit. **Judge an exit from the WHOLE frame**: the interesting
+failure is in the middle of the screen, not where the words are.
+
+**`Plymouth.GetMode()` is already right at the TOP of the script**, not only
+inside a callback. `omarchy.script` asks it in `display_normal_callback`, which
+makes it look like something only a callback can know; it is not. plymouthd sets
+the mode before it loads the theme, so the whole storyboard can be *selected* at
+load time rather than swapped mid-flight. Proven rather than assumed: probes at
+the first and last line of the file both read `shutdown` under
+`--mode=shutdown`. `bin/preview-plymouth.sh --mode NAME` exists for exactly this
+-- it is how the exit splashes are photographed without turning the machine off.
 
 **`omarchy plymouth current` cannot see our boot theme.** It identifies a theme
 by comparing `logo.png` inside Omarchy's *own* folder, and ours installs
@@ -554,7 +611,9 @@ failure in any one of them is a failure to ship.
    `bin/preview-plymouth.sh` — the typed line, the passphrase dialog with a
    handful of dots in it, and the progress track at 0 %, part way and full, all
    photographed. Neither the bullets nor the track can be reached by a scenario
-   on its own: see the trap below for the doctored stage that gets you there. It used
+   on its own: see the trap below for the doctored stage that gets you there. And
+   the two exit splashes are `--mode shutdown` and `--mode reboot`, which need
+   no reboot either. It used
    to be the one piece that shipped unseen; it no longer has that excuse. Every non-visual check passed
    while the machine was in fact locking to Omarchy's blurred wallpaper, and the
    image was the only thing that said so.

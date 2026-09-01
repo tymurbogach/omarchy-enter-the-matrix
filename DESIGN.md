@@ -46,30 +46,78 @@ away is what makes the rest of this cheap -- with nothing after the text, the
 first N characters of a line are exactly the first N cells of a picture of it,
 so typing is a crop.
 
+The way out gets its own lines. `Plymouth.GetMode()` reports what `plymouthd`
+was started with, and it is already right at the top of the script -- not only
+inside a callback, which is the one place `omarchy.script` asks it -- so the
+whole storyboard is chosen before the first frame rather than swapped
+mid-flight:
+
+```
+boot        Wake up, Neo...            /  The Matrix has you...
+            Follow the white rabbit.   /  Knock, knock, Neo.
+
+shutdown    Goodbye, Mr. Anderson.     /  Unplug him.
+
+reboot      Déjà vu.                   /  They changed something.
+```
+
+The panel does not come to the exits. Nothing asks for a passphrase on the way
+out, so there is no dialog and no progress readout — just the words on black.
+That took a fix: `plymouthd` feeds boot progress in `--mode=shutdown` as well,
+and the readout's fill turned *itself* on, so a shutdown used to show one lit
+cell of the track floating on an empty screen with no panel behind it.
+
+**There are two exits, not three.** `plymouth-halt.service`,
+`plymouth-poweroff.service` and `plymouth-kexec.service` all run
+`plymouthd --mode=shutdown`; only `plymouth-reboot.service` differs. A halt
+cannot be told apart from a power off from inside the script, so there is no
+`halt` entry in `provider.json` -- it would be configuration that never runs.
+
+Two things follow from an exit being *short*. It lives until the machine stops,
+which is a couple of seconds, so the exits type half again as fast, hold for
+half as long, and start with no held black -- and even then, assume only the
+**first** line is ever seen, which is why the first line of each is the payoff.
+And the type size does not change: the cell every mode is drawn on comes from
+the longest **boot** line, so a shorter exit line is not blown up to fill the
+same width. `derive-plymouth.py` checks instead that no line of any mode runs
+off the right-hand edge at that size.
+
+Any mode the dispatch does not name -- `updates`, `firmware-upgrade`, whatever
+Plymouth grows next -- falls through to the boot lines rather than to a blank
+screen. Modes are slices of one flat step table, so that fallback is two
+numbers rather than a branch.
+
 And in the middle, where Omarchy puts its dialog, the film's framed panel: a
-caption on its top rule between two little block widgets, the disk's own prompt
-above it dimmed, one dash per character typed, and `[ CAPS LOCK ]` underneath
-when it is on, which Omarchy's dialog does not tell you.
+FILLED title band across its top, the way an old window manager's title bar
+is rather than a rule with a caption-shaped hole in it, two hollow corner
+widgets sitting inside that band, one dash per character typed -- centred as a
+group in the row below, not anchored to the left edge, so a passphrase does
+not end up stranded off to one side of a box wide enough for a much longer
+one -- and `[ CAPS LOCK ]` underneath when it is on, which Omarchy's dialog
+does not tell you. The disk's own prompt is not drawn above it any more:
+once the band carries its own caption, saying "enter password" twice was the
+panel repeating itself.
 
 ```
-        Please enter passphrase for disk nvme0n1p2 (cryptroot):
-
-   +--[]  []-------------- enter password ------------------[]--+
-   |                                                            |
-   |    - - - - - - -                                           |
-   |                                                            |
-   +------------------------------------------------------------+
+   ┌──[■][■]───────────── enter password ─────────────────[■■]──┐
+   │                                                              │
+   │                        - - - - - - -                        │
+   │                                                              │
+   └──────────────────────────────────────────────────────────────┘
 ```
+
+(The top row is filled, caption in the panel's own dark ink on top of it --
+ASCII cannot really draw that, only the shape of it.)
 
 Once it is answered the boot's progress takes the same panel -- same frame, same
 row, same grid, only the caption changes:
 
 ```
-   +--[]  []------------------ booting ---------------------[]--+
-   |                                                            |
-   |    ########------------                             42%    |
-   |                                                            |
-   +------------------------------------------------------------+
+   ┌──[■][■]───────────────── booting ─────────────────────[■■]──┐
+   │                                                              │
+   │    ########------------                              42%    │
+   │                                                              │
+   └──────────────────────────────────────────────────────────────┘
 ```
 
 One panel with two captions rather than a panel and then a bare bar: a boot that
@@ -111,6 +159,11 @@ Details that explain the design, each of them forced by something:
   worked out at derive time from `hyprctl` is wrong the moment you dock.
 - **The step table is generated in Python.** A step is two integers -- which
   line, how much of it -- so the script needs no `SubString` and no `Length`.
+- **The face is asked whether it has every character, not just the mask.** A
+  missing glyph draws *nothing* in freetype -- no box, no warning -- so
+  `Déjà vu.` in a face without accents comes out with two holes in it and
+  nothing anywhere says why. The deriver renders every character in use as one
+  strip and measures the ink in each cell.
 - **The colours are measured, not chosen.** The panel's ice blue was sampled off
   the frames themselves. The first guess was a mint green-cyan, and beside the
   real thing it was obviously the wrong colour: what matters is that blue sits

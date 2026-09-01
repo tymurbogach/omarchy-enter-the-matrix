@@ -59,6 +59,37 @@
       "Follow the white rabbit.",
       "Knock, knock, Neo."
     ],
+    "//modes": [
+      "What is typed on the way OUT, keyed by the mode plymouthd was started",
+      "with -- which is what the theme's `Plymouth.GetMode()` reports. `boot` is",
+      "`lines` above; anything named here replaces it for that mode only.",
+      "",
+      "THERE ARE ONLY TWO EXITS, not three. `plymouth-halt.service`,",
+      "`plymouth-poweroff.service` and `plymouth-kexec.service` all start the",
+      "daemon with --mode=shutdown -- only `plymouth-reboot.service` differs. So",
+      "a halt cannot be told apart from a power off from inside the script, and",
+      "a `halt` key here would be config that never runs.",
+      "",
+      "The exits are SHORT: the splash lives until the machine does, which is a",
+      "couple of seconds. Only the first line is reliably seen, so the first line",
+      "is the payoff -- see EXIT_PACE in bin/derive-plymouth.py, which types",
+      "these faster and holds them for less than the boot's.",
+      "",
+      "Shutdown answers the boot: it opens by waking Mr. Anderson and closes by",
+      "saying goodbye to him, and `Unplug him.` is what is actually happening.",
+      "Reboot is the film's own definition of one -- a deja vu is a glitch in the",
+      "Matrix, and it happens when they change something."
+    ],
+    "modes": {
+      "shutdown": [
+        "Goodbye, Mr. Anderson.",
+        "Unplug him."
+      ],
+      "reboot": [
+        "D\u00e9j\u00e0 vu.",
+        "They changed something."
+      ]
+    },
     "//color": [
       "The typed lines' colour, r, g, b in 0..1 -- and DELIBERATELY ABSENT.",
       "",
@@ -73,17 +104,40 @@
       "The passphrase box, a different colour from the lines on purpose: in the",
       "film the terminal runs green and the boxed prompt is an ice blue.",
       "",
-      "MEASURED, not chosen. Sampled off the frames themselves -- #75C8D9 is the",
-      "box's mid-tone, and the close-ups run brighter at #A8D9E4 and #D5F9FA.",
-      "What matters is that BLUE sits above green here (B 217 > G 200 > R 117);",
-      "the first guess at this was a mint #7FFFE0, green-dominant, and it read",
-      "as the wrong colour immediately beside the real thing.",
+      "MEASURED, not chosen -- twice. #75C8D9 was the first pass, sampled off a",
+      "wider shot of the frame; on the reference's own close-up screenshot the",
+      "flat fill of the band itself (not the bloom on its brightest pixels, not",
+      "the border) averages a good deal whiter, #B2DDE5. That is what is here",
+      "now. What matters is that BLUE still sits above green (E 229 > D 221 >",
+      "B 178 in 0..255); the first guess at any of this was a mint #7FFFE0,",
+      "green-dominant, and it read as the wrong colour immediately beside the",
+      "real thing.",
       "",
       "Omit it and the box takes `color`, so an older provider is unaffected."
     ],
-    "dialogColor": [0.459, 0.784, 0.851],
-    "//titles": "On the box's rule, the way an old window manager captioned one.",
+    "dialogColor": [0.698, 0.867, 0.898],
+    "//titles": [
+      "On the box's rule, the way an old window manager captioned one.",
+      "progressTitle also captions the ACCESS GRANTED flash: they share one",
+      "panel (the bar takes the passphrase field's own row), so one caption."
+    ],
     "boxTitle": "enter password",
-    "progressTitle": "booting"
+    "progressTitle": "RTF CONTROL",
+
+    "//grantedDenied": [
+      "The one-shot feedback shown in the passphrase field's own row.",
+      "",
+      "ACCESS GRANTED plays once, in the progress box, the moment the",
+      "passphrase is accepted -- then the panel hands that row to the real",
+      "progress track for the rest of boot.",
+      "",
+      "ACCESS DENIED plays in the password box when Plymouth re-asks for a",
+      "passphrase. That is a HEURISTIC, not a real signal: the script API never",
+      "tells a rejected passphrase apart from the user backspacing the field to",
+      "nothing by hand, because both look exactly like a fresh",
+      "display_password_callback with bullets back at 0. See derive-plymouth.py."
+    ],
+    "grantedText": "ACCESS GRANTED",
+    "deniedText": "ACCESS DENIED"
   }
 }

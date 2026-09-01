@@ -50,7 +50,7 @@ omarchy-matrix doctor            # assert everything again
 | `wallpaper` | Rain on the desktop, above the wallpaper and below every window. Clicks go through it, and Omarchy's own background is not touched. On mains it always rains; on battery, only while no window is on the active workspace. |
 | `screensaver` | Rain when you go idle, on your `shell.json` idle timing. It behaves like Omarchy's own: the pointer is hidden, the mouse does not dismiss it, any key does. |
 | `lock` | Rain behind the password field. |
-| `boot` | The screen before login, typing out the four lines from the film. Needs your password and rebuilds the initramfs, so it never applies on its own. |
+| `boot` | The screen before login, typing out the four lines from the film — and two more on the way out, different for a shutdown and for a reboot. Needs your password and rebuilds the initramfs, so it never applies on its own. |
 | `widget` | The Matrix icon on the bar: the four switches above with a ✓ each, plus Repair and Uninstall. |
 
 The desktop rain is one more background in the carousel, `1-live-rain`.
@@ -66,7 +66,8 @@ than shipping a frozen copy of it — the lock starts from your machine's
 Omarchy's fixes keep arriving. [DESIGN.md](DESIGN.md) explains why, at length.
 
 Try the lock without locking yourself out: `omarchy-shell lock preview`. See the
-boot splash without rebooting: `bin/preview-plymouth.sh`.
+boot splash without rebooting: `bin/preview-plymouth.sh`, and the shutdown one
+without shutting down: `bin/preview-plymouth.sh <scenario> --mode shutdown`.
 
 > **If your disk is encrypted**, Plymouth is also what asks for your passphrase.
 > The pack adds a callback rather than editing one, and falls back to Omarchy's

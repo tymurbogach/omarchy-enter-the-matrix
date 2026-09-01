@@ -33,7 +33,13 @@
 # see the difference.
 #
 #   ./bin/preview-plymouth.sh scenario.sh [--out DIR] [--theme NAME]
-#                             [--stage DIR] [--pango] [--keep]
+#                             [--stage DIR] [--mode NAME] [--pango] [--keep]
+#
+# --mode is what plymouthd is started with, and therefore what the theme's
+# `Plymouth.GetMode()` reports: `boot` (the default), `shutdown` or `reboot`.
+# It is the only way to see the exit splashes without actually turning the
+# machine off. NOTE that `halt`, `poweroff` and `kexec` are NOT modes of their
+# own -- all three units start plymouthd with --mode=shutdown.
 #
 # The scenario is a bash file run inside the sandbox, once the splash is up.
 # Two helpers are in scope:
@@ -92,6 +98,7 @@ if [[ ${MX_PREVIEW_STAGE:-} != inner ]]; then
   OUT="$PWD/plymouth-preview"
   THEME=""
   STAGE=""
+  MODE=boot
   LABEL=freetype
   KEEP=0
 
@@ -100,6 +107,7 @@ if [[ ${MX_PREVIEW_STAGE:-} != inner ]]; then
     --out) OUT=$2; shift 2 ;;
     --theme) THEME=$2; shift 2 ;;
     --stage) STAGE=$2; shift 2 ;;
+    --mode) MODE=$2; shift 2 ;;
     --pango) LABEL=pango; shift ;;
     --keep) KEEP=1; shift ;;
     -h | --help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \?//;$d'; exit 0 ;;
@@ -110,6 +118,10 @@ if [[ ${MX_PREVIEW_STAGE:-} != inner ]]; then
 
   [[ -n $SCENARIO ]] || die "no scenario given. See --help."
   [[ -f $SCENARIO ]] || die "no such scenario: $SCENARIO"
+  case "$MODE" in
+  boot | shutdown | reboot | updates | system-upgrade | firmware-upgrade) ;;
+  *) die "unknown --mode $MODE (boot, shutdown, reboot, updates, system-upgrade, firmware-upgrade)" ;;
+  esac
   command -v grim >/dev/null || die "grim is needed to photograph the splash"
   command -v unshare >/dev/null || die "unshare is needed (util-linux)"
   [[ -n ${WAYLAND_DISPLAY:-} ]] || die "no WAYLAND_DISPLAY: run this from your desktop session"
@@ -158,13 +170,15 @@ sys.exit('cannot find provider.json')
   echo "$SELF: previewing $THEME"
   echo "  from    $STAGE"
   echo "  shots   $OUT"
+  echo "  mode    $MODE"
   echo "  labels  $LABEL$([[ $LABEL == freetype ]] && echo "  (as the initramfs has it)")"
   echo "  font    $(basename "$FONT_MAIN"), mono $(basename "$FONT_MONO")"
 
   exec unshare --user --map-root-user --mount --propagation private \
     env MX_PREVIEW_STAGE=inner \
     MX_THEME="$THEME" MX_STAGE="$STAGE" MX_OUT="$OUT" \
-    MX_LABEL="$LABEL" MX_KEEP="$KEEP" MX_SCENARIO="$(realpath "$SCENARIO")" \
+    MX_LABEL="$LABEL" MX_KEEP="$KEEP" MX_MODE="$MODE" \
+    MX_SCENARIO="$(realpath "$SCENARIO")" \
     MX_FONT_MAIN="$FONT_MAIN" MX_FONT_MONO="$FONT_MONO" \
     MX_FONT_MONO_BOLD="$FONT_MONO_BOLD" \
     bash "$0"
@@ -175,6 +189,7 @@ fi
 THEME=$MX_THEME
 STAGE=$MX_STAGE
 OUT=$MX_OUT
+MODE=$MX_MODE
 SCENARIO=$MX_SCENARIO
 
 # /run is about to be replaced wholesale, and the compositor's sockets live
@@ -300,7 +315,7 @@ cleanup() {
 
 export DISPLAY=${DISPLAY:-:0}
 plymouthd --no-daemon --debug --debug-file="$WORK/plymouthd.log" \
-  --mode=boot --tty="$TTY" &
+  --mode="$MODE" --tty="$TTY" &
 PLYMOUTHD=$!
 trap cleanup EXIT
 

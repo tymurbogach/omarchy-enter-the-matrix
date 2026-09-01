@@ -63,6 +63,21 @@ TARGET = Path("/usr/share/plymouth/themes") / THEME
 # What is typed out at boot, in order.
 LINES = PROVIDER["plymouth"]["lines"]
 
+# ...and what is typed on the way out. Keyed by the mode plymouthd was started
+# with, which is exactly what `Plymouth.GetMode()` hands back -- verified with
+# `preview-plymouth.sh --mode`, and verified at the TOP of the script rather
+# than inside a callback, which is what lets the whole storyboard be chosen
+# before the first frame is drawn.
+#
+# ONLY TWO EXITS EXIST. plymouth-halt.service, plymouth-poweroff.service and
+# plymouth-kexec.service all run `plymouthd --mode=shutdown`; only
+# plymouth-reboot.service differs. A `halt` key would be config that never runs,
+# so there is not one.
+#
+# A mode with no entry falls through to LINES, so an older provider.json -- and
+# any provider that does not care -- keeps exactly the splash it had.
+MODE_LINES = {"boot": LINES, **(PROVIDER["plymouth"].get("modes") or {})}
+
 # The typed lines take the THEME's `green` -- its accent, out of colors.toml at
 # derive time. Repeating the hex in provider.json would work today and drift the
 # first time the palette moved.
@@ -83,10 +98,28 @@ DIALOG_HEX = "".join(f"{round(channel * 255):02X}" for channel in DIALOG_COLOUR)
 BOX_TITLE = PROVIDER["plymouth"].get("boxTitle", "enter password")
 PROGRESS_TITLE = PROVIDER["plymouth"].get("progressTitle", "booting")
 
+# The title band's own ink. The band is FILLED with the dialog colour --
+# like an old window manager's title bar, not a rule with a gap knocked in it
+# for the caption, which is what this drew before and reads as a plain
+# terminal divider rather than a window. Dark text and hollow corner widgets
+# sit on top of it, the way the band inverts against the caption underneath.
+# Measured off the reference screenshot's darkest pixels rather than flat
+# black, so it keeps the same blue bias as the dialog colour instead of
+# reading as a second, unrelated ink.
+BAND_INK_HEX = "04121A"
+
+# The one-shot feedback, drawn in the SAME row the passphrase's dashes sit in
+# -- "the bar in the passphrase's own place" holds for these too: each takes
+# that row over for a beat, then hands it back. GRANTED is a real signal (it
+# plays exactly when Plymouth stops asking and boot proceeds); DENIED is not
+# -- see mx_password_callback in DIALOG below for why.
+GRANTED_TEXT = PROVIDER["plymouth"].get("grantedText", "ACCESS GRANTED")
+DENIED_TEXT = PROVIDER["plymouth"].get("deniedText", "ACCESS DENIED")
+
 # The family Plymouth is told about in the .plymouth. It decides which single
-# TTF the mkinitcpio hook copies into the initramfs, and therefore what the few
-# things still drawn as TEXT come out in -- the disk's own prompt and the caps
-# lock label. Everything whose shape matters is a PNG instead; see FONT_FILE.
+# TTF the mkinitcpio hook copies into the initramfs, and therefore what the one
+# thing still drawn as TEXT comes out in -- the caps lock label. Everything
+# whose shape matters is a PNG instead; see FONT_FILE.
 FONT = "JetBrainsMono Nerd Font"
 
 # ...and the face the splash is actually drawn in, as a FILE, out of the theme's
@@ -134,6 +167,32 @@ GAP_PAUSE = 60              # cleared screen, before the next line
 # never reached. That is the accepted price of a readable pace: the film's
 # terminal types slowly, and 25 keystrokes a second read as a blur.
 
+# The way out is not the way in, and it is much shorter. A boot's splash lives
+# for as long as the disk takes to unlock; an exit's lives until the machine
+# stops, which on this laptop is a couple of seconds. At the boot pace the first
+# line would still be typing itself when the power went.
+#
+# So: no held black at the start, half again the keystroke rate, and a hold long
+# enough to read once rather than to sit on. Even then, assume only the FIRST
+# line is ever seen -- which is why the first line of each exit is the payoff.
+EXIT_FRAMES_PER_CHAR = 3    # -> ~17 keystrokes a second
+EXIT_OPEN_PAUSE = 10
+EXIT_HOLD_PAUSE = 50
+EXIT_GAP_PAUSE = 25
+
+# How long the one-shot feedback holds the passphrase row before handing it
+# back -- to the progress track for GRANTED, to an empty field for DENIED.
+GRANTED_HOLD = 60           # 1.2s
+DENIED_HOLD = 60            # 1.2s
+
+
+def pace(mode):
+    """Frames per character, and the three pauses, for one Plymouth mode."""
+    if mode == "boot":
+        return FRAMES_PER_CHAR, OPEN_PAUSE, HOLD_PAUSE, GAP_PAUSE
+    return (EXIT_FRAMES_PER_CHAR, EXIT_OPEN_PAUSE, EXIT_HOLD_PAUSE,
+            EXIT_GAP_PAUSE)
+
 # --- layout, all of it in fractions of the window ---------------------------
 # NOTHING here is a pixel count, and no point size is worked out at derive time.
 # Plymouth draws at the panel's NATIVE resolution, so a size chosen against
@@ -145,7 +204,8 @@ TEXT_X = 0.055              # left margin of Neo's terminal
 TEXT_Y = 0.085              # and how far down it starts
 TEXT_WIDTH = 0.42           # what the longest line takes up
 KEY_CELLS = 21              # dashes shown for a passphrase, at most
-PROMPT_WIDTH = 0.42         # the disk's own prompt, when it fits
+PROMPT_WIDTH = 0.42         # sizes the CAPS LOCK label; the disk's own prompt
+                            # this was named for is no longer drawn
 
 # --- the box ----------------------------------------------------------------
 # The film's prompt is a framed panel with a caption on its top rule. It is one
@@ -194,9 +254,9 @@ def literal(text):
     return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def storyboard():
-    """The typing, already resolved into steps: which line, how much of it, and
-    for how many frames.
+def storyboard(mode="boot"):
+    """The typing for one mode, already resolved into steps: which line, how
+    much of it, and for how many frames.
 
     Generated here rather than inside the Plymouth script on purpose -- that way
     the .script needs no SubString, no Length and no string slicing. It used to
@@ -213,14 +273,20 @@ def storyboard():
 
     A step with 0 characters shown is a held blank -- the pause before the first
     line, and the cleared screen between them.
+
+    `line` is an index into MODE_IMAGES[mode], not into the mode's own list --
+    every mode's pictures share one flat table in the script, so a step can be
+    used without knowing which mode it came from.
     """
-    steps = [(0, 0, OPEN_PAUSE)]
-    for index, phrase in enumerate(LINES):
+    lines = MODE_LINES[mode]
+    per_char, open_pause, hold_pause, gap_pause = pace(mode)
+    steps = [(0, 0, open_pause)]
+    for index, phrase in enumerate(lines):
         for n in range(1, len(phrase) + 1):
-            steps.append((index, n, FRAMES_PER_CHAR))
-        steps.append((index, len(phrase), HOLD_PAUSE))
-        if index != len(LINES) - 1:
-            steps.append((index, 0, GAP_PAUSE))
+            steps.append((index, n, per_char))
+        steps.append((index, len(phrase), hold_pause))
+        if index != len(lines) - 1:
+            steps.append((index, 0, gap_pause))
     return steps
 
 
@@ -257,9 +323,9 @@ TYPING = string.Template("""
 # Nothing here is a pixel count. Sizes come from the window and from ratios
 # measured at derive time, never from the machine this was generated on.
 
-global.mx_r = $R;   # the box's colour. The only things still drawn as TEXT are
-global.mx_g = $G;   # the disk's own prompt and the caps label -- both of them
-global.mx_b = $B;   # belong to the box, so both take its colour.
+global.mx_r = $R;   # the box's colour. The one thing still drawn as TEXT is
+global.mx_g = $G;   # the caps lock label, which belongs to the box, so it
+global.mx_b = $B;   # takes its colour too.
 global.mx_font = "$FONT";
 global.mx_w = Window.GetWidth();
 global.mx_h = Window.GetHeight();
@@ -276,18 +342,46 @@ fun mx_fit(text, target) {
   return size;
 }
 
-# One cell for all four lines: they were rendered at one point size in one
-# monospace face, so scaling each to its own character count keeps them on a
+# One cell for every line of every mode: they were rendered at one point size in
+# one monospace face, so scaling each to its own character count keeps them on a
 # single grid. $LINE_ASPECT is a RATIO measured at derive time -- the line's
 # height over one cell's width -- so it survives any panel.
+#
+# $WIDEST_CELLS is the longest BOOT line, not the longest line there is. That is
+# what fixes the size: the boot lines are the ones whose size, colour and face
+# were settled by looking at them, and an exit whose longest line is shorter
+# would otherwise be typed LARGER to fill the same $TEXT_WIDTH. Every mode
+# therefore shares the boot's cell, and the deriver checks that no line of any
+# mode runs off the right-hand edge at it.
 global.mx_cell_w = global.mx_w * $TEXT_WIDTH / $WIDEST_CELLS;
 global.mx_line_h = Math.Int(global.mx_cell_w * $LINE_ASPECT);
 $LINE_LOAD
 
-global.mx_steps = $STEPS;
 $TABLE
 
-global.mx_step = 0;
+# Which storyboard plays, decided before the first frame.
+#
+# `Plymouth.GetMode()` is what plymouthd was started with, and it is already
+# right HERE, at load time -- not only inside a callback, which is the only
+# place omarchy.script asks it. Checked with `preview-plymouth.sh --mode`:
+# probes at the top and the bottom of the file both read `shutdown` under
+# --mode=shutdown. So the whole sequence can be selected rather than swapped
+# mid-flight.
+#
+# Every mode's steps and pictures live in the ONE flat table above; a mode is
+# just a slice of it. That keeps this dispatch to two numbers, and it means an
+# unknown mode -- `updates`, `firmware-upgrade`, anything Plymouth grows later
+# -- falls through to the boot lines rather than to a blank screen.
+#
+# There are only TWO exits to have a slice for. plymouth-halt.service,
+# plymouth-poweroff.service and plymouth-kexec.service all start the daemon with
+# --mode=shutdown; only plymouth-reboot.service differs. A halt cannot be told
+# apart from a power off from in here.
+global.mx_mode = Plymouth.GetMode();
+global.mx_step = $BOOT_FIRST;
+global.mx_end = $BOOT_END;
+$DISPATCH
+
 global.mx_frame = 0;
 global.mx_painted = -1;
 
@@ -315,11 +409,12 @@ fun mx_paint(step) {
 
 fun mx_tick() {
   mx_caps_tick();
+  mx_feedback_tick();
 
-  if (global.mx_step >= global.mx_steps) return;
+  if (global.mx_step >= global.mx_end) return;
 
   if (global.mx_painted == -1) {
-    mx_paint(0);
+    mx_paint(global.mx_step);
     return;
   }
 
@@ -329,8 +424,9 @@ fun mx_tick() {
   global.mx_frame = 0;
   global.mx_step++;
   # At the end it rests on the last line rather than looping: a boot is shorter
-  # than the whole sequence, and starting over would be noticeable.
-  if (global.mx_step >= global.mx_steps) return;
+  # than the whole sequence, and starting over would be noticeable. An exit is
+  # shorter still -- the machine usually stops before the second line.
+  if (global.mx_step >= global.mx_end) return;
   mx_paint(global.mx_step);
 }
 
@@ -348,6 +444,12 @@ global.mx_dialog_on = 0;
 global.mx_bullets = -1;
 global.mx_caps_state = -1;
 global.mx_percent = -1;
+# Whether the progress readout is on screen at all. It is NOT the same question
+# as "what is the percentage": see mx_progress.
+global.mx_bar_on = 0;
+# Countdown, in frames, of the one-shot feedback -- see mx_feedback_tick().
+global.mx_denied_frames = 0;
+global.mx_granted_frames = 0;
 """)
 
 
@@ -362,9 +464,11 @@ DIALOG = string.Template("""
 # the passphrase path has been edited. If any of this ever fails to load,
 # Omarchy's dialog is still whole underneath.
 #
-# It hangs off `entry.y`, which is Omarchy's own idea of where a dialog goes.
-# That is deliberate: the middle of the screen should stay where Omarchy puts
-# it, whatever Omarchy decides that is.
+# It hangs off `entry.y`, Omarchy's own idea of where a dialog goes -- raised
+# a bit from there, not left exactly on it. Photographed sitting right at the
+# bottom edge of the screen with entry.y as the top, which read as too low
+# once the panel was its own filled window rather than a thin rule; entry.y
+# is still the anchor, `mx_box_lift` just moves the box up off it.
 #
 # ONE panel, two captions. The passphrase and the progress readout are never on
 # screen together, so they share the frame as well as the row -- swapping a
@@ -377,13 +481,25 @@ DIALOG = string.Template("""
 global.mx_box_w = Math.Int(global.mx_w * $BOX_WIDTH);
 global.mx_box_h = Math.Int(global.mx_box_w * $BOX_ASPECT);
 
+global.mx_box_x = Math.Int((global.mx_w - global.mx_box_w) / 2);
+global.mx_box_lift = Math.Int(global.mx_h * 0.15);
+global.mx_box_y = entry.y - global.mx_box_lift;
+
+# BOX_ASPECT is derive-time -- baked from THIS machine's font metrics, never
+# from a screen it has not seen. entry.y is boot-time, and on a panel where
+# it sits low there may not be BOX_ASPECT's worth of room under it even after
+# the lift above: measured, not assumed, on this machine's own panel, where
+# the unlifted box once ran off the bottom of the screen entirely. So the
+# height is clamped against the window Plymouth is actually drawing into, the
+# same way the type sizes elsewhere in this file are measured at boot rather
+# than baked in.
+global.mx_box_room = global.mx_h - global.mx_box_y - Math.Int(global.mx_h * 0.02);
+if (global.mx_box_h > global.mx_box_room) global.mx_box_h = global.mx_box_room;
+
 mx_box.key = Image("box-key.png");
 mx_box.bar = Image("box-bar.png");
 mx_box.key_scaled = mx_box.key.Scale(global.mx_box_w, global.mx_box_h);
 mx_box.bar_scaled = mx_box.bar.Scale(global.mx_box_w, global.mx_box_h);
-
-global.mx_box_x = Math.Int((global.mx_w - global.mx_box_w) / 2);
-global.mx_box_y = entry.y;
 
 mx_box.sprite = Sprite();
 mx_box.sprite.SetPosition(global.mx_box_x, global.mx_box_y, 10000);
@@ -408,16 +524,38 @@ mx_key.sprite = Sprite();
 mx_key.sprite.SetPosition(global.mx_in_x, global.mx_in_y, 10001);
 mx_key.sprite.SetOpacity(0);
 
-# The disk's own prompt, dimmed, above the panel. It is the one thing here that
-# cannot be baked -- LUKS writes it at boot -- so it stays text, in whatever
-# face the initramfs holds. That is defensible: it is the system talking, not
-# the theme.
+# The one-shot feedback -- ACCESS GRANTED and ACCESS DENIED -- drawn in this
+# SAME row, at this same height, and centred on the PANEL rather than pinned to
+# mx_in_x: neither is built cell by cell like the row above it, each is one
+# label scaled by its own aspect, so it is not generally $KEY_CELLS cells wide.
+mx_granted.image = Image("granted.png");
+mx_granted.scaled = mx_granted.image.Scale(Math.Int(global.mx_in_h * $GRANTED_ASPECT), global.mx_in_h);
+# The image goes to the CONSTRUCTOR, not a later SetImage(): unlike mx_key or
+# mx_fill, this content never changes, so there is no crop to redraw later.
+mx_granted.sprite = Sprite(mx_granted.scaled);
+mx_granted.sprite.SetPosition(
+  global.mx_box_x + Math.Int((global.mx_box_w - mx_granted.scaled.GetWidth()) / 2),
+  global.mx_in_y, 10002);
+mx_granted.sprite.SetOpacity(0);
+
+mx_denied.image = Image("denied.png");
+mx_denied.scaled = mx_denied.image.Scale(Math.Int(global.mx_in_h * $DENIED_ASPECT), global.mx_in_h);
+mx_denied.sprite = Sprite(mx_denied.scaled);
+mx_denied.sprite.SetPosition(
+  global.mx_box_x + Math.Int((global.mx_box_w - mx_denied.scaled.GetWidth()) / 2),
+  global.mx_in_y, 10002);
+mx_denied.sprite.SetOpacity(0);
+
+# The disk's own prompt used to be drawn here too, dimmed, above the panel --
+# but the panel now has its own caption baked into its band ("enter
+# password"), so the disk's words on top of ours just repeated the question.
+# Dropped rather than kept and hidden.
+#
+# `mx_prompt_size`/`mx_prompt_face` survive -- they are not really about the
+# prompt any more, they are the shared type size the CAPS LOCK label below
+# still sizes itself from, and changing that would be its own regression.
 global.mx_prompt_size = mx_fit($PROMPT_PROBE, global.mx_w * $PROMPT_WIDTH);
 global.mx_prompt_face = global.mx_font + " " + global.mx_prompt_size;
-global.mx_prompt_shown = "";
-
-mx_prompt.sprite = Sprite();
-mx_prompt.sprite.SetOpacity(0);
 
 mx_caps.image = Image.Text($CAPS_TEXT, global.mx_r, global.mx_g, global.mx_b, 1,
                            global.mx_prompt_face);
@@ -465,6 +603,7 @@ fun mx_bar_show(on) {
   # fill comes back with a fresh crop instead of the one from the last boot
   # phase.
   global.mx_percent = -1;
+  global.mx_bar_on = on;
   mx_fill.sprite.SetOpacity(0);
   if (on == 0) {
     mx_track.sprite.SetOpacity(0);
@@ -475,28 +614,6 @@ fun mx_bar_show(on) {
     mx_track.sprite.SetOpacity($TRACK_ALPHA);
     mx_pct_show(1);
   }
-}
-
-fun mx_prompt_show(text) {
-  if (text != global.mx_prompt_shown) {
-    global.mx_prompt_shown = text;
-    # Dimmed with alpha rather than a darker colour: it stays the same hue as
-    # the panel, which is what makes it read as one thing.
-    image = Image.Text(text, global.mx_r, global.mx_g, global.mx_b, 0.55,
-                       global.mx_prompt_face);
-    # A LUKS prompt naming a device by UUID can be far wider than the screen,
-    # and there is no wrapping to save us. Too wide, and we say it ourselves.
-    if (image.GetWidth() > global.mx_w * 0.9) {
-      image = Image.Text($PROMPT_FALLBACK, global.mx_r, global.mx_g, global.mx_b,
-                         0.55, global.mx_prompt_face);
-    }
-    mx_prompt.sprite.SetImage(image);
-    mx_prompt.sprite.SetPosition(
-      Math.Int((global.mx_w - image.GetWidth()) / 2),
-      global.mx_box_y - Math.Int(global.mx_prompt_size * 1.8),
-      10001);
-  }
-  mx_prompt.sprite.SetOpacity(1);
 }
 
 # Driven from mx_tick() on every frame. It used to hang off the caret's blink;
@@ -514,12 +631,31 @@ fun mx_caps_tick() {
   }
 }
 
+# Driven from mx_tick() on every frame, same as mx_caps_tick(). Counts down
+# whichever of the two one-shot feedback images is up, and hands its row back
+# when the count runs out: to the progress track for GRANTED, to the (already
+# cleared, by mx_password_callback) passphrase field for DENIED.
+fun mx_feedback_tick() {
+  if (global.mx_denied_frames > 0) {
+    global.mx_denied_frames = global.mx_denied_frames - 1;
+    if (global.mx_denied_frames == 0) mx_denied.sprite.SetOpacity(0);
+  }
+  if (global.mx_granted_frames > 0) {
+    global.mx_granted_frames = global.mx_granted_frames - 1;
+    if (global.mx_granted_frames == 0) {
+      mx_granted.sprite.SetOpacity(0);
+      mx_bar_show(1);
+    }
+  }
+}
+
 fun mx_hide_dialog() {
   global.mx_dialog_on = 0;
   global.mx_bullets = -1;
   global.mx_caps_state = -1;
+  global.mx_denied_frames = 0;
   mx_key.sprite.SetOpacity(0);
-  mx_prompt.sprite.SetOpacity(0);
+  mx_denied.sprite.SetOpacity(0);
   mx_caps.sprite.SetOpacity(0);
   mx_box.sprite.SetOpacity(0);
 }
@@ -534,10 +670,27 @@ fun mx_password_callback(prompt, bullets) {
 
   mx_box.sprite.SetImage(mx_box.key_scaled);
   mx_box.sprite.SetOpacity(1);
-  mx_prompt_show(prompt);
 
   shown = bullets;
   if (shown > $KEY_CELLS) shown = $KEY_CELLS;
+
+  if (shown > 0 && global.mx_denied_frames > 0) {
+    # Typing resumed while the DENIED flash was still up: cut it short rather
+    # than sit in front of what the user is typing right now.
+    global.mx_denied_frames = 0;
+    mx_denied.sprite.SetOpacity(0);
+  }
+
+  if (global.mx_dialog_on == 1 && shown == 0 && global.mx_bullets > 0 &&
+      global.mx_denied_frames == 0) {
+    # HEURISTIC, not a real signal -- see provider.json's //grantedDenied.
+    # Plymouth re-asking after a rejected passphrase calls this with the same
+    # prompt and bullets back at 0, and there is nothing else here to tell
+    # that apart from the user backspacing the field to nothing by hand.
+    global.mx_denied_frames = $DENIED_HOLD;
+    mx_denied.sprite.SetOpacity(1);
+  }
+
   if (shown != global.mx_bullets) {
     global.mx_bullets = shown;
     if (shown < 1) {
@@ -545,8 +698,17 @@ fun mx_password_callback(prompt, bullets) {
       # "nothing typed yet" should look like anyway.
       mx_key.sprite.SetOpacity(0);
     } else {
-      mx_key.sprite.SetImage(
-        mx_key.scaled.Crop(0, 0, Math.Int(shown * global.mx_cell), global.mx_in_h));
+      # Centred as a GROUP, not left-anchored -- the reference shows the
+      # dashes centred in the box, the same as GRANTED/DENIED are, and a
+      # field anchored at mx_in_x instead left a typed passphrase stranded
+      # off to one side of a box wide enough for KEY_CELLS characters. It
+      # re-centres on every keystroke, so the block grows outward from its
+      # own middle rather than sliding as a whole.
+      key_w = Math.Int(shown * global.mx_cell);
+      mx_key.sprite.SetPosition(
+        global.mx_box_x + Math.Int((global.mx_box_w - key_w) / 2),
+        global.mx_in_y, 10001);
+      mx_key.sprite.SetImage(mx_key.scaled.Crop(0, 0, key_w, global.mx_in_h));
       mx_key.sprite.SetOpacity(1);
     }
   }
@@ -563,10 +725,35 @@ fun mx_normal_callback() {
   progress_box.sprite.SetOpacity(0);
   progress_bar.sprite.SetOpacity(0);
   mx_hide_dialog();
-  if (global.password_shown == 1) mx_bar_show(1);
+  if (global.password_shown == 1) {
+    # ACCESS GRANTED first, in the passphrase's own row -- mx_feedback_tick()
+    # hands the row to the real progress track once $GRANTED_HOLD runs out.
+    mx_box.sprite.SetImage(mx_box.bar_scaled);
+    mx_box.sprite.SetOpacity(1);
+    mx_granted.sprite.SetOpacity(1);
+    global.mx_granted_frames = $GRANTED_HOLD;
+  }
 }
 
 fun mx_progress(fraction) {
+  # Nothing is drawn unless the readout is actually on screen, and that is not a
+  # tidiness check -- without it the fill turns ITSELF on, since it is the only
+  # thing that knows how wide the crop should be.
+  #
+  # Photographed: on the way out the splash showed one lit cell of the track
+  # floating in the middle of a black screen, with no panel and no track behind
+  # it. plymouthd feeds progress into `Plymouth.SetBootProgressFunction` in
+  # --mode=shutdown and --mode=reboot as well as --mode=boot, and nothing on an
+  # exit ever asks for a passphrase, so mx_bar_show(1) is never reached and the
+  # panel that block belongs to is never shown.
+  #
+  # The opacity is cleared rather than merely left alone: a percent arriving
+  # after the readout was hidden must not leave the last crop lit.
+  if (global.mx_bar_on == 0) {
+    mx_fill.sprite.SetOpacity(0);
+    return;
+  }
+
   percent = Math.Int(fraction * 100);
   if (percent < 0) percent = 0;
   if (percent > 100) percent = 100;
@@ -610,7 +797,8 @@ $PCT_PAINT
 # registered further up, never unregistered, and whole.
 if (mx_key.image.GetWidth() > 0 && mx_track.image.GetWidth() > 0 &&
     mx_digits.image.GetWidth() > 0 && mx_box.key.GetWidth() > 0 &&
-    mx_box.bar.GetWidth() > 0) {
+    mx_box.bar.GetWidth() > 0 && mx_granted.image.GetWidth() > 0 &&
+    mx_denied.image.GetWidth() > 0) {
   Plymouth.SetDisplayPasswordFunction(mx_password_callback);
   Plymouth.SetDisplayNormalFunction(mx_normal_callback);
 }
@@ -618,19 +806,47 @@ if (mx_key.image.GetWidth() > 0 && mx_track.image.GetWidth() > 0 &&
 
 
 def typing_block(font, metrics):
-    steps = storyboard()
-    table = "\n".join(
-        f"global.mx_line[{i}] = {line}; global.mx_shown[{i}] = {shown}; "
-        f"global.mx_dur[{i}] = {frames};"
-        for i, (line, shown, frames) in enumerate(steps))
+    """The typed lines: every mode's pictures and every mode's steps, flat.
 
-    # One Image() and one Scale() per line, at start-up, never again. Each is
-    # scaled to its OWN character count times the shared cell, which is what
-    # keeps four pictures of different lengths on one grid.
-    load = "\n".join(
-        f'global.mx_img[{i}] = Image("line{i}.png").Scale('
-        f"Math.Int({cells} * global.mx_cell_w), global.mx_line_h);"
-        for i, cells in enumerate(metrics["LINE_CELLS"]))
+    One table and one image list for the whole file, with each mode owning a
+    slice of them, rather than a table per mode. Two reasons. The .script gets
+    no function big enough to worry about -- the boot's storyboard alone is some
+    ninety statements -- and `mx_tick` never has to know which mode it is in: it
+    walks from `mx_step` to `mx_end` and those two numbers are all a mode is.
+
+    Loading every mode's pictures rather than only the running mode's is
+    deliberate too. It is four extra `Image()` calls on a splash that already
+    does four, it happens once, and it means the dispatch below cannot leave a
+    sprite pointing at an image that was never loaded.
+    """
+    load, table, slices = [], [], {}
+    for mode, lines in MODE_LINES.items():
+        first_image = len(load)
+        # One Image() and one Scale() per line, at start-up, never again. Each
+        # is scaled to its OWN character count times the shared cell, which is
+        # what keeps pictures of different lengths on one grid.
+        for index, cells in enumerate(metrics["LINE_CELLS"][mode]):
+            load.append(
+                f'global.mx_img[{len(load)}] = Image("line-{mode}-{index}.png")'
+                f".Scale(Math.Int({cells} * global.mx_cell_w), "
+                f"global.mx_line_h);")
+
+        first_step = len(table)
+        for line, shown, frames in storyboard(mode):
+            table.append(
+                f"global.mx_line[{len(table)}] = {first_image + line}; "
+                f"global.mx_shown[{len(table)}] = {shown}; "
+                f"global.mx_dur[{len(table)}] = {frames};")
+        slices[mode] = (first_step, len(table))
+
+    # Boot is the fallback, so it is assigned before the tests rather than
+    # inside one: a mode nobody thought of gets the boot lines, not a blank
+    # screen. `else if` is avoided on purpose -- one flat `if` per mode is the
+    # same code whatever modes a provider names.
+    dispatch = "\n".join(
+        f'if (global.mx_mode == "{mode}") {{ global.mx_step = {first}; '
+        f"global.mx_end = {end}; }}"
+        for mode, (first, end) in slices.items() if mode != "boot")
 
     name = PROVIDER["displayName"]
     return TYPING.substitute(
@@ -638,7 +854,9 @@ def typing_block(font, metrics):
         R=DIALOG_COLOUR[0], G=DIALOG_COLOUR[1], B=DIALOG_COLOUR[2],
         TEXT_X=TEXT_X, TEXT_Y=TEXT_Y, TEXT_WIDTH=TEXT_WIDTH,
         WIDEST_CELLS=metrics["WIDEST_CELLS"], LINE_ASPECT=metrics["LINE_ASPECT"],
-        LINE_LOAD=load, STEPS=len(steps), TABLE=table)
+        LINE_LOAD="\n".join(load), TABLE="\n".join(table),
+        BOOT_FIRST=slices["boot"][0], BOOT_END=slices["boot"][1],
+        DISPATCH=dispatch or "# (this provider names no exit lines)")
 
 
 # The four cells of the progress readout. The TABLES and the SPRITES are
@@ -684,11 +902,12 @@ def dialog_block(metrics):
         BOX_PAD_FRAC=metrics["BOX_PAD_FRAC"],
         BOX_ROW_FRAC=metrics["BOX_ROW_FRAC"],
         CELL_ASPECT=metrics["CELL_ASPECT"],
+        GRANTED_ASPECT=metrics["GRANTED_ASPECT"], DENIED_ASPECT=metrics["DENIED_ASPECT"],
+        DENIED_HOLD=DENIED_HOLD, GRANTED_HOLD=GRANTED_HOLD,
         KEY_CELLS=KEY_CELLS, BAR_CELLS=BAR_CELLS, BAR_GAP_CELLS=BAR_GAP_CELLS,
         PCT_CELLS=PCT_CELLS, ATLAS_CELLS=len(ATLAS), TRACK_ALPHA=TRACK_ALPHA,
         PROMPT_WIDTH=PROMPT_WIDTH,
         PROMPT_PROBE=literal("Please enter passphrase for disk nvme0n1p2 (cryptroot):"),
-        PROMPT_FALLBACK=literal("Passphrase required to unlock this disk"),
         CAPS_TEXT=literal("[ CAPS LOCK ]"),
         PCT_TABLE=table, PCT_SPRITES=sprites, PCT_SHOW=show, PCT_PAINT=paint)
 
@@ -738,31 +957,98 @@ def splash_assets(target, font_path, line_hex):
             ["magick", str(path), "-alpha", "extract", "-format", "%[fx:mean]",
              "info:"], capture_output=True, text=True, check=True).stdout)
 
-    # --- the typed lines ----------------------------------------------------
-    line_cells = [len(line) for line in LINES]
-    for index, line in enumerate(LINES):
-        render(line, f"#{line_hex}", target / f"line{index}.png")
-    sizes = [measure(target / f"line{index}.png") for index in range(len(LINES))]
+    # --- the typed lines, for every mode ------------------------------------
+    # One picture per line per mode, all at the same point size in the same
+    # face, so a single cell describes the lot. The mode is in the FILENAME
+    # rather than in a subdirectory: Plymouth's ImageDir is one flat folder.
+    line_cells, units, heights, first_height = {}, [], set(), None
+    for mode, lines in MODE_LINES.items():
+        if not lines:
+            die(f"the {mode!r} mode in provider.json names no lines. Remove the "
+                f"key to fall back to the boot lines,\n  or give it something to "
+                f"type.")
+        line_cells[mode] = [len(line) for line in lines]
+        for index, line in enumerate(lines):
+            render(line, f"#{line_hex}", target / f"line-{mode}-{index}.png")
+        sizes = [measure(target / f"line-{mode}-{index}.png")
+                 for index in range(len(lines))]
+        units += [w / c for (w, _), c in zip(sizes, line_cells[mode])]
+        heights |= {h for _, h in sizes}
+        if first_height is None:
+            first_height = sizes[0][1]
 
     # Is the face really monospace? The whole typewriter rests on it: a crop of
     # N cells is only the first N characters if every character is one cell.
-    # Asked of the PICTURES, per line, because that is what will be cropped.
-    units = [w / c for (w, _), c in zip(sizes, line_cells)]
+    # Asked of the PICTURES, per line, because that is what will be cropped --
+    # and across every mode, because they all share one cell.
     if max(units) - min(units) > 1:
         die(f"the splash's font ({font_path}) is not monospace: its cell "
             f"measures between {min(units):.1f} and {max(units):.1f} px across "
-            f"the four lines,\n  so a half-typed line would be cropped mid-glyph.")
-    heights = {h for _, h in sizes}
+            f"the typed lines,\n  so a half-typed line would be cropped mid-glyph.")
     if len(heights) != 1:
-        die(f"the four lines came out {sorted(heights)} px tall. They are drawn "
+        die(f"the typed lines came out {sorted(heights)} px tall. They are drawn "
             f"by one sprite at one height,\n  so they have to agree.")
     line_cell = sum(units) / len(units)
-    line_height = sizes[0][1]
+    line_height = first_height
+
+    # Does the face actually HAVE every character these lines are spelt with?
+    #
+    # This is the missing-glyph trap again -- freetype draws nothing at all for
+    # one, no box, no warning -- but a line is not a mask: a whole line inks
+    # plenty even with a character missing from the middle of it, so the mask's
+    # ink test would pass and the splash would come out spelt wrong. An accent
+    # is the realistic way to hit it (`Déjà vu.`), and a face that has `e` says
+    # nothing about whether it has `é`.
+    #
+    # Rendered as ONE strip and measured per cell, because the face is monospace
+    # by the assertion above: one magick call for the whole alphabet in use.
+    alphabet = "".join(sorted({c for lines in MODE_LINES.values()
+                               for line in lines for c in line if c != " "}))
+    probe = target / ".alphabet.png"
+    render(alphabet, "#FFFFFF", probe)
+    width, height = measure(probe)
+    tile = width / len(alphabet)
+    means = subprocess.run(
+        ["magick", str(probe), "-alpha", "extract",
+         "-crop", f"{round(tile)}x{height}", "+repage",
+         "-format", "%[fx:mean] ", "info:"],
+        capture_output=True, text=True, check=True).stdout.split()
+    blank = [c for c, mean in zip(alphabet, means) if float(mean) < 0.005]
+    probe.unlink(missing_ok=True)
+    if blank:
+        die(f"{font_path} has no glyph for {' '.join(repr(c) for c in blank)}.\n"
+            f"  freetype draws a missing glyph as BLANK rather than as a box, so "
+            f"the line would simply\n  come out with holes in it and nothing "
+            f"anywhere would say why. Respell it, or ship a face that has them.")
+
+    # And does every line fit on the screen at the boot's cell? The cell is
+    # fixed by the longest BOOT line so that no mode changes the type size (see
+    # the template), which means a longer line in another mode does not shrink
+    # anything -- it runs off the right-hand edge instead, silently.
+    widest = max(line_cells["boot"])
+    for mode, cells in line_cells.items():
+        overrun = TEXT_X + max(cells) / widest * TEXT_WIDTH
+        if overrun > 0.97:
+            longest = max(MODE_LINES[mode], key=len)
+            die(f"the {mode!r} line {longest!r} is {max(cells)} characters, "
+                f"which at the boot's type size\n  reaches {overrun:.0%} across "
+                f"the screen and runs off the edge. Keep it to "
+                f"{int((0.97 - TEXT_X) / TEXT_WIDTH * widest)} characters.")
 
     # --- what goes inside the panel -----------------------------------------
     render(MASK * KEY_CELLS, f"#{DIALOG_HEX}", target / "keyline.png")
     render(BLOCK * BAR_CELLS, f"#{DIALOG_HEX}", target / "bar.png")
     render(ATLAS, f"#{DIALOG_HEX}", target / "digits.png")
+
+    # The one-shot feedback. Neither is built from repeated glyphs on a shared
+    # cell the way the row above is -- each is one label, scaled at boot to fill
+    # the row's height by its OWN aspect, the same way the caption below scales
+    # by width. All caps, like the digits: no descenders to throw the vertical
+    # weight off against a row that has none either.
+    render(GRANTED_TEXT, f"#{DIALOG_HEX}", target / "granted.png")
+    render(DENIED_TEXT, f"#{DIALOG_HEX}", target / "denied.png")
+    granted_w, granted_h = measure(target / "granted.png")
+    denied_w, denied_h = measure(target / "denied.png")
 
     inside = {"keyline.png": KEY_CELLS, "bar.png": BAR_CELLS,
               "digits.png": len(ATLAS)}
@@ -826,15 +1112,54 @@ def splash_assets(target, font_path, line_hex):
     # --- the panel ----------------------------------------------------------
     interior = BOX_CELLS * cell
     pad = cell                      # a cell of air either side of the content
+
+    # Scaled to the row's height, same as it will be at boot -- if it is wider
+    # than the row has to give, better to fail here than to run off the panel's
+    # edge on a screen nobody is going to reboot to check.
+    for label, text, (w, h) in (("grantedText", GRANTED_TEXT, (granted_w, granted_h)),
+                                ("deniedText", DENIED_TEXT, (denied_w, denied_h))):
+        scaled_w = row_height * w / h
+        if scaled_w > interior * 0.95:
+            die(f"{label} {text!r} is {scaled_w:.0f}px wide at the panel's row "
+                f"height, and only {interior * 0.95:.0f}px fits.\n"
+                f"  Shorten it in provider.json.")
     box_w = int(interior + pad * 2)
-    rule_y = int(size * 0.55)       # the top rule, where the caption sits
     stroke = max(2, int(size * 0.045))
-    block = int(size * 0.30)        # the caption's little square widgets
+    # The corner widgets, and the band's own proportions -- both MEASURED off
+    # the reference rather than guessed. A first pass kept the old rule's
+    # `size * 0.30` square and just padded a band around it, which came out a
+    # letterbox: a huge sliver of air around a small icon, and the whole box
+    # barely a fifth as tall as it is wide (aspect 0.19) against the
+    # reference's own ~0.33. The reference's own squares fill most of the
+    # band's height too (~70% of it, corner to corner) -- so the fix scales
+    # the WIDGET, not just the padding around it.
+    #
+    # A second pass dialled this back to 0.28 because the panel ran off the
+    # bottom of the screen -- but that was `entry.y` sitting too low, not this
+    # aspect being too tall; DIALOG now lifts the panel off `entry.y` instead,
+    # which is the actual fix, so this goes back to the reference's own ratio.
+    # The runtime clamp in DIALOG stays regardless, for whatever panel this
+    # has not been measured against.
+    block = int(size * 0.84)        # the corner widgets' height
+
+    # The title band. FILLED, the way an old window manager's title bar is --
+    # not a rule with a caption-shaped hole knocked in it, which is what this
+    # drew before and reads as a terminal's plain divider rather than a
+    # window. Sized to the corner widgets, the tallest thing that sits in it,
+    # with air above and below; the caption is centred in whatever that
+    # leaves.
+    band_pad = max(stroke * 2, int(size * 0.21))
+    band_h = block + band_pad * 2
+    band_bottom = stroke + band_h   # the divider between band and content
 
     # The panel is sized to its CONTENT, not to the point size: a fixed multiple
     # of `size` gave a box with the row of dashes stranded in the top third and
-    # a hand's width of nothing under it.
-    box_h = rule_y + int(row_height * 1.55)
+    # a hand's width of nothing under it. 3.0, not the 1.9 this started at, to
+    # match the reference's own content-to-band proportion once the band grew
+    # to its measured size -- 1.9 paired with the bigger band came out
+    # top-heavy, a wide band over a cramped strip of dashes.
+    content_h = int(row_height * 3.0)
+    box_h = band_bottom + content_h
 
     # ...and the row is centred on the INK, not on the line box. `label:` returns
     # a full line box with room for ascenders and descenders, and a dash inks a
@@ -847,53 +1172,60 @@ def splash_assets(target, font_path, line_hex):
                              check=True).stdout
     ink_h, ink_y = (int(n) for n in re.match(
         r"\d+x(\d+)\+\d+\+(\d+)", trimmed).groups())
-    content_y = rule_y + int(((box_h - rule_y) - ink_h) / 2) - ink_y
+    content_y = band_bottom + int((content_h - ink_h) / 2) - ink_y
+
+    corner_y0 = stroke + band_pad
+    corner_y1 = corner_y0 + block
+    zoom_w = int(block * 1.8)       # the right widget: wider than tall
 
     for name, caption in (("box-key.png", BOX_TITLE),
                           ("box-bar.png", PROGRESS_TITLE)):
-        render(caption, f"#{DIALOG_HEX}", target / ".caption.png")
+        # Dark on the band, not the panel's usual light-on-dark -- the band
+        # is what inverts, the way the reference's title bar does.
+        render(caption, f"#{BAND_INK_HEX}", target / ".caption.png")
         caption_w = measure(target / ".caption.png")[0] * 62 // 100
         subprocess.run(["magick", str(target / ".caption.png"), "-resize",
                         f"{caption_w}x", "-strip", str(target / ".caption.png")],
                        check=True)
-        gap = int(size * 0.45)
+        caption_h = measure(target / ".caption.png")[1]
         left = (box_w - caption_w) // 2
-        # The frame is drawn as five strokes rather than as a rectangle with a
-        # hole knocked in it. Knocking the hole is what this did first, with
-        # `-compose clear` over a `-draw rectangle`, and it silently did
-        # nothing: `-draw` takes its colour from `-fill`, and `-fill none` means
-        # "do not fill" rather than "erase". The rule came out straight through
-        # the caption, which is only visible by looking.
-        #
-        # The alternative -- painting the gap in the background colour -- is
-        # worse than it sounds: the background belongs to Omarchy's theme, so
-        # our guess at it would show as a patch on any other.
         bottom, right = box_h - stroke, box_w - stroke
         subprocess.run([
             "magick", "-size", f"{box_w}x{box_h}", "xc:none",
-            "-stroke", f"#{DIALOG_HEX}", "-strokewidth", str(stroke),
-            "-fill", "none",
-            "-draw", f"line {stroke},{rule_y} {left - gap},{rule_y}",
-            "-draw", f"line {left + caption_w + gap},{rule_y} {right},{rule_y}",
-            "-draw", f"line {stroke},{rule_y} {stroke},{bottom}",
-            "-draw", f"line {right},{rule_y} {right},{bottom}",
-            "-draw", f"line {stroke},{bottom} {right},{bottom}",
-            "-stroke", "none", "-fill", f"#{DIALOG_HEX}",
-            "-draw", f"rectangle {pad},{rule_y - block // 2} "
-                     f"{pad + block},{rule_y + block // 2}",
-            "-draw", f"rectangle {pad + block * 1.4},{rule_y - block // 2} "
-                     f"{pad + block * 2.4},{rule_y + block // 2}",
-            "-draw", f"rectangle {box_w - pad - block * 2.2},{rule_y - block // 2} "
-                     f"{box_w - pad},{rule_y + block // 2}",
+            # The band, filled, full width, top edge to the divider.
+            "-fill", f"#{DIALOG_HEX}", "-stroke", "none",
+            "-draw", f"rectangle {stroke},{stroke} {right},{band_bottom}",
+            # The frame: one rectangle for the whole panel, plus the divider
+            # under the band. `-fill none` is deliberate here -- an earlier
+            # version of this box tried to knock a hole in a filled rectangle
+            # with `-compose clear`, which silently does nothing: `-draw`
+            # takes its colour from `-fill`, and `-fill none` means "do not
+            # fill" rather than "erase". There is no hole to knock any more,
+            # but the frame still has to stay unfilled or it would paint over
+            # the band and the content beneath it.
+            "-fill", "none", "-stroke", f"#{DIALOG_HEX}", "-strokewidth", str(stroke),
+            "-draw", f"rectangle {stroke},{stroke} {right},{bottom}",
+            "-draw", f"line {stroke},{band_bottom} {right},{band_bottom}",
+            # The corner widgets: hollow outlines sitting inside the band, its
+            # own fill showing through the middle -- not the solid squares
+            # this drew before, which is right on a bare rule but reads as a
+            # patch on a filled one.
+            "-strokewidth", str(max(1, stroke // 2)), "-stroke", f"#{BAND_INK_HEX}",
+            "-draw", f"rectangle {pad},{corner_y0} {pad + block},{corner_y1}",
+            "-draw", f"rectangle {pad + block + stroke},{corner_y0} "
+                     f"{pad + block * 2 + stroke},{corner_y1}",
+            "-draw", f"rectangle {box_w - pad - zoom_w},{corner_y0} "
+                     f"{box_w - pad},{corner_y1}",
             "-strip", str(target / name)], check=True)
         subprocess.run([
             "magick", str(target / name), str(target / ".caption.png"),
-            "-geometry", f"+{left}+{rule_y - measure(target / '.caption.png')[1] // 2}",
+            "-geometry", f"+{left}+{stroke + (band_h - caption_h) // 2}",
             "-composite", "-strip", str(target / name)], check=True)
     (target / ".caption.png").unlink(missing_ok=True)
 
     return {
-        "WIDEST_CELLS": max(line_cells),
+        # The boot lines set the type size for every mode; see the template.
+        "WIDEST_CELLS": max(line_cells["boot"]),
         "LINE_ASPECT": round(line_height / line_cell, 4),
         "LINE_CELLS": line_cells,
         "BOX_ASPECT": round(box_h / box_w, 4),
@@ -901,6 +1233,8 @@ def splash_assets(target, font_path, line_hex):
         "BOX_PAD_FRAC": round(pad / box_w, 6),
         "BOX_ROW_FRAC": round(content_y / box_w, 6),
         "CELL_ASPECT": round(row_height / cell, 4),
+        "GRANTED_ASPECT": round(granted_w / granted_h, 4),
+        "DENIED_ASPECT": round(denied_w / denied_h, 4),
     }
 
 
@@ -1034,11 +1368,13 @@ def main():
     staging = Path(tempfile.mkdtemp(prefix=f"{SLUG}-plymouth."))
     try:
         font, face = stage(staging, colours, theme_dir)
-        steps = storyboard()
-        seconds = sum(frames for _, _, frames in steps) / FPS
-        print(f"  {THEME}: {len(steps)} steps, {seconds:.1f}s of typing")
+        for mode in MODE_LINES:
+            steps = storyboard(mode)
+            seconds = sum(frames for _, _, frames in steps) / FPS
+            print(f"  {THEME} [{mode}]: {len(steps)} steps, {seconds:.1f}s of "
+                  f"typing, {len(MODE_LINES[mode])} lines")
         print(f"  drawn in {face.name}, baked to PNG; {font!r} only for the "
-              f"disk's own prompt")
+              f"CAPS LOCK label")
         print(f"  every size measured at boot, none baked in")
 
         if stage_only:
