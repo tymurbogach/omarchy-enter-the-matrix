@@ -108,11 +108,10 @@ PROGRESS_TITLE = PROVIDER["plymouth"].get("progressTitle", "booting")
 # reading as a second, unrelated ink.
 BAND_INK_HEX = "04121A"
 
-# The one-shot feedback, drawn in the SAME row the passphrase's dashes sit in
-# -- "the bar in the passphrase's own place" holds for these too: each takes
-# that row over for a beat, then hands it back. GRANTED is a real signal (it
-# plays exactly when Plymouth stops asking and boot proceeds); DENIED is not
-# -- see mx_password_callback in DIALOG below for why.
+# The one-shot feedback, worn by the panel's own title band -- each takes it
+# over for a beat, then hands it back. GRANTED is a real signal (it plays
+# exactly when Plymouth stops asking and boot proceeds); DENIED is not -- see
+# mx_password_callback in DIALOG below for why.
 GRANTED_TEXT = PROVIDER["plymouth"].get("grantedText", "ACCESS GRANTED")
 DENIED_TEXT = PROVIDER["plymouth"].get("deniedText", "ACCESS DENIED")
 
@@ -133,19 +132,18 @@ FONT = "JetBrainsMono Nerd Font"
 FONT_FILE = "fonts/TerminessNerdFont-Regular.ttf"
 
 BLOCK = "█"                 # full block: the progress track is a row of these
-# One typed character of the passphrase. A dash, and NOT any kind of block.
+# One typed character of the passphrase. A circle, and NOT any kind of block.
 #
-# This was `▊` first -- seven-eighths of a cell, chosen over `█` precisely so the
-# characters would not butt together into one solid bar. It did not work, and the
-# reason is worth keeping: the progress readout lives in the SAME row and is also
-# made of blocks, so a boot went `solid bar` (typing) -> `empty track` ->
-# `filling track`, and the eye read all three as one meter behaving strangely.
-# What separates the passphrase from the progress is the GLYPH, not the gap.
-#
-# Then it was `•`, which worked. It is a dash now because that is what the film's
-# boxed prompt shows, and a dash is further still from a block: 4.4 % of one in
-# Terminus, against the dot's 6 %.
-MASK = "-"
+# It used to be a character too -- `▊` first (rejected: butts against `█` in
+# the shared row, see the trap this cost in CLAUDE.md), then `•`, then a dash
+# to match the film's own boxed prompt. It is a circle now on direct
+# instruction, and this time it is DRAWN rather than typeset: TerminessNerdFont
+# (a Terminus derivative, and Terminus is a bitmap face at heart) renders `●`
+# as a blocky octagon, not a disc -- visible only by rendering it and looking,
+# not by its measured ink share, which reads close to `•`'s. No glyph in this
+# font gives a clean circle at any size, so MASK is no longer a font character
+# at all: `mask_diameter`, in splash_assets(), draws one directly with
+# ImageMagick, on the same grid the font-rendered track and digits share.
 # The progress readout's characters, as one strip to crop cells out of. Baked
 # for the same reason everything else here is: at boot the font is whatever the
 # initramfs happens to hold, and digits in a face that does not match the box
@@ -203,7 +201,7 @@ def pace(mode):
 TEXT_X = 0.055              # left margin of Neo's terminal
 TEXT_Y = 0.085              # and how far down it starts
 TEXT_WIDTH = 0.42           # what the longest line takes up
-KEY_CELLS = 21              # dashes shown for a passphrase, at most
+KEY_CELLS = 21              # masked characters shown for a passphrase, at most
 PROMPT_WIDTH = 0.42         # sizes the CAPS LOCK label; the disk's own prompt
                             # this was named for is no longer drawn
 
@@ -214,11 +212,11 @@ PROMPT_WIDTH = 0.42         # sizes the CAPS LOCK label; the disk's own prompt
 # images that can drift.
 #
 # Its interior is wide enough for BOTH phases, so the panel never changes size
-# between asking for the passphrase and reporting progress -- 21 dashes, and
-# 20 track blocks + a gap + 4 digits, is 25 either way.
+# between asking for the passphrase and reporting progress -- 21 masked
+# characters, and 20 track blocks + a gap + 4 digits, is 25 either way.
 #
 # Every element inside the panel that is drawn LIVE rather than baked -- the
-# dashes, the track, the digits -- is sized off `mx_cell`, a fraction of this,
+# mask, the track, the digits -- is sized off `mx_cell`, a fraction of this,
 # so this scales the whole panel and its contents together. It went 0.46 ->
 # 0.58 to fix contents that looked small, which was the wrong knob: the
 # caption's own scale and the panel's internal proportions were the actual
@@ -523,14 +521,15 @@ mx_box.sprite.SetOpacity(0);
 # crosses from the machine that derived this to the one that boots it.
 #
 # Everything inside is scaled to a whole number of these cells and rendered at
-# one point size, which is what puts the dashes, the track and the digits on a
+# one point size, which is what puts the mask, the track and the digits on a
 # single monospace grid instead of three that nearly agree.
 global.mx_cell = global.mx_box_w * $BOX_CELL_FRAC;
 global.mx_in_x = global.mx_box_x + Math.Int(global.mx_box_w * $BOX_PAD_FRAC);
 global.mx_in_y = global.mx_box_y + Math.Int(global.mx_box_w * $BOX_ROW_FRAC);
 global.mx_in_h = Math.Int(global.mx_cell * $CELL_ASPECT);
 
-# The passphrase: one image of $KEY_CELLS dashes, revealed a cell at a time.
+# The passphrase: one image of $KEY_CELLS masked characters, revealed a cell
+# at a time.
 mx_key.image = Image("keyline.png");
 mx_key.scaled = mx_key.image.Scale(Math.Int($KEY_CELLS * global.mx_cell), global.mx_in_h);
 mx_key.sprite = Sprite();
@@ -692,9 +691,9 @@ fun mx_password_callback(prompt, bullets) {
       mx_key.sprite.SetOpacity(0);
     } else {
       # Centred as a GROUP, not left-anchored -- the reference shows the
-      # dashes centred in the box, and a field anchored at mx_in_x instead
-      # left a typed passphrase stranded off to one side of a box wide
-      # enough for KEY_CELLS characters. It re-centres on every keystroke,
+      # masked entry centred in the box, and a field anchored at mx_in_x
+      # instead left a typed passphrase stranded off to one side of a box
+      # wide enough for KEY_CELLS characters. It re-centres on every keystroke,
       # so the block grows outward from its own middle rather than sliding
       # as a whole.
       key_w = Math.Int(shown * global.mx_cell);
@@ -772,7 +771,7 @@ $PCT_PAINT
 #
 # Tested by deleting keyline.png from a staged theme: Plymouth does NOT abort
 # the script over Scale() on an image that failed to load, it carries on. So
-# without this guard the prompt appeared with no field, no dashes and no panel
+# without this guard the prompt appeared with no field, no mask and no panel
 # -- you could still type your passphrase, but with nothing on screen to say
 # so, which on an encrypted disk at 7am is its own kind of broken.
 #
@@ -911,12 +910,12 @@ def splash_assets(target, font_path, line_hex):
     put in the initramfs. A theme therefore cannot choose a typeface through
     Image.Text -- it can only choose one through pixels. So the four lines, the
     passphrase field, the progress track, its digits and the panel around them
-    all arrive as pictures, and the only text left at boot is the disk's own
-    prompt and the caps label, which are the system's words rather than ours.
+    all arrive as pictures, and the only text left at boot is the caps label,
+    which is the system's own word rather than ours.
 
     It buys two more things. Typing costs no rendering at all -- N characters is
     one Crop of a picture that already exists -- and every element is scaled to
-    a whole number of ONE cell, so the dashes, the blocks and the digits land on
+    a whole number of ONE cell, so the mask, the blocks and the digits land on
     a single grid instead of three that nearly agree.
 
     Returns the metrics the two templates need, all of them RATIOS. Not one
@@ -931,9 +930,25 @@ def splash_assets(target, font_path, line_hex):
 
     size = 120                      # generous: everything is only scaled DOWN
 
-    def render(text, colour, out):
+    # Air between the track/digit glyphs, and between the mask's own dots (which
+    # share their grid but are drawn, not typeset -- see BLOCK's own comment for
+    # why). `kerning` has a hard ceiling: the mask row must not outgrow the
+    # panel's interior, i.e. KEY_CELLS*(pitch+kerning) <= BOX_CELLS*pitch, which
+    # at this font's own measured pitch works out to roughly kerning <= 0.24 *
+    # pitch (~0.12 * size). 0.06 leaves comfortable headroom for tuning against
+    # the reference.
+    kerning = int(size * 0.06)
+    # How much of its own cell each dot fills, corner to corner. Bounded by the
+    # same shared-cell-width guard as everything else on this grid (drawing it
+    # too big would make the row read as blocks, exactly what BLOCK's own
+    # comment on MASK's history exists to avoid) -- otherwise tuned by eye
+    # against the reference.
+    mask_diameter = 0.8
+
+    def render(text, colour, out, kerning=0):
         subprocess.run(
             ["magick", "-background", "none", "-fill", colour,
+             *(["-kerning", str(kerning)] if kerning else []),
              "-font", str(font_path), "-pointsize", str(size), f"label:{text}",
              "-background", "none", "-flatten", "-strip", str(out)], check=True)
 
@@ -1027,27 +1042,40 @@ def splash_assets(target, font_path, line_hex):
                 f"{int((0.97 - TEXT_X) / TEXT_WIDTH * widest)} characters.")
 
     # --- what goes inside the panel -----------------------------------------
-    render(MASK * KEY_CELLS, f"#{DIALOG_HEX}", target / "keyline.png")
-    render(BLOCK * BAR_CELLS, f"#{DIALOG_HEX}", target / "bar.png")
-    render(ATLAS, f"#{DIALOG_HEX}", target / "digits.png")
+    # The track and the digits are typeset, same as everything else -- BLOCK
+    # and the atlas are ordinary, well-behaved monospace glyphs in this font.
+    render(BLOCK * BAR_CELLS, f"#{DIALOG_HEX}", target / "bar.png", kerning=kerning)
+    render(ATLAS, f"#{DIALOG_HEX}", target / "digits.png", kerning=kerning)
 
-    inside = {"keyline.png": KEY_CELLS, "bar.png": BAR_CELLS,
-              "digits.png": len(ATLAS)}
+    inside = {"bar.png": BAR_CELLS, "digits.png": len(ATLAS)}
     cells = {}
     for name, count in inside.items():
         w, h = measure(target / name)
-        cells[name] = (w / count, h)
+        # +kerning: `-kerning` adds air between EVERY adjacent pair, count-1
+        # gaps for `count` glyphs, so the naive w/count under-counts the true
+        # per-character stride by roughly kerning/count. Applied identically to
+        # both renders, so the guard below still compares them on equal footing.
+        cells[name] = ((w + kerning) / count, h)
     widths = [c for c, _ in cells.values()]
     if max(widths) - min(widths) > 1:
-        die("the dashes, the track and the digits came out on different cell "
-            "widths\n  ({}), so they would not share a grid.".format(
+        die("the track and the digits came out on different cell widths\n"
+            "  ({}), so they would not share a grid.".format(
                 ", ".join(f"{n} {c:.1f}px" for n, (c, _) in cells.items())))
     cell = sum(widths) / len(widths)
+    # `cell` above is INFLATED by kerning -- correct for BOX_CELL_FRAC (which
+    # decides how much of the panel's fixed on-screen width each glyph gets at
+    # boot), but wrong for sizing the panel itself: box_w below is DEFINED as a
+    # multiple of whatever cell feeds it, so the kerned cell would silently
+    # shrink CELL_ASPECT and BOX_ASPECT and flatten the whole panel as a side
+    # effect of a change that was only supposed to touch spacing. `pitch` is
+    # the unkerned reference -- what `cell` would have measured without the
+    # air -- and is what everything that sizes the box uses instead.
+    pitch = cell - kerning
 
-    # One height for all three, so one aspect describes them and the row cannot
-    # sit a pixel high. Padded rather than assumed equal: `label:` hands back a
-    # line box, and whether a row of blocks and a row of digits produce the same
-    # one is a property of the font, not something to take on trust.
+    # One height for both, so one aspect describes them and the row cannot sit a
+    # pixel high. Padded rather than assumed equal: `label:` hands back a line
+    # box, and whether a row of blocks and a row of digits produce the same one
+    # is a property of the font, not something to take on trust.
     row_height = max(h for _, h in cells.values())
     for name in inside:
         subprocess.run(["magick", str(target / name), "-background", "none",
@@ -1055,44 +1083,49 @@ def splash_assets(target, font_path, line_hex):
                         "-extent", f"{measure(target / name)[0]}x{row_height}",
                         "-strip", str(target / name)], check=True)
 
-    # And is what it drew actually a mask? Two ways for that to go wrong, and
-    # neither says anything at the time. Ask the PICTURE rather than the font:
-    # measure how much of its cell the mask inks, against a full block.
+    # The mask: KEY_CELLS dots, DRAWN on this same `cell`/`row_height` grid
+    # rather than typeset -- see BLOCK's own comment for why no glyph in this
+    # font gives a clean circle. One magick call, one `circle` primitive per
+    # dot, each centred in its own cell.
+    key_w = int(round(KEY_CELLS * cell))
+    radius = pitch * mask_diameter / 2
+    dots = " ".join(
+        f"circle {i * cell + cell / 2},{row_height / 2} "
+        f"{i * cell + cell / 2 + radius},{row_height / 2}"
+        for i in range(KEY_CELLS))
+    subprocess.run(["magick", "-size", f"{key_w}x{int(row_height)}", "xc:none",
+                    "-fill", f"#{DIALOG_HEX}", "-draw", dots, "-strip",
+                    str(target / "keyline.png")], check=True)
+
+    # Is the mask actually visible? Ask the PICTURE, the same way every other
+    # guard in this function does: measure how much of its cell it inks,
+    # against a full block.
     #
-    # Measured in Terminus, which is what ships with the theme:
+    # TOO LITTLE, and `mask_diameter` drew nothing (or next to it) -- a
+    # passphrase prompt that does not react as you type, indistinguishable from
+    # a dead keyboard on an encrypted disk at 7am.
     #
-    #   missing glyph  0%      -  4.4%    .  3%      *  12%
-    #   #             46%      @  38%     block 100%
-    #
-    # TOO LITTLE, and the font has no MASK at all. It does not draw .notdef --
-    # no box, no warning -- it draws NOTHING and advances the cell, so you get a
-    # passphrase prompt that does not react as you type. On an encrypted disk at
-    # 7am that is indistinguishable from a dead keyboard.
-    #
-    # TOO MUCH, and whatever it drew is block-shaped, which puts the row of
-    # solid rectangles back and undoes the entire point of MASK (see its
-    # comment). Cascadia Code was rejected here while choosing the face: its
-    # dashes touch, and a row of them reads as a rule rather than as characters.
+    # TOO MUCH, and the dots touch or fill their cell, which puts the row of
+    # solid marks back and undoes the entire point of drawing a mask rather
+    # than a block in the first place (see BLOCK's own comment).
     block_ink = ink(target / "bar.png")
     mask_ink = ink(target / "keyline.png") * KEY_CELLS / BAR_CELLS
     if block_ink > 0:
         share = mask_ink / block_ink
         if share < 0.01:
-            die(f"the mask glyph {MASK!r} draws nothing in {font_path}.\n"
-                f"  That font has no {MASK!r}, and freetype renders a missing "
-                f"glyph as blank rather than as a box --\n"
-                f"  so the passphrase prompt would not react as you typed. Pick "
-                f"a MASK the font actually has.")
+            die(f"mask_diameter={mask_diameter} draws next to nothing "
+                f"({share:.0%} of a full block's ink).\n"
+                f"  A passphrase prompt that does not react as you type is "
+                f"indistinguishable from a dead\n  keyboard. Grow mask_diameter.")
         if share > 0.6:
-            die(f"the mask glyph {MASK!r} inks {share:.0%} of a full block in "
-                f"{font_path}.\n"
-                f"  A row of that reads as a progress bar rather than as typed "
-                f"characters, which is the\n"
-                f"  one thing this design exists to avoid. Pick a lighter MASK.")
+            die(f"mask_diameter={mask_diameter} inks {share:.0%} of a full "
+                f"block.\n  A row of that reads as a progress bar rather than "
+                f"as typed characters, which is the\n  one thing this design "
+                f"exists to avoid. Shrink mask_diameter.")
 
     # --- the panel ----------------------------------------------------------
-    interior = BOX_CELLS * cell
-    pad = cell                      # a cell of air either side of the content
+    interior = BOX_CELLS * pitch
+    pad = pitch                     # a cell of air either side of the content
     box_w = int(interior + pad * 2)
     stroke = max(2, int(size * 0.045))
     # The corner widgets, and the band's own proportions -- both MEASURED off
@@ -1123,20 +1156,20 @@ def splash_assets(target, font_path, line_hex):
     band_bottom = stroke + band_h   # the divider between band and content
 
     # The panel is sized to its CONTENT, not to the point size: a fixed multiple
-    # of `size` gave a box with the row of dashes stranded in the top third and
+    # of `size` gave a box with the mask row stranded in the top third and
     # a hand's width of nothing under it. 3.0, not the 1.9 this started at, to
     # match the reference's own content-to-band proportion once the band grew
     # to its measured size -- 1.9 paired with the bigger band came out
-    # top-heavy, a wide band over a cramped strip of dashes.
+    # top-heavy, a wide band over a cramped mask row.
     content_h = int(row_height * 3.0)
     box_h = band_bottom + content_h
 
     # ...and the row is centred on the INK, not on the line box. `label:` returns
-    # a full line box with room for ascenders and descenders, and a dash inks a
-    # band across the middle of it -- so centring the box leaves the only thing
-    # anyone can see sitting noticeably high. Measured off the track, because
-    # blocks fill their cell and are therefore the honest extent of the row; the
-    # dashes share a baseline with them, so they land where they should.
+    # a full line box with room for ascenders and descenders, and the glyph inks
+    # only part of it -- so centring the box leaves the only thing anyone can
+    # see sitting noticeably high. Measured off the track, because blocks fill
+    # their cell and are therefore the honest extent of the row; the mask
+    # shares a baseline with them, so it lands where it should.
     trimmed = subprocess.run(["magick", str(target / "bar.png"), "-format", "%@",
                               "info:"], capture_output=True, text=True,
                              check=True).stdout
@@ -1208,10 +1241,13 @@ def splash_assets(target, font_path, line_hex):
         "LINE_ASPECT": round(line_height / line_cell, 4),
         "LINE_CELLS": line_cells,
         "BOX_ASPECT": round(box_h / box_w, 4),
+        # The kerned `cell`, deliberately, not `pitch` -- this is the one export
+        # meant to carry the extra air forward to boot time. See the `pitch`
+        # comment above for why everything else here uses `pitch` instead.
         "BOX_CELL_FRAC": round(cell / box_w, 6),
         "BOX_PAD_FRAC": round(pad / box_w, 6),
         "BOX_ROW_FRAC": round(content_y / box_w, 6),
-        "CELL_ASPECT": round(row_height / cell, 4),
+        "CELL_ASPECT": round(row_height / pitch, 4),
     }
 
 

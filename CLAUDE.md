@@ -438,17 +438,33 @@ dither pattern and the other is solid ink, so an empty bar and a half-full one
 do not look like the same object. The track is now one image drawn twice, at two
 opacities.
 
-**A missing glyph draws NOTHING -- not `.notdef`, not a box.** The guard against
-this was written the other way round first, on the assumption that freetype
-would give back a hollow rectangle; it does not. It inks zero pixels and
-advances the cell, so a font without the mask gives you a passphrase prompt that
-does not react as you type, which at 7am on an encrypted disk is
-indistinguishable from a dead keyboard. `splash_assets()` therefore asks the
-PICTURE, at both ends: it measures the mask's ink
-(`magick ... -alpha extract -format "%[fx:mean]"`) against a full block's and
-dies below 1 % (nothing drawn) or above 60 % (block-shaped). Measured in
-Terminus, which is the face that ships: `-` 4.4 %, `·` 3 %, `•` 6 %, `▪` 11 %,
-`*` 12 %, `●` 38 %, `■` 46 %, `▊` 75 %, `█` 100 %.
+**A missing glyph draws NOTHING -- not `.notdef`, not a box.** True of every
+piece of text this splash still typesets (the boot lines, the captions, the
+CAPS LOCK label): freetype does not give back a hollow rectangle for a glyph
+the font lacks, it inks zero pixels and advances the cell. On the passphrase
+mask specifically this is no longer a live risk -- see the next trap, it is
+DRAWN rather than typeset now -- but the guard pattern is worth keeping for
+everything that still is: ask the PICTURE, not the font (`magick ... -alpha
+extract -format "%[fx:mean]"`), and die below 1% ink (nothing drawn) or above
+60% (block-shaped, reads as the progress track). The old table this held was
+wrong for more than one glyph -- re-measured in Terminus, which is the face
+that ships: `-` 4.1 %, `·` 1.4 %, `•` 5.6 %, `▪` 0 % (missing in this font),
+`*` 13.6 %, `●` 5.6 %, `■` 18.7 %, `▊` 73 %, `█` 94.6 %.
+
+**A font can render `●` as a blocky octagon, not a disc, and its ink share
+will not tell you.** TerminessNerdFont is a Terminus derivative, and Terminus
+is a bitmap face at heart -- its `●` measures barely more ink than a plain
+`•` (see the table above) and is visibly NOT round: a stepped, roughly-square
+blob, even at pointsize 120 with no antialiasing to blame. Only visible by
+rendering the one glyph alone and looking at it -- every measurement this file
+takes of MASK is about coverage, none of them are about shape. Cost real time:
+`kerning` and a faux-bold `-strokewidth` were tuned against this glyph first,
+on the reasonable-sounding theory that bigger and bolder would eventually read
+as round. It does not; dilating a blocky octagon draws a bigger blocky octagon.
+The passphrase mask is drawn with ImageMagick's own `circle` primitive now,
+one per cell, rather than typeset at all -- the one piece of text in this file
+that stopped being text, specifically because no glyph in the shipped font
+could deliver the shape asked for.
 
 The same trap bites the typed LINES, and the mask's guard does not cover them: a
 whole line inks plenty with one character missing from the middle, so it comes
