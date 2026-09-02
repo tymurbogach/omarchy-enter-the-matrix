@@ -213,7 +213,7 @@ PROMPT_WIDTH = 0.42         # sizes the CAPS LOCK label; the disk's own prompt
 #
 # Its interior is wide enough for BOTH phases, so the panel never changes size
 # between asking for the passphrase and reporting progress -- 21 masked
-# characters, and 20 track blocks + a gap + 4 digits, is 25 either way.
+# characters, and 16 track blocks + a gap + 4 digits, is 21 either way.
 #
 # Every element inside the panel that is drawn LIVE rather than baked -- the
 # mask, the track, the digits -- is sized off `mx_cell`, a fraction of this,
@@ -233,7 +233,17 @@ BOX_CELLS = 26              # interior width, in cells: 25 of content and air
 # one rather than a different material. `[████░░░░] 42%` was the old readout:
 # `░` is a dither pattern and `█` is solid ink, which made 0% and 50% look like
 # two unrelated widgets.
-BAR_CELLS = 20              # blocks in the track
+#
+# 16, not 20: kerning (added when the mask became a drawn circle) widens
+# every cell on this grid, and this row -- BAR_CELLS+BAR_GAP_CELLS+PCT_CELLS
+# -- only had ONE cell of slack against BOX_CELLS to absorb that in. It did
+# not: photographed on real hardware, "27%" ran past the panel's own right
+# edge. KEY_CELLS's row has FIVE cells of slack and was never at risk, which
+# is why only the digits, not the passphrase, ever showed it. 16 brings this
+# row to 21 cells, matching KEY_CELLS's own count and its five-cell margin --
+# see the guard right after `pitch` is computed in splash_assets(), which
+# now checks this arithmetic instead of leaving it to a comment.
+BAR_CELLS = 16              # blocks in the track
 BAR_GAP_CELLS = 1           # between the track and the digits
 PCT_CELLS = 4               # "  0%" .. "100%", padded, so the width is fixed
 TRACK_ALPHA = 0.25          # the part still to do
@@ -457,6 +467,10 @@ global.mx_bar_on = 0;
 # Countdown, in frames, of the one-shot feedback -- see mx_feedback_tick().
 global.mx_denied_frames = 0;
 global.mx_granted_frames = 0;
+# Set the moment the DENIED heuristic fires, cleared the moment real typing
+# progress is seen again -- see mx_password_callback for why GRANTED cannot
+# just read `password_shown` on its own.
+global.mx_was_denied = 0;
 """)
 
 
@@ -528,13 +542,21 @@ global.mx_in_x = global.mx_box_x + Math.Int(global.mx_box_w * $BOX_PAD_FRAC);
 global.mx_in_y = global.mx_box_y + Math.Int(global.mx_box_w * $BOX_ROW_FRAC);
 global.mx_in_h = Math.Int(global.mx_cell * $CELL_ASPECT);
 
-# The passphrase: one image of $KEY_CELLS masked characters, revealed a cell
-# at a time.
+# The passphrase: $KEY_CELLS masked characters. Drawn TWICE, same as the
+# progress track below -- the whole row dimmed at $TRACK_ALPHA and always
+# visible once the dialog is up, the typed prefix opaque on top of it and
+# growing a cell at a time. Without the dimmed row underneath, the field was
+# invisible until the first keystroke: no sense of the field even being
+# there, let alone how much of it there was to fill.
 mx_key.image = Image("keyline.png");
 mx_key.scaled = mx_key.image.Scale(Math.Int($KEY_CELLS * global.mx_cell), global.mx_in_h);
-mx_key.sprite = Sprite();
+mx_key.sprite = Sprite(mx_key.scaled);
 mx_key.sprite.SetPosition(global.mx_in_x, global.mx_in_y, 10001);
 mx_key.sprite.SetOpacity(0);
+
+mx_key_fill.sprite = Sprite();
+mx_key_fill.sprite.SetPosition(global.mx_in_x, global.mx_in_y, 10002);
+mx_key_fill.sprite.SetOpacity(0);
 
 
 # The disk's own prompt used to be drawn here too, dimmed, above the panel --
@@ -649,6 +671,7 @@ fun mx_hide_dialog() {
   global.mx_caps_state = -1;
   global.mx_denied_frames = 0;
   mx_key.sprite.SetOpacity(0);
+  mx_key_fill.sprite.SetOpacity(0);
   mx_caps.sprite.SetOpacity(0);
   mx_box.sprite.SetOpacity(0);
 }
@@ -660,6 +683,7 @@ fun mx_password_callback(prompt, bullets) {
   stop_fake_progress();
   hide_progress_bar();
   mx_bar_show(0);
+  mx_key.sprite.SetOpacity($TRACK_ALPHA);
 
   shown = bullets;
   if (shown > $KEY_CELLS) shown = $KEY_CELLS;
@@ -678,6 +702,9 @@ fun mx_password_callback(prompt, bullets) {
     # that apart from the user backspacing the field to nothing by hand.
     global.mx_denied_frames = $DENIED_HOLD;
     mx_box.sprite.SetImage(mx_box.denied_scaled);
+    # See `mx_was_denied`'s own declaration for why GRANTED cannot be decided
+    # from `password_shown` alone.
+    global.mx_was_denied = 1;
   } else {
     mx_box.sprite.SetImage(mx_box.key_scaled);
   }
@@ -687,21 +714,27 @@ fun mx_password_callback(prompt, bullets) {
     global.mx_bullets = shown;
     if (shown < 1) {
       # Crop() to zero width is not worth trusting, and an empty field is what
-      # "nothing typed yet" should look like anyway.
-      mx_key.sprite.SetOpacity(0);
+      # "nothing typed yet" should look like anyway -- the dimmed mx_key row
+      # above is what actually stays on screen.
+      mx_key_fill.sprite.SetOpacity(0);
     } else {
-      # Centred as a GROUP, not left-anchored -- the reference shows the
-      # masked entry centred in the box, and a field anchored at mx_in_x
-      # instead left a typed passphrase stranded off to one side of a box
-      # wide enough for KEY_CELLS characters. It re-centres on every keystroke,
-      # so the block grows outward from its own middle rather than sliding
-      # as a whole.
+      # Real typing progress -- the passphrase field just grew by a character
+      # -- is the one event that un-arms a denial. `password_shown` cannot do
+      # this job on its own: this whole function runs on every refresh tick
+      # the dialog is up, not once per keystroke (the `shown != mx_bullets`
+      # guard right here exists for exactly that reason), and it sets
+      # `password_shown = 1` unconditionally at its own top every single one
+      # of those ticks. A flag reset inside the DENIED branch above would be
+      # re-armed by the very next tick's unconditional set, before
+      # mx_normal_callback ever gets a chance to read it -- proved by feeding
+      # this function a denial followed by repeated no-op ticks in a doctored
+      # preview and watching GRANTED paint anyway. `mx_was_denied` only ever
+      # changes on these two real events, never on a tick that changed
+      # nothing.
+      global.mx_was_denied = 0;
       key_w = Math.Int(shown * global.mx_cell);
-      mx_key.sprite.SetPosition(
-        global.mx_box_x + Math.Int((global.mx_box_w - key_w) / 2),
-        global.mx_in_y, 10001);
-      mx_key.sprite.SetImage(mx_key.scaled.Crop(0, 0, key_w, global.mx_in_h));
-      mx_key.sprite.SetOpacity(1);
+      mx_key_fill.sprite.SetImage(mx_key.scaled.Crop(0, 0, key_w, global.mx_in_h));
+      mx_key_fill.sprite.SetOpacity(1);
     }
   }
 
@@ -717,7 +750,14 @@ fun mx_normal_callback() {
   progress_box.sprite.SetOpacity(0);
   progress_bar.sprite.SetOpacity(0);
   mx_hide_dialog();
-  if (global.password_shown == 1) {
+  # `password_shown` alone is not enough -- it is Omarchy's own "a dialog was
+  # shown at least once this boot" flag, set the instant a single character is
+  # typed and never reset by anything, ours or Omarchy's. A boot that gives up
+  # on a wrong passphrase (retries exhausted, no further prompt) reaches this
+  # function with password_shown still 1 from the very first keystroke, and
+  # painted ACCESS GRANTED over a rejected password. `mx_was_denied` is what
+  # actually rules that out: see its own declaration and mx_password_callback.
+  if (global.password_shown == 1 && global.mx_was_denied == 0) {
     # ACCESS GRANTED in the band itself -- mx_feedback_tick() hands it to the
     # progress caption, and starts the real track, once $GRANTED_HOLD runs out.
     mx_box.sprite.SetImage(mx_box.granted_scaled);
@@ -1071,6 +1111,20 @@ def splash_assets(target, font_path, line_hex):
     # the unkerned reference -- what `cell` would have measured without the
     # air -- and is what everything that sizes the box uses instead.
     pitch = cell - kerning
+
+    # Does the widest row (mask, or track+gap+digits, whichever needs more
+    # cells) actually fit the interior once kerning's air is added back in?
+    # BOX_CELLS is the budget; a row that needs more of it than it has runs
+    # past the panel's own frame -- "27%" doing exactly that on real hardware,
+    # because this was never checked, is why this guard exists now.
+    widest_row = max(KEY_CELLS, BAR_CELLS + BAR_GAP_CELLS + PCT_CELLS)
+    if widest_row * cell > BOX_CELLS * pitch:
+        die(f"the widest row on the panel's grid is {widest_row} cells, which "
+            f"at this kerning needs {widest_row * cell:.0f}px -- more than "
+            f"the {BOX_CELLS}-cell interior's {BOX_CELLS * pitch:.0f}px.\n"
+            f"  Shrink `kerning`, or free up cells: BAR_CELLS + "
+            f"BAR_GAP_CELLS + PCT_CELLS and KEY_CELLS both have to fit "
+            f"BOX_CELLS.")
 
     # One height for both, so one aspect describes them and the row cannot sit a
     # pixel high. Padded rather than assumed equal: `label:` hands back a line

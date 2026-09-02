@@ -289,7 +289,7 @@ there and it gets regenerated, so editing in it loses the change. Keep a working
 copy elsewhere:
 
 ```bash
-git clone https://github.com/tymurbogach/omarchy-enter-the-matrix ~/dev/omarchy-matrix
+git clone https://github.com/tymurbogach/omarchy-enter-the-matrix ~/dev/omarchy-enter-the-matrix
 # edit, commit and push there, then:
 cd ~/.config/omarchy/themes/enter-the-matrix && git pull && ./install.sh
 ```
