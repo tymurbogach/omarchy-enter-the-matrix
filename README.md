@@ -42,7 +42,6 @@ bar** or from the command line:
 omarchy-matrix status            # what is on right now
 omarchy-matrix wallpaper off     # any piece: wallpaper screensaver lock boot widget
 omarchy-matrix boot on
-omarchy-matrix soft on           # the soft theme mode (see below)
 omarchy-matrix doctor            # assert everything again
 ```
 
@@ -76,31 +75,15 @@ without shutting down: `bin/preview-plymouth.sh <scenario> --mode shutdown`.
 > `omarchy plymouth reset` from a running system, or `plymouth.enable=0` on the
 > kernel line from your boot loader.
 
-## The soft variant
+## The palette
 
-The theme root is the original void — phosphor on near-black, full glare.
-`omarchy-matrix soft on` — or the **Soft** switch on the bar widget — trades
-it for the film's own shadows: surfaces lifted to where the film's dark
-scenes actually sit (the pills scene averages `#171716`, Neo's sleep
-`#0E170C`, Morpheus in warm ambers), the accent taken down from neon to a
-softer phosphor. Same hue axis, same green hero, same ice-blue prompt and
-reserved red — only the glare goes. Everything follows: terminal colours,
-bar, launcher, menus, notifications, and the boot splash, which re-derives
-from the soft colours so the typed lines match the mode. The rain is
-untouched.
-
-```bash
-omarchy-matrix soft on       # shadows; re-applies the theme, holds your background
-omarchy-matrix soft off      # the void, files handed back with git
-omarchy-matrix soft toggle   # either way
-```
-
-How it works: the overlay is committed at `variants/soft-dark/` and copied
-over the *installed* theme directory, then the theme is re-applied. That
-dirties the clone on purpose, the way a user edit would — so `soft off`
-restores the void files with `git checkout`, and `omarchy theme update` (a
-bare `git pull`) wants a clean tree: turn soft off first, update, turn it
-back on.
+No void black: the film never shows one. Surfaces sit where its dark scenes
+actually sit (the pills scene averages `#171716`, Neo's sleep `#0E170C`,
+Morpheus in warm ambers), the green is the monitor's own yellow-leaning
+phosphor, red is the signal red (pill, dress, alarms) and blue the real
+world's steel — each lightened only as far as legibility demands
+(`#C8102E` at 3.3:1 cannot carry text). Same green hero, same ice-blue
+prompt. The rain is untouched.
 
 ## Worth knowing
 

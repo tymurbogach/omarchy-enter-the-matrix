@@ -195,7 +195,6 @@ hiding `label-pango` and every font but the three the initramfs would have.
 | | |
 |---|---|
 | `colors.toml` | The palette. Semantic, not `color0..15`. Includes the Hyprland border colours, which go through the template. |
-| `variants/soft-dark/` | The soft overlay: `colors.toml`, the four `shell.*.toml` and `icons.theme` at the film's own shadow values. `soft on` copies them over the installed theme directory; `soft off` hands the files back with `git checkout`. Listed in `provider.json`, the way everything nameable is. |
 | `shell.{bar,menu,launcher,notifications}.toml` | Shell section overrides: they give the bar and the cards some relief, which otherwise all paint the same black. |
 | `backgrounds/` | The carousel. `0-pills.jpg` is the default, so installing only the theme still gives you a wallpaper. `1-live-rain.png` is a still frame of the shader: thumbnail, marker and fallback in one — selecting it is what turns the desktop rain on, and the shader finds it by the `-live-` in its name. The rest are stills: seven from the film, three not. |
 | `unlock.png`, `preview-unlock.png` | The static boot mark, for anyone installing the theme without the pack. With the pack, `logo.png` goes invisible and the lines are typed instead. |
@@ -231,46 +230,25 @@ hl.config({
 
 ### The palette
 
-Everything is green except the red, which is reserved for errors. What sets it
-apart from any other green theme is that each ANSI slot sits on a **different
-rung of luminance**, so in `nvim` or `bat` the syntactic roles stay apart instead
-of blurring into one smear. Minimum contrast against the background: 5.2.
-
-The hue axis is **126°**, which is where the rain itself lives (120°). That
-matters more than it sounds: the palette used to sit at 135–158°, drifting into
-mint and teal while the wallpaper stayed true green, and the mismatch is the
-kind the eye notices without being able to name. Saturation is held at 42–52%
-— the rain's own trail is 25% — so the interface accompanies the wallpaper
-instead of competing with it.
-
-And the accent is not the border. `#60C76B` marks what the eye should find;
-window frames, selections and card edges run dimmer, around 4.3:1 against the
-surface they sit on. A border delimits; it does not need to shout.
-
-### The soft variant
-
-One repo is one theme in Omarchy — a single `mode` per `colors.toml`, a folder
-named after the repo — so a second mode cannot be a second theme without a
-second repo, and maintaining the whole pack twice is how the two drift apart.
-Instead the theme root stays the void and `variants/soft-dark/` carries the
-overlay: same files, same names, softer values. The CLI copies them over the
-installed theme directory and re-applies it; switching off restores the void
-files with `git checkout`, which is available because the theme directory is
-always a clone. Deliberately derived, never a frozen second copy: after a
-`theme update` the overlay is the fresh one, and the lock and boot derivers
-keep reading the installed directory, so they follow the mode with no changes.
-Both modes are `mode = "dark"`, so the CLI tells them apart by the background:
-soft is staged when the root wears the overlay's own background, read from the
-overlay rather than written down anywhere else.
-
-What the overlay does not touch is the rain. The shader stays exactly as it
-is in both modes — the complaint was never the falling code, it was the void
-behind the windows.
-
-The values are measured off the film's own stills, not chosen: the pills
+There is no void black here, because the film never shows one: the pills
 scene averages `#171716`, Neo's sleep `#0E170C`, Morpheus in warm ambers
-(`#433C2D`, `#584B35`). The void (`#080C08`) is darker and colder than any of
-them, which is why it glares next to the phosphor.
+(`#433C2D`, `#584B35`). Surfaces sit in that range with a faint warm-green
+cast, and the green is the monitor's own -- yellow-leaning, the way the grade
+pushes it -- with the ice-blue prompt untouched and red reserved for errors.
+
+What sets it apart from any other green theme is that each ANSI slot sits on
+a **different rung of luminance**, so in `nvim` or `bat` the syntactic roles
+stay apart instead of blurring into one smear. Minimum contrast against the
+background: 4.5.
+
+The hue axis follows the rain rather than grass: yellow-leaning phosphor for
+the hero, the grade's sickly midtones for yellow, the real world's steel for
+blue, the ship's amber for brown. Saturation stays below the rain's own trail,
+so the interface accompanies the wallpaper instead of competing with it.
+
+And the accent is not the border. `#7BAE4E` marks what the eye should find;
+window frames, selections and card edges run dimmer. A border delimits; it
+does not need to shout.
 
 | | | |
 |---|---|---|
@@ -278,26 +256,18 @@ them, which is why it glares next to the phosphor.
 | `foreground` | `#93B298` | sage, never phosphor · 7.9 |
 | `accent` / `green` | `#7BAE4E` | monitor phosphor, yellow-leaning · 7.0 |
 | `yellow` | `#A8BE5A` | the grade's sickly midtones · 8.9 |
+| `cyan` | `#7CBCA0` | pale terminal · 8.3 |
+| `magenta` | `#4CAF7E` | jade · 6.7 |
+| `orange` | `#7BAE5A` | olive · 7.0 |
 | `blue` | `#5B8CA8` | the real world's steel · 5.0 |
 | `brown` | `#A07A45` | the ship's amber · 4.7 |
 | `red` | `#E5484D` | signal red, lightened to read · 4.7 |
 | `muted` | `#33482F` | |
 
-| | | |
-|---|---|---|
-| `cyan` | `#92D9BB` | mint · 12.1 |
-| `yellow` | `#B6CF7D` | lime · 11.4 |
-| `green` | `#60C76B` | the hero · 9.3 |
-| `magenta` | `#4FC482` | jade · 9.0 |
-| `orange` | `#81B851` | olive · 8.4 |
-| `blue` | `#5B8CA8` | the real world's steel · 5.4 |
-| `brown` | `#A07A45` | the ship's amber · 5.0 |
-| `red` | `#E5484D` | signal red, lightened to read · 5.0 |
-
 Blue used to be a third green and red a pink: neither exists in the film.
 The real red (`#C8102E`, pill and dress) sits at 3.3:1 and cannot carry text,
-so both files wear the closest rung that holds the floor -- and say so, here,
-rather than pretending the hex came off a frame.
+so the theme wears the closest rung that holds the floor -- and says so,
+here, rather than pretending the hex came off a frame.
 
 ### Regenerating
 

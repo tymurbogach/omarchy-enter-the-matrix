@@ -51,11 +51,6 @@ CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 PIECES=(wallpaper screensaver lock boot widget)
 
-# The soft variant is an overlay, not a piece: it never follows `on`/`off`
-# (those switch the rain, not the theme mode) and it defaults to false, unlike
-# the pieces above which default to true when the key is missing.
-SOFT_DIR=$(jq -r '.variants.soft.dir // "variants/soft-dark"' "$PROVIDER" 2>/dev/null || echo "variants/soft-dark")
-
 # --- state ------------------------------------------------------------------
 
 # The desktop pieces are only IN EFFECT while the pack's theme is the current
@@ -297,92 +292,6 @@ sync_files() {
   files_outdated "$theme" || return 0
   echo "  the theme directory has moved on; refreshing the pack's copies"
   "$theme/install.sh" --sync || echo "  could not refresh them; run $theme/install.sh" >&2
-}
-
-# --- the soft variant -------------------------------------------------------
-# The theme root is the original void; the soft mode is an overlay committed
-# at variants/soft-dark/ and copied over the INSTALLED theme directory by
-# `soft on`. That dirties the clone the way a user edit would, on purpose --
-# so `soft off` hands the files back with `git checkout`, and `theme update`
-# (a bare `git pull`) wants a clean tree: turn soft off first, update, turn
-# it on.
-#
-# doctor never re-applies the overlay on its own: re-applying means
-# `theme set`, which rotates the background, and a hook doing that behind your
-# back is worse than the drift. Drift is reported by `status` instead.
-
-soft_setting() {
-  [[ -f $CONFIG ]] || { echo "false"; return; }
-  # `// false` is wrong here for the same reason `// true` is wrong above: jq
-  # treats false as absent. Ask for the key, not for its value.
-  jq -r 'if has("soft") then .soft else false end | tostring' "$CONFIG" 2>/dev/null || echo "false"
-}
-
-soft_files() {
-  jq -r '(.variants.soft.files // [])[]' "$PROVIDER" 2>/dev/null
-}
-
-# What the installed theme directory currently wears, void or soft. Both modes
-# are `mode = "dark"`, so the background tells them apart: soft is staged when
-# the root wears the overlay's own background. Read from the overlay rather
-# than written down here, so the two cannot drift apart.
-soft_staged() {
-  local dir src want got
-  dir=$(theme_dir) || return 1
-  src="$dir/$SOFT_DIR/colors.toml"
-  [[ -f $src ]] || return 1
-  want=$(sed -n 's/^background *= *//p' "$src" 2>/dev/null | tr -d '" ' | head -1)
-  got=$(sed -n 's/^background *= *//p' "$dir/colors.toml" 2>/dev/null | tr -d '" ' | head -1)
-  [[ -n $want && $got == "$want" ]]
-}
-
-is_soft_active() {
-  [[ $(soft_setting) == "true" ]] || return 1
-  pack_in_effect || return 1
-  soft_staged
-}
-
-apply_soft() {
-  local theme src f kept=""
-  theme=$(theme_dir) || fail "cannot find the $THEME_SLUG theme directory"
-  # The overlay lives in the INSTALLED theme, not next to this script: after a
-  # `theme update` it is the fresh one, which is exactly what we want to wear.
-  src="$theme/$SOFT_DIR"
-  [[ -d $src ]] || fail "no soft variant in $theme (needs $SOFT_DIR)"
-  mapfile -t FILES < <(soft_files)
-  (( ${#FILES[@]} > 0 )) || fail "no soft variant files in provider.json"
-
-  if [[ $(soft_setting) == "true" ]]; then
-    for f in "${FILES[@]}"; do
-      [[ -f $src/$f ]] || fail "soft variant is missing $f"
-      cp -f "$src/$f" "$theme/$f"
-    done
-    echo "  soft on: ${#FILES[@]} files over $theme"
-  else
-    if [[ -d $theme/.git ]]; then
-      (cd "$theme" && git checkout -- "${FILES[@]}") ||
-        fail "could not restore the void files; check git status in $theme"
-    else
-      fail "cannot restore the void files: $theme is not a git clone"
-    fi
-    echo "  soft off: void files restored"
-  fi
-
-  # `theme set` stages colours+shell and rotates to the NEXT background, so hold
-  # the background steady across the switch: back to the rain when it is on,
-  # else back to the still that was there.
-  kept=$(readlink "$HOME/.local/state/omarchy/current/background" 2>/dev/null || true)
-  omarchy-theme-set "$THEME_SLUG" >/dev/null 2>&1 || fail "could not re-apply $THEME_SLUG"
-  if [[ $(read_setting wallpaper) == "true" ]]; then
-    select_live_background
-  elif [[ -n $kept && -f $theme/backgrounds/$(basename "$kept") ]]; then
-    omarchy-theme-bg-set "$theme/backgrounds/$(basename "$kept")" >/dev/null 2>&1 || true
-  fi
-  # The boot splash bakes the theme's colours in: re-derive it when it is on so
-  # the typed lines match the mode. It needs sudo, which is why the widget runs
-  # `soft` visibly rather than detached.
-  [[ $(read_setting boot) == "true" ]] || return 0
-  apply_boot
 }
 
 # --- pieces -----------------------------------------------------------------
@@ -702,19 +611,17 @@ cmd_status() {
     # `settings` is what you asked for, `active` is what is happening. They are
     # not the same question -- see is_active -- and the widget draws its ticks
     # from `active` so that one definition serves both it and the text below.
-    # `soft` rides along the same way: the widget's Soft switch reads it.
     jq -n \
       --argjson w "$(read_setting wallpaper)" --argjson s "$(read_setting screensaver)" \
       --argjson l "$(read_setting lock)" --argjson b "$(read_setting boot)" \
       --argjson aw "$(active_of wallpaper)" --argjson as "$(active_of screensaver)" \
       --argjson al "$(active_of lock)" --argjson ab "$(active_of boot)" \
       --argjson g "$(read_setting widget)" --argjson ag "$(active_of widget)" \
-      --argjson li "$(soft_setting)" --argjson la "$(is_soft_active && echo true || echo false)" \
       --argjson effect "$(pack_in_effect && echo true || echo false)" \
       --arg theme "$(current_theme)" --arg name "$DISPLAY_NAME" --arg slug "$THEME_SLUG" \
       '{name: $name, slug: $slug, theme: $theme, active: $effect,
-        settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b, widget: $g, soft: $li},
-        pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab, widget: $ag, soft: $la}}'
+        settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b, widget: $g},
+        pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab, widget: $ag}}'
     return
   fi
 
@@ -751,22 +658,6 @@ cmd_status() {
   if pack_in_effect && [[ $(read_setting wallpaper) == "true" || $(read_setting screensaver) == "true" ]] &&
     ! plugin_enabled "$PLUGIN_ID"; then
     printf '\n  the %s plugin is not active — fix it with: %s doctor\n' "$PLUGIN_ID" "$SELF"
-  fi
-
-  # The theme mode, after the rain pieces: on means the soft film shadows, off
-  # means the original void. Never re-applied here -- see apply_soft -- only
-  # reported.
-  if is_soft_active; then
-    printf '  \033[32m✓\033[0m %-12s\n' "soft"
-  elif [[ $(soft_setting) != "true" ]]; then
-    printf '    %-12s\n' "soft"
-  elif ! pack_in_effect; then
-    printf '    %-12s \033[2mon, but stood down with the theme\033[0m\n' "soft"
-  elif ! soft_staged; then
-    printf '    %-12s \033[2mon, but the theme files are the void — run: %s soft on\033[0m\n' \
-      "soft" "$SELF"
-  else
-    printf '    %-12s \033[2mon, but not in effect — run: %s doctor\033[0m\n' "soft" "$SELF"
   fi
 }
 
@@ -840,10 +731,9 @@ usage() {
   cat <<USAGE
 Usage: $SELF <command>
 
-  on | off                            Turn the whole pack on or off (the rain pieces, not the theme mode)
+  on | off                            Turn the whole pack on or off
   wallpaper|screensaver|lock|boot|widget on|off|toggle
                                       One piece at a time
-  soft on|off|toggle                  The film's own shadows (on) or the original void (off)
   status [--is <piece>] [--json]      What is on
   doctor                              Assert everything again
   suspend                             Stand the pack down, keeping your settings
@@ -854,9 +744,6 @@ Pieces:
   lock         Rain behind the password field when you lock
   boot         The screen before login (Plymouth). Needs sudo.
   widget       The switchboard on the bar: these switches, one click away
-  soft         The theme mode. Needs the theme directory to be a git clone
-               (it is, when installed with `omarchy theme install`); turn it
-               off before `omarchy theme update`, then back on after.
 USAGE
 }
 
@@ -869,19 +756,6 @@ off) cmd_all false ;;
 status) cmd_status "$@" ;;
 doctor) cmd_doctor ;;
 suspend) cmd_suspend ;;
-light)
-  fail "no light mode in this pack; the soft shadows are: $SELF soft on"
-  ;;
-soft)
-  action="${1:-toggle}"
-  case "$action" in
-  on) write_setting soft true ;;
-  off) write_setting soft false ;;
-  toggle) [[ $(soft_setting) == "true" ]] && write_setting soft false || write_setting soft true ;;
-  *) fail "unknown action: $action (use on, off or toggle)" ;;
-  esac
-  apply_soft
-  ;;
 wallpaper | screensaver | lock | boot | widget)
   action="${1:-toggle}"
   case "$action" in

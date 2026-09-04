@@ -276,7 +276,7 @@ if [[ ! -f $CONFIG ]]; then
   ask "Screensaver" "rain when idle, instead of Omarchy's" || s=false
   ask "Lock       " "rain behind the password field"       || l=false
   ask "Bar icon   " "these switches, one click away"       || g=false
-  printf '{"wallpaper": %s, "screensaver": %s, "lock": %s, "boot": true, "widget": %s, "soft": false}\n' \
+  printf '{"wallpaper": %s, "screensaver": %s, "lock": %s, "boot": true, "widget": %s}\n' \
     "$w" "$s" "$l" "$g" >"$CONFIG"
 fi
 

@@ -37,11 +37,11 @@ DARK_FG = "#3A6B4A"
 ACCENT = "#00FF41"
 
 PALETTE = [
-    ("bg", "#020A04"), ("red", "#F0263F"), ("green", "#00FF41"),
-    ("yellow", "#B8E65C"), ("blue", "#1AB07A"), ("magenta", "#35D68F"),
+    ("bg", "#020A04"), ("red", "#E5484D"), ("green", "#00FF41"),
+    ("yellow", "#B8E65C"), ("blue", "#5B8CA8"), ("magenta", "#35D68F"),
     ("cyan", "#8AF5C8"), ("fg", "#B8ECC6"),
-    ("muted", "#203A27"), ("red+", "#FF5C74"), ("green+", "#6BFF92"),
-    ("yellow+", "#E2FF8F"), ("blue+", "#2BD68C"), ("magenta+", "#66F0B4"),
+    ("muted", "#203A27"), ("red+", "#E0605F"), ("green+", "#6BFF92"),
+    ("yellow+", "#E2FF8F"), ("blue+", "#6B9AB5"), ("magenta+", "#66F0B4"),
     ("cyan+", "#B8FFE8"), ("fg+", "#DFFFE9"),
 ]
 
@@ -50,11 +50,11 @@ PALETTE = [
 # show every ANSI slot at once on a realistic line of code, which is the whole
 # argument for this palette.
 CODE = [
-    [("def ", "#1AB07A"), ("wake_up", "#00FF41"), ("(", FG), ("subject", "#B8E65C"),
+    [("def ", "#5B8CA8"), ("wake_up", "#00FF41"), ("(", FG), ("subject", "#B8E65C"),
      (", ", FG), ("pill", "#B8E65C"), ("=", FG), ('"red"', "#8AF5C8"), ("):", FG)],
-    [("    ", FG), ("if", "#1AB07A"), (" pill ", FG), ("==", FG), (' "blue"', "#8AF5C8"), (":", FG)],
-    [("        raise ", "#1AB07A"), ("StillAsleep", "#F0263F"), ("(subject)", FG)],
-    [("    ", FG), ("return", "#1AB07A"), (" subject.", FG), ("unplug", "#35D68F"), ("()", FG)],
+    [("    ", FG), ("if", "#5B8CA8"), (" pill ", FG), ("==", FG), (' "blue"', "#8AF5C8"), (":", FG)],
+    [("        raise ", "#5B8CA8"), ("StillAsleep", "#E0605F"), ("(subject)", FG)],
+    [("    ", FG), ("return", "#5B8CA8"), (" subject.", FG), ("unplug", "#35D68F"), ("()", FG)],
 ]
 
 

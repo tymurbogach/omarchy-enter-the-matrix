@@ -19,29 +19,8 @@
   "cli": "omarchy-matrix",
   "//ipc": "The IpcHandler target the service registers; `omarchy-shell <ipc> ...`.",
   "ipc": "matrix",
-  "accent": "#60c76b",
+  "accent": "#7bae4e",
   "repoUrl": "https://github.com/tymurbogach/omarchy-enter-the-matrix",
-
-  "//variants": [
-    "Theme modes that ship in this repo as overlays. The theme root stays the",
-    "original void; `omarchy-matrix soft on` copies the overlay over the",
-    "installed theme directory and re-applies it, `soft off` hands the files",
-    "back with `git checkout`. The machinery reads these names from here, the",
-    "way it reads everything else: nothing outside this file says `soft`."
-  ],
-  "variants": {
-    "soft": {
-      "dir": "variants/soft-dark",
-      "files": [
-        "colors.toml",
-        "shell.bar.toml",
-        "shell.launcher.toml",
-        "shell.menu.toml",
-        "shell.notifications.toml",
-        "icons.theme"
-      ]
-    }
-  },
 
   "plugin": {
     "id": "matrix.rain",
