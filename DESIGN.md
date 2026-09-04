@@ -276,8 +276,11 @@ them, which is why it glares next to the phosphor.
 |---|---|---|
 | `background` | `#131610` | the film's shadows, faintly warm-green |
 | `foreground` | `#93B298` | sage, never phosphor · 7.9 |
-| `accent` / `green` | `#5CAE66` | the hero, one rung down · 6.7 |
-| `red` | `#D98A92` | errors · 7.0 |
+| `accent` / `green` | `#7BAE4E` | monitor phosphor, yellow-leaning · 7.0 |
+| `yellow` | `#A8BE5A` | the grade's sickly midtones · 8.9 |
+| `blue` | `#5B8CA8` | the real world's steel · 5.0 |
+| `brown` | `#A07A45` | the ship's amber · 4.7 |
+| `red` | `#E5484D` | signal red, lightened to read · 4.7 |
 | `muted` | `#33482F` | |
 
 | | | |
@@ -287,8 +290,14 @@ them, which is why it glares next to the phosphor.
 | `green` | `#60C76B` | the hero · 9.3 |
 | `magenta` | `#4FC482` | jade · 9.0 |
 | `orange` | `#81B851` | olive · 8.4 |
-| `blue` | `#319B4A` | emerald · 5.5 |
-| `red` | `#D85A63` | errors · 5.2 |
+| `blue` | `#5B8CA8` | the real world's steel · 5.4 |
+| `brown` | `#A07A45` | the ship's amber · 5.0 |
+| `red` | `#E5484D` | signal red, lightened to read · 5.0 |
+
+Blue used to be a third green and red a pink: neither exists in the film.
+The real red (`#C8102E`, pill and dress) sits at 3.3:1 and cannot carry text,
+so both files wear the closest rung that holds the floor -- and say so, here,
+rather than pretending the hex came off a frame.
 
 ### Regenerating
 

@@ -25,18 +25,21 @@ active_border_color      = "#3D8F48"
 active_tab_background    = "#2E7A40"
 
 # --- the ANSI ladder: separated by luminance, plus hue within the green ----
-red     = "#D85A63"
+# Red is the film's signal red (pill, dress, alarms), blue the real world's
+# steel blue -- both lightened to stay legible, because the exact film hexes
+# (#C8102E at 3.3:1) cannot carry text. Brown is the Nebuchadnezzar amber.
+red     = "#E5484D"
 yellow  = "#B6CF7D"
 orange  = "#81B851"
 green   = "#60C76B"
 cyan    = "#92D9BB"
-blue    = "#319B4A"
+blue    = "#5B8CA8"
 magenta = "#4FC482"
-brown   = "#4E663D"
+brown   = "#A07A45"
 
-bright_red     = "#EC8A91"
+bright_red     = "#E0605F"
 bright_yellow  = "#CEE0A3"
 bright_green   = "#8BDA93"
 bright_cyan    = "#B9E9D5"
-bright_blue    = "#4FC46A"
+bright_blue    = "#6B9AB5"
 bright_magenta = "#7DD8A5"

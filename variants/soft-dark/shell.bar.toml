@@ -4,7 +4,7 @@
 background       = "#0B0E09"
 background-alpha = 1.0
 text             = "#93B298"
-active           = "#D98A92"
+active           = "#E5484D"
 scale-with-font  = true
 size-horizontal  = 26
 size-vertical    = 28
