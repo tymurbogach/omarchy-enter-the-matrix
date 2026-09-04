@@ -22,6 +22,30 @@
   "accent": "#60c76b",
   "repoUrl": "https://github.com/tymurbogach/omarchy-enter-the-matrix",
 
+  "//variants": [
+    "Theme modes that ship in this repo as overlays. The theme root stays the",
+    "dark theme; `omarchy-matrix light on` copies the overlay over the",
+    "installed theme directory and re-applies it, `light off` hands the files",
+    "back with `git checkout`. The machinery reads these names from here, the",
+    "way it reads everything else: nothing outside this file says `light`."
+  ],
+  "variants": {
+    "light": {
+      "dir": "variants/light",
+      "files": [
+        "colors.toml",
+        "shell.bar.toml",
+        "shell.launcher.toml",
+        "shell.menu.toml",
+        "shell.notifications.toml",
+        "icons.theme",
+        "unlock.png",
+        "preview-unlock.png",
+        "preview.png"
+      ]
+    }
+  },
+
   "plugin": {
     "id": "matrix.rain",
     "dir": ".",

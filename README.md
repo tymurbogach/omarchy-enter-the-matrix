@@ -42,6 +42,7 @@ bar** or from the command line:
 omarchy-matrix status            # what is on right now
 omarchy-matrix wallpaper off     # any piece: wallpaper screensaver lock boot widget
 omarchy-matrix boot on
+omarchy-matrix light on          # the light theme mode (see below)
 omarchy-matrix doctor            # assert everything again
 ```
 
@@ -74,6 +75,31 @@ without shutting down: `bin/preview-plymouth.sh <scenario> --mode shutdown`.
 > own dialog rather than to no dialog. If anything goes wrong:
 > `omarchy plymouth reset` from a running system, or `plymouth.enable=0` on the
 > kernel line from your boot loader.
+
+## The light variant
+
+The theme root is the dark void. `omarchy-matrix light on` — or the **Light**
+switch on the bar widget — lays mist-green paper over it instead: same hue
+axis as the dark palette, inverted to green ink on `#E9F1E7`. Everything
+follows: terminal colours, bar, launcher, menus, notifications, icons, the
+lock's password field fonts aside, and the boot splash, which re-derives from
+the light colours so the typed lines match the mode.
+
+```bash
+omarchy-matrix light on      # paper; re-applies the theme, holds your background
+omarchy-matrix light off     # the dark void, files handed back with git
+omarchy-matrix light toggle  # either way
+```
+
+How it works: the overlay is committed at `variants/light/` and copied over
+the *installed* theme directory, then the theme is re-applied. That dirties
+the clone on purpose, the way a user edit would — so `light off` restores the
+dark files with `git checkout`, and `omarchy theme update` (a bare `git pull`)
+wants a clean tree: turn light off first, update, turn it back on.
+
+The rain is untouched and stays phosphor-bright in both modes. On the
+near-white stills (notably `9-neo-white.jpg`) that means the rain washes out —
+pick a darker still, or turn the desktop rain off, when the paper is on.
 
 ## Worth knowing
 
@@ -181,6 +207,9 @@ ordinary Omarchy theme.
 5-hotel-corridor.jpg
 6-green-street.jpg
 7-the-office.jpg
+8-helicopter.png   daylight raid, pale green sky
+9-neo-white.jpg    Neo on white — the light mode's natural company
+10-trinity-neo.jpg  Trinity and Neo, warm and dark
 ```
 
 The rain has an entry of its own, and it is the only one with `-live-` in its
@@ -192,11 +221,12 @@ The default is a photograph rather than the rain frame, so installing the theme
 without the pack leaves you with a wallpaper instead of a frozen picture of the
 one thing the theme is about making move.
 
-> `0-pills.jpg`, `2-neo-sleep.jpg`, `3-morpheus.jpg` and `4-sunglasses.jpg` are
-> frames from *The Matrix* (1999), © Warner Bros. They are here because this is a
+> `0-pills.jpg`, `2-neo-sleep.jpg`, `3-morpheus.jpg`, `4-sunglasses.jpg`,
+> `8-helicopter.png`, `9-neo-white.jpg` and `10-trinity-neo.jpg` are frames
+> from *The Matrix* (1999), © Warner Bros. They are here because this is a
 > fan theme and they are what the theme is about. They are not covered by this
 > repository's MIT licence, which applies to the code. If you would rather not
-> carry them, delete those four and pick your own — any file with `-live-` in its
+> carry them, delete those seven and pick your own — any file with `-live-` in its
 > name becomes the rain's marker.
 
 ## More

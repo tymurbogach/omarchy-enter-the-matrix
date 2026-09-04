@@ -1,0 +1,10 @@
+[bar]
+# Light variant: the bar sits one rung darker than the windows, so it still
+# reads as the edge of the screen rather than as one more surface.
+background       = "#DDE8DA"
+background-alpha = 1.0
+text             = "#223A28"
+active           = "#B33944"
+scale-with-font  = true
+size-horizontal  = 26
+size-vertical    = 28

@@ -1,0 +1,49 @@
+mode = "light"
+
+# --- light variant: mist-green paper, green ink --------------------------------
+# Same hue axis (~126 deg) as the dark theme, inverted to ink-on-paper.
+# The rain shader is untouched and stays phosphor-bright; only the UI goes
+# light, so pick a still background (9-neo-white.jpg loves company) when the
+# bright rain would wash out.
+background         = "#E9F1E7"
+darker_background  = "#D8E4D5"
+dark_background    = "#E0EADC"
+lighter_background = "#F5F9F3"
+
+# --- text ------------------------------------------------------------------
+foreground         = "#223A28"
+light_foreground   = "#2E4A35"
+bright_foreground  = "#14251A"
+dark_foreground    = "#6B8A72"
+muted              = "#A9BFAE"
+
+accent               = "#2E7A40"
+selection            = "#C6DFC9"
+selection_background = "#2E7A40"
+selection_foreground = "#F2F7F1"
+
+# --- borders: deep matrix green, flat --------------------------------------
+hyprland_active_border   = "rgba(2E7A40ff)"
+hyprland_inactive_border = "rgba(A9BFAEcc)"
+active_border_color      = "#2E7A40"
+active_tab_background    = "#2E7A40"
+
+# --- the ANSI ladder: same hues as dark, darkened to read on paper -----------
+# Every slot holds >= 4.5:1 against the paper, the way the dark ladder holds
+# >= 5.2 against the void. Brights run a touch more vivid, never lighter --
+# on paper, lighter is dimmer.
+red     = "#B33944"
+yellow  = "#576F22"
+orange  = "#4E7526"
+green   = "#2E7A40"
+cyan    = "#23705A"
+blue    = "#1F6E3E"
+magenta = "#27744D"
+brown   = "#5A6E43"
+
+bright_red     = "#B13A46"
+bright_yellow  = "#5B7220"
+bright_green   = "#2B7A3E"
+bright_cyan    = "#22725C"
+bright_blue    = "#237A44"
+bright_magenta = "#287A4E"

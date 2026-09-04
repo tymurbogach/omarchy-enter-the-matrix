@@ -57,6 +57,10 @@ Panel {
     return !!(state.settings && state.settings[key])
   }
 
+  // The theme mode, not a rain piece: it never counts toward the summary, and
+  // its switch lives below the four rain rows rather than among them.
+  readonly property bool lightOn: on("light")
+
   readonly property var rows: [
     { key: "wallpaper", label: "Background", description: "Rain on the desktop" },
     { key: "screensaver", label: "Screensaver", description: "Rain when idle, instead of Omarchy's" },
@@ -78,13 +82,16 @@ Panel {
   }
 
   // --- the cursor -------------------------------------------------------------
-  // Four switches then two actions, in one list: Up/Down walks it, Enter
-  // activates. Mouse hover moves the cursor to whatever it is over, so the
-  // keyboard never lands somewhere the eye is not.
+  // Four rain switches, then the Light switch, then two actions, in one list:
+  // Up/Down walks it, Enter activates. Mouse hover moves the cursor to whatever
+  // it is over, so the keyboard never lands somewhere the eye is not.
 
   property bool cursorActive: false
   property int cursorIndex: 0
-  readonly property int itemCount: rows.length + 2
+  readonly property int lightIndex: rows.length
+  readonly property int repairIndex: rows.length + 1
+  readonly property int uninstallIndex: rows.length + 2
+  readonly property int itemCount: rows.length + 3
 
   function moveCursor(dx, dy) {
     var step = dy !== 0 ? dy : dx
@@ -93,7 +100,8 @@ Panel {
 
   function activateCursor() {
     if (cursorIndex < rows.length) togglePiece(rows[cursorIndex].key)
-    else if (cursorIndex === rows.length) repair()
+    else if (cursorIndex === lightIndex) toggleLight()
+    else if (cursorIndex === repairIndex) repair()
     else uninstall()
   }
 
@@ -121,6 +129,13 @@ Panel {
     // others land in a second or so. Ask again shortly either way rather than
     // drawing an optimistic tick that may not come true.
     settle.restart()
+  }
+
+  function toggleLight() {
+    // A theme re-apply, and a boot re-derive with sudo when the splash is on:
+    // visible, and the panel closes because the shell may go away with it.
+    runVisibly(cli + " light toggle")
+    root.close()
   }
 
   function repair() {
@@ -305,6 +320,27 @@ Panel {
 
         PanelSeparator { width: parent.width }
 
+        Toggle {
+          width: column.width
+          label: "Light"
+          description: "Mist-green paper instead of the dark void"
+          foreground: root.foreground
+          accent: root.accent
+          fontFamily: root.fontFamily
+          checked: root.lightOn
+          hasCursor: root.cursorActive && root.cursorIndex === root.lightIndex
+          onHovered: function(isHovered) {
+            if (isHovered) { root.cursorActive = true; root.cursorIndex = root.lightIndex }
+          }
+          onClicked: {
+            root.cursorActive = true
+            root.cursorIndex = root.lightIndex
+            root.toggleLight()
+          }
+        }
+
+        PanelSeparator { width: parent.width }
+
         Row {
           width: parent.width
           spacing: Style.space(8)
@@ -317,9 +353,9 @@ Panel {
             foreground: root.foreground
             accent: root.accent
             fontFamily: root.fontFamily
-            hasCursor: root.cursorActive && root.cursorIndex === root.rows.length
+            hasCursor: root.cursorActive && root.cursorIndex === root.repairIndex
             onHovered: function(isHovered) {
-              if (isHovered) { root.cursorActive = true; root.cursorIndex = root.rows.length }
+              if (isHovered) { root.cursorActive = true; root.cursorIndex = root.repairIndex }
             }
             onClicked: root.repair()
           }
@@ -335,9 +371,9 @@ Panel {
             foreground: root.foreground
             accent: root.accent
             fontFamily: root.fontFamily
-            hasCursor: root.cursorActive && root.cursorIndex === root.rows.length + 1
+            hasCursor: root.cursorActive && root.cursorIndex === root.uninstallIndex
             onHovered: function(isHovered) {
-              if (isHovered) { root.cursorActive = true; root.cursorIndex = root.rows.length + 1 }
+              if (isHovered) { root.cursorActive = true; root.cursorIndex = root.uninstallIndex }
             }
             onClicked: root.uninstall()
           }

@@ -1,0 +1,7 @@
+[notifications]
+background       = "#F5F9F3"
+background-alpha = 1.0
+text             = "#223A28"
+border           = "hyprland.active-border"
+border-alpha     = 1.0
+countdown        = "#2E7A40"
