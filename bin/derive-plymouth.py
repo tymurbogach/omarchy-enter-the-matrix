@@ -132,13 +132,6 @@ FONT = "JetBrainsMono Nerd Font"
 FONT_FILE = "fonts/TerminessNerdFont-Regular.ttf"
 
 BLOCK = "█"                 # full block: the progress track is a row of these
-# The passphrase field, before anything is typed: one `_` per slot, dimmed.
-# A dash would sit mid-cell and a dot would read as a typed circle already;
-# the underscore sits on the baseline, below where the circles land, so the
-# two never touch. It is well-behaved in this font (4.1% of a full block for
-# the dash; the guard below measures the underscore itself), which is more
-# than can be said for the circle it makes room for:
-MASK = "_"
 # One typed character of the passphrase. A circle, and NOT any kind of block.
 #
 # It used to be a character too -- `▊` first (rejected: butts against `█` in
@@ -151,7 +144,7 @@ MASK = "_"
 # font gives a clean circle at any size, so the typed mask lives in its own
 # image, `keydots.png`: `mask_diameter`, in splash_assets(), draws one circle
 # per cell directly with ImageMagick, on the same grid the font-rendered
-# track, digits and underscores share.
+# track and digits share.
 # The progress readout's characters, as one strip to crop cells out of. Baked
 # for the same reason everything else here is: at boot the font is whatever the
 # initramfs happens to hold, and digits in a face that does not match the box
@@ -568,16 +561,9 @@ global.mx_row_x = global.mx_box_x + Math.Int((global.mx_box_w - global.mx_row_w)
 global.mx_pass_w = Math.Int($KEY_CELLS * global.mx_cell);
 global.mx_pass_x = global.mx_box_x + Math.Int((global.mx_box_w - global.mx_pass_w) / 2);
 
-# The passphrase: $KEY_CELLS slots shown as underscores, dimmed, until they
-# are typed -- then one circle per character, growing from the centre
-# outward. The underscores sit on the baseline, below where the circles land,
-# so the two never touch.
-mx_key.image = Image("keyline.png");
-mx_key.scaled = mx_key.image.Scale(Math.Int($KEY_CELLS * global.mx_cell), global.mx_in_h);
-mx_key.sprite = Sprite(mx_key.scaled);
-mx_key.sprite.SetPosition(global.mx_pass_x, global.mx_in_y, 10001);
-mx_key.sprite.SetOpacity(0);
-
+# The passphrase: one circle per typed character, growing from the centre
+# outward on the panel's grid. The field shows nothing until the first
+# keystroke -- there is no placeholder row.
 # The typed circles live in their own image, `keydots.png` -- no glyph in the
 # shipped font draws a clean disc, so they are drawn, not typeset. The fill
 # below crops its prefix out of here; it is never shown whole.
@@ -700,7 +686,6 @@ fun mx_hide_dialog() {
   global.mx_bullets = -1;
   global.mx_caps_state = -1;
   global.mx_denied_frames = 0;
-  mx_key.sprite.SetOpacity(0);
   mx_key_fill.sprite.SetOpacity(0);
   mx_caps.sprite.SetOpacity(0);
   mx_box.sprite.SetOpacity(0);
@@ -713,7 +698,6 @@ fun mx_password_callback(prompt, bullets) {
   stop_fake_progress();
   hide_progress_bar();
   mx_bar_show(0);
-  mx_key.sprite.SetOpacity($TRACK_ALPHA);
 
   shown = bullets;
   if (shown > $KEY_CELLS) shown = $KEY_CELLS;
@@ -744,8 +728,8 @@ fun mx_password_callback(prompt, bullets) {
     global.mx_bullets = shown;
     if (shown < 1) {
       # Crop() to zero width is not worth trusting, and an empty field is what
-      # "nothing typed yet" should look like anyway -- the dimmed underscores
-      # above are what actually stays on screen.
+      # "nothing typed yet" should look like anyway -- the panel and its
+      # caption stay on screen, the row itself stays empty.
       mx_key_fill.sprite.SetOpacity(0);
     } else {
       # Real typing progress -- the passphrase field just grew by a character
@@ -763,11 +747,11 @@ fun mx_password_callback(prompt, bullets) {
       # nothing.
       global.mx_was_denied = 0;
       # Centred as a GROUP, not left-anchored: the typed dots grow outward
-      # from the middle of the centred dim row above, so one dot sits exactly
+      # from the middle of the centred row, so one dot sits exactly
       # in the centre rather than stranded off to one side of a wide box.
-      # The offset is a WHOLE number of cells from the dim row's own left
-      # edge, so every bright dot lands exactly on a dim one: a fractional
-      # offset would park each dot between two dim cells, straddling them.
+      # The offset is a WHOLE number of cells from the row's own left
+      # edge, so every bright dot lands exactly on the shared grid: a
+      # fractional offset would park each dot between two cells, straddling them.
       key_w = Math.Int(shown * global.mx_cell);
       key_x = global.mx_pass_x + Math.Int((($KEY_CELLS - shown) / 2) * global.mx_cell);
       mx_key_fill.sprite.SetPosition(key_x, global.mx_in_y, 10002);
@@ -847,7 +831,7 @@ $PCT_PAINT
 
 # Only take the dialog over if there is something to draw it with.
 #
-# Tested by deleting keyline.png from a staged theme: Plymouth does NOT abort
+# Tested by deleting keydots.png from a staged theme: Plymouth does NOT abort
 # the script over Scale() on an image that failed to load, it carries on. So
 # without this guard the prompt appeared with no field, no mask and no panel
 # -- you could still type your passphrase, but with nothing on screen to say
@@ -864,7 +848,7 @@ $PCT_PAINT
 #
 # With it, a theme missing its assets falls back to Omarchy's own dialog:
 # registered further up, never unregistered, and whole.
-if (mx_key.image.GetWidth() > 0 && mx_dots.image.GetWidth() > 0 &&
+if (mx_dots.image.GetWidth() > 0 &&
     mx_track.image.GetWidth() > 0 &&
     mx_digits.image.GetWidth() > 0 && mx_box.key.GetWidth() > 0 &&
     mx_box.bar.GetWidth() > 0 && mx_box.granted.GetWidth() > 0 &&
@@ -1015,9 +999,8 @@ def splash_assets(target, font_path, line_hex):
     # why). `kerning` has a hard ceiling: the mask row must not outgrow the
     # panel's interior, i.e. KEY_CELLS*(pitch+kerning) <= BOX_CELLS*pitch, which
     # at this font's own measured pitch works out to roughly kerning <= 0.24 *
-    # pitch (~0.12 * size). 0.10 reads clearly separated next to the bigger
-    # dots below; the fit guard after `pitch` is what says if that still fits
-    # the interior.
+    # pitch (~0.12 * size). 0.10 reads clearly separated; the fit guard after
+    # `pitch` is what says if that still fits the interior.
     kerning = int(size * 0.10)
     # How much of its own cell each dot fills, corner to corner. Bounded by the
     # same shared-cell-width guard as everything else on this grid (drawing it
@@ -1125,15 +1108,12 @@ def splash_assets(target, font_path, line_hex):
                 f"{int((0.97 - TEXT_X) / TEXT_WIDTH * widest)} characters.")
 
     # --- what goes inside the panel -----------------------------------------
-    # The track, the digits and the underscores are typeset, same as everything
-    # else -- BLOCK, the atlas and MASK are ordinary, well-behaved monospace
-    # glyphs in this font.
+    # The track and the digits are typeset, same as everything else -- BLOCK
+    # and the atlas are ordinary, well-behaved monospace glyphs in this font.
     render(BLOCK * BAR_CELLS, f"#{DIALOG_HEX}", target / "bar.png", kerning=kerning)
     render(ATLAS, f"#{DIALOG_HEX}", target / "digits.png", kerning=kerning)
-    render(MASK * KEY_CELLS, f"#{DIALOG_HEX}", target / "keyline.png", kerning=kerning)
 
-    inside = {"bar.png": BAR_CELLS, "digits.png": len(ATLAS),
-              "keyline.png": KEY_CELLS}
+    inside = {"bar.png": BAR_CELLS, "digits.png": len(ATLAS)}
     cells = {}
     for name, count in inside.items():
         w, h = measure(target / name)
@@ -1145,7 +1125,7 @@ def splash_assets(target, font_path, line_hex):
         cells[name] = ((w + kerning) / count, h)
     widths = [c for c, _ in cells.values()]
     if max(widths) - min(widths) > 1:
-        die("the track, the digits and the underscores came out on different "
+        die("the track and the digits came out on different "
             "cell widths\n"
             "  ({}), so they would not share a grid.".format(
                 ", ".join(f"{n} {c:.1f}px" for n, (c, _) in cells.items())))
@@ -1174,9 +1154,9 @@ def splash_assets(target, font_path, line_hex):
             f"BAR_GAP_CELLS + PCT_CELLS and KEY_CELLS both have to fit "
             f"BOX_CELLS.")
 
-    # One height for all three, so one aspect describes them and the row cannot
+    # One height for both, so one aspect describes them and the row cannot
     # sit a pixel high. Padded rather than assumed equal: `label:` hands back
-    # a line box, and whether rows of blocks, digits and underscores produce
+    # a line box, and whether rows of blocks and digits produce
     # the same one is a property of the font, not something to take on trust.
     row_height = max(h for _, h in cells.values())
     for name in inside:
@@ -1185,32 +1165,14 @@ def splash_assets(target, font_path, line_hex):
                         "-extent", f"{measure(target / name)[0]}x{row_height}",
                         "-strip", str(target / name)], check=True)
 
-    # Does the face actually HAVE the underscore? A missing glyph draws
-    # NOTHING -- not `.notdef`, not a box -- so without this guard a field of
-    # blanks would come out with no complaint from anywhere. Asked of the
-    # PICTURE, against a full block: too little means the font has no MASK at
-    # all, too much means the underscores touch and read as one ruled line
-    # rather than one mark per slot.
     block_ink = ink(target / "bar.png")
-    under_ink = ink(target / "keyline.png") * KEY_CELLS / BAR_CELLS
-    if block_ink > 0:
-        share = under_ink / block_ink
-        if share < 0.01:
-            die(f"the mask glyph {MASK!r} draws nothing in {font_path}.\n"
-                f"  That font has no {MASK!r}, and freetype renders a missing "
-                f"glyph as blank rather than as a box.\n  Respell MASK with "
-                f"a glyph the font actually has.")
-        if share > 0.6:
-            die(f"the mask glyph {MASK!r} inks {share:.0%} of a full block.\n"
-                f"  A row of that reads as a rule rather than as one mark per "
-                f"slot. Shrink the mask, not the field.")
 
     # The typed circles: KEY_CELLS dots, DRAWN on this same `cell`/`row_height`
     # grid rather than typeset -- see BLOCK's own comment for why no glyph in
     # this font gives a clean circle. One magick call, one `circle` primitive
-    # per dot, each centred in its own cell. This is `keydots.png`, not
-    # `keyline.png`: the underscores above are what the dialog SHOWS, the
-    # circles are only ever cropped out of this image a few cells at a time.
+    # per dot, each centred in its own cell. The dialog shows nothing until
+    # the first keystroke; the circles are only ever cropped out of this
+    # image a few cells at a time.
     key_w = int(round(KEY_CELLS * cell))
     radius = pitch * mask_diameter / 2
     dots = " ".join(
@@ -1245,6 +1207,11 @@ def splash_assets(target, font_path, line_hex):
                 f"block.\n  A row of that reads as a progress bar rather than "
                 f"as typed characters, which is the\n  one thing this design "
                 f"exists to avoid. Shrink mask_diameter.")
+
+    # The placeholder row is gone -- the dialog shows nothing until the first
+    # keystroke -- so a `keyline.png` left behind by an older derive must not
+    # linger in the staged theme (stage() overlays, it never wipes).
+    (target / "keyline.png").unlink(missing_ok=True)
 
     # --- the panel ----------------------------------------------------------
     interior = BOX_CELLS * pitch
@@ -1533,6 +1500,11 @@ def main():
             subprocess.run(["sudo", "mkdir", "-p", str(TARGET)], check=True)
             subprocess.run(["sudo", "cp", "-a", "--no-preserve=mode,ownership",
                             f"{staging}/.", f"{TARGET}/"], check=True)
+            # The copy overlays, it never wipes: a `keyline.png` from before
+            # the placeholder row was dropped would sit here forever, and ride
+            # along in every initramfs. The staged theme no longer carries it.
+            subprocess.run(["sudo", "rm", "-f", str(TARGET / "keyline.png")],
+                           check=True)
             subprocess.run(["sudo", "plymouth-set-default-theme", THEME], check=True)
 
             if shutil.which("limine-mkinitcpio"):
