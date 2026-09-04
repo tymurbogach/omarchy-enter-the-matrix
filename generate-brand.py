@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Generate the matrix theme's three identity PNGs.
 
-    ./generate-brand.py            # the dark theme root
-    ./generate-brand.py --light    # the light overlay in variants/light/
+    ./generate-brand.py
 
   · unlock.png          the Plymouth boot mark (with alpha; Plymouth paints it
                         over `background` from colors.toml). A line half typed
@@ -15,9 +14,7 @@
 
 Needs rsvg-convert and ImageMagick, plus the theme's -live- background, which is
 committed in backgrounds/ rather than generated -- generate-backgrounds.py has
-not produced it since the live background stopped being a fresh render. The
-light card composites over 9-neo-white.jpg instead, for the same reason: the
-card should look like the mode it stands for.
+not produced it since the live background stopped being a fresh render.
 """
 
 import glob
@@ -59,39 +56,6 @@ CODE = [
     [("        raise ", "#1AB07A"), ("StillAsleep", "#F0263F"), ("(subject)", FG)],
     [("    ", FG), ("return", "#1AB07A"), (" subject.", FG), ("unplug", "#35D68F"), ("()", FG)],
 ]
-
-LIGHT = "--light" in sys.argv
-if LIGHT:
-    # Mist-green paper, green ink: the same hue axis as the dark card,
-    # inverted. Everything below is read from these globals at render time, so
-    # overriding them here repaints all three PNGs without touching a function.
-    BG = "#E9F1E7"
-    ELEVATED = "#F5F9F3"
-    BAR = "#DDE8DA"
-    FG = "#223A28"
-    BRIGHT = "#14251A"
-    DARK_FG = "#6B8A72"
-    ACCENT = "#2E7A40"
-
-    PALETTE = [
-        ("bg", "#E9F1E7"), ("red", "#B33944"), ("green", "#2E7A40"),
-        ("yellow", "#576F22"), ("blue", "#1F6E3E"), ("magenta", "#27744D"),
-        ("cyan", "#23705A"), ("fg", "#223A28"),
-        ("muted", "#A9BFAE"), ("red+", "#B13A46"), ("green+", "#2B7A3E"),
-        ("yellow+", "#607620"), ("blue+", "#237A44"), ("magenta+", "#2A7F52"),
-        ("cyan+", "#22725C"), ("fg+", "#14251A"),
-    ]
-
-    # Same snippet, darkened to read on paper: each slot keeps its hue, only
-    # the luminance rung moves. Written out rather than mapped, the way the
-    # dark one is: a mapping dict hides which colour each role wears.
-    CODE = [
-        [("def ", "#1F6E3E"), ("wake_up", "#2E7A40"), ("(", FG), ("subject", "#576F22"),
-         (", ", FG), ("pill", "#576F22"), ("=", FG), ('"red"', "#23705A"), ("):", FG)],
-        [("    ", FG), ("if", "#1F6E3E"), (" pill ", FG), ("==", FG), (' "blue"', "#23705A"), (":", FG)],
-        [("        raise ", "#1F6E3E"), ("StillAsleep", "#B33944"), ("(subject)", FG)],
-        [("    ", FG), ("return", "#1F6E3E"), (" subject.", FG), ("unplug", "#27744D"), ("()", FG)],
-    ]
 
 
 def render(svg, width, height, output):
@@ -252,38 +216,34 @@ def preview(w=1800, h=1012):
 
 
 def main():
-    outdir = os.path.join(HERE, "variants", "light") if LIGHT else HERE
-    os.makedirs(outdir, exist_ok=True)
-
-    unlock = os.path.join(outdir, "unlock.png")
+    unlock = os.path.join(HERE, "unlock.png")
     render(brand(), 1108, 523, unlock)
-    print(f"  {os.path.relpath(unlock, HERE)}  {os.path.getsize(unlock) // 1024} KB")
+    print(f"  unlock.png  {os.path.getsize(unlock) // 1024} KB")
 
-    pu = os.path.join(outdir, "preview-unlock.png")
+    pu = os.path.join(HERE, "preview-unlock.png")
     render(preview_unlock(), 1920, 1080, pu)
     subprocess.run(["magick", pu, "-strip", "-dither", "None", "-colors", "256", pu], check=True)
-    print(f"  {os.path.relpath(pu, HERE)}  {os.path.getsize(pu) // 1024} KB")
+    print(f"  preview-unlock.png  {os.path.getsize(pu) // 1024} KB")
 
-    base = "9-neo-white.jpg" if LIGHT else "*-live-*"
-    background = next(iter(sorted(glob.glob(os.path.join(HERE, "backgrounds", base)))), "")
+    background = next(iter(sorted(glob.glob(os.path.join(HERE, "backgrounds", "*-live-*")))), "")
     if not os.path.exists(background):
-        print(f"  ! no backgrounds/{base} found. That file is committed, not "
+        print("  ! no backgrounds/*-live-* found. That file is committed, not "
               "generated: restore it from git rather than regenerating it.",
               file=sys.stderr)
         return 1
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
         overlay = fh.name
-    p = os.path.join(outdir, "preview.png")
+    p = os.path.join(HERE, "preview.png")
     try:
         render(preview(), 1800, 1012, overlay)
         subprocess.run(
             ["magick", background, "-resize", "1800x1012^", "-gravity", "center",
-             "-extent", "1800x1012", overlay, "-composite",
-             "-strip", "-dither", "None", "-colors", "256",
-             "-define", "png:compression-level=9", p], check=True)
+              "-extent", "1800x1012", overlay, "-composite",
+              "-strip", "-dither", "None", "-colors", "256",
+              "-define", "png:compression-level=9", p], check=True)
     finally:
         os.remove(overlay)
-    print(f"  {os.path.relpath(p, HERE)}  {os.path.getsize(p) // 1024} KB")
+    print(f"  preview.png  {os.path.getsize(p) // 1024} KB")
 
 
 if __name__ == "__main__":

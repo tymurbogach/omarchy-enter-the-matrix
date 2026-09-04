@@ -42,7 +42,7 @@ bar** or from the command line:
 omarchy-matrix status            # what is on right now
 omarchy-matrix wallpaper off     # any piece: wallpaper screensaver lock boot widget
 omarchy-matrix boot on
-omarchy-matrix light on          # the light theme mode (see below)
+omarchy-matrix soft on           # the soft theme mode (see below)
 omarchy-matrix doctor            # assert everything again
 ```
 
@@ -76,30 +76,31 @@ without shutting down: `bin/preview-plymouth.sh <scenario> --mode shutdown`.
 > `omarchy plymouth reset` from a running system, or `plymouth.enable=0` on the
 > kernel line from your boot loader.
 
-## The light variant
+## The soft variant
 
-The theme root is the dark void. `omarchy-matrix light on` — or the **Light**
-switch on the bar widget — lays mist-green paper over it instead: same hue
-axis as the dark palette, inverted to green ink on `#E9F1E7`. Everything
-follows: terminal colours, bar, launcher, menus, notifications, icons, the
-lock's password field fonts aside, and the boot splash, which re-derives from
-the light colours so the typed lines match the mode.
+The theme root is the original void — phosphor on near-black, full glare.
+`omarchy-matrix soft on` — or the **Soft** switch on the bar widget — trades
+it for the film's own shadows: surfaces lifted to where the film's dark
+scenes actually sit (the pills scene averages `#171716`, Neo's sleep
+`#0E170C`, Morpheus in warm ambers), the accent taken down from neon to a
+softer phosphor. Same hue axis, same green hero, same ice-blue prompt and
+reserved red — only the glare goes. Everything follows: terminal colours,
+bar, launcher, menus, notifications, and the boot splash, which re-derives
+from the soft colours so the typed lines match the mode. The rain is
+untouched.
 
 ```bash
-omarchy-matrix light on      # paper; re-applies the theme, holds your background
-omarchy-matrix light off     # the dark void, files handed back with git
-omarchy-matrix light toggle  # either way
+omarchy-matrix soft on       # shadows; re-applies the theme, holds your background
+omarchy-matrix soft off      # the void, files handed back with git
+omarchy-matrix soft toggle   # either way
 ```
 
-How it works: the overlay is committed at `variants/light/` and copied over
-the *installed* theme directory, then the theme is re-applied. That dirties
-the clone on purpose, the way a user edit would — so `light off` restores the
-dark files with `git checkout`, and `omarchy theme update` (a bare `git pull`)
-wants a clean tree: turn light off first, update, turn it back on.
-
-The rain is untouched and stays phosphor-bright in both modes. On the
-near-white stills (notably `9-neo-white.jpg`) that means the rain washes out —
-pick a darker still, or turn the desktop rain off, when the paper is on.
+How it works: the overlay is committed at `variants/soft-dark/` and copied
+over the *installed* theme directory, then the theme is re-applied. That
+dirties the clone on purpose, the way a user edit would — so `soft off`
+restores the void files with `git checkout`, and `omarchy theme update` (a
+bare `git pull`) wants a clean tree: turn soft off first, update, turn it
+back on.
 
 ## Worth knowing
 
@@ -208,7 +209,7 @@ ordinary Omarchy theme.
 6-green-street.jpg
 7-the-office.jpg
 8-helicopter.png   daylight raid, pale green sky
-9-neo-white.jpg    Neo on white — the light mode's natural company
+9-neo-white.jpg    Neo on white — the bright one, for when the rain is off
 10-trinity-neo.jpg  Trinity and Neo, warm and dark
 ```
 

@@ -195,9 +195,9 @@ hiding `label-pango` and every font but the three the initramfs would have.
 | | |
 |---|---|
 | `colors.toml` | The palette. Semantic, not `color0..15`. Includes the Hyprland border colours, which go through the template. |
-| `variants/light/` | The light overlay: `colors.toml`, the four `shell.*.toml`, `icons.theme` and the three brand PNGs, mist-green paper at the same hue axis. `light on` copies them over the installed theme directory; `light off` hands the files back with `git checkout`. Listed in `provider.json`, the way everything nameable is. |
+| `variants/soft-dark/` | The soft overlay: `colors.toml`, the four `shell.*.toml` and `icons.theme` at the film's own shadow values. `soft on` copies them over the installed theme directory; `soft off` hands the files back with `git checkout`. Listed in `provider.json`, the way everything nameable is. |
 | `shell.{bar,menu,launcher,notifications}.toml` | Shell section overrides: they give the bar and the cards some relief, which otherwise all paint the same black. |
-| `backgrounds/` | The carousel. `0-pills.jpg` is the default, so installing only the theme still gives you a wallpaper. `1-live-rain.png` is a still frame of the shader: thumbnail, marker and fallback in one — selecting it is what turns the desktop rain on, and the shader finds it by the `-live-` in its name. The rest are stills: seven from the film, three not. `9-neo-white.jpg` is the light mode's natural company. |
+| `backgrounds/` | The carousel. `0-pills.jpg` is the default, so installing only the theme still gives you a wallpaper. `1-live-rain.png` is a still frame of the shader: thumbnail, marker and fallback in one — selecting it is what turns the desktop rain on, and the shader finds it by the `-live-` in its name. The rest are stills: seven from the film, three not. |
 | `unlock.png`, `preview-unlock.png` | The static boot mark, for anyone installing the theme without the pack. With the pack, `logo.png` goes invisible and the lines are typed instead. |
 | `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glyphs.png` | The plugin. |
 | `widget/` | The bar widget: one icon, four switches, Repair and Uninstall. |
@@ -247,34 +247,38 @@ And the accent is not the border. `#60C76B` marks what the eye should find;
 window frames, selections and card edges run dimmer, around 4.3:1 against the
 surface they sit on. A border delimits; it does not need to shout.
 
-### The light variant
+### The soft variant
 
 One repo is one theme in Omarchy — a single `mode` per `colors.toml`, a folder
 named after the repo — so a second mode cannot be a second theme without a
 second repo, and maintaining the whole pack twice is how the two drift apart.
-Instead the theme root stays dark and `variants/light/` carries the overlay:
-same files, same names, paper values. The CLI copies them over the installed
-theme directory and re-applies it; switching off restores the dark files with
-`git checkout`, which is available because the theme directory is always a
-clone. Deliberately derived, never a frozen second copy: after a `theme
-update` the overlay is the fresh one, and the lock and boot derivers keep
-reading the installed directory, so they follow the mode with no changes.
+Instead the theme root stays the void and `variants/soft-dark/` carries the
+overlay: same files, same names, softer values. The CLI copies them over the
+installed theme directory and re-applies it; switching off restores the void
+files with `git checkout`, which is available because the theme directory is
+always a clone. Deliberately derived, never a frozen second copy: after a
+`theme update` the overlay is the fresh one, and the lock and boot derivers
+keep reading the installed directory, so they follow the mode with no changes.
+Both modes are `mode = "dark"`, so the CLI tells them apart by the background:
+soft is staged when the root wears the overlay's own background, read from the
+overlay rather than written down anywhere else.
 
-What the overlay does not touch is the rain. The shader stays phosphor-bright
-in both modes — dimming it for paper would mean a second shader variant, a
-second atlas tuning, and three surfaces to keep in step, for a look the film
-never has. The honest version is written on the switch: paper loves stills.
+What the overlay does not touch is the rain. The shader stays exactly as it
+is in both modes — the complaint was never the falling code, it was the void
+behind the windows.
+
+The values are measured off the film's own stills, not chosen: the pills
+scene averages `#171716`, Neo's sleep `#0E170C`, Morpheus in warm ambers
+(`#433C2D`, `#584B35`). The void (`#080C08`) is darker and colder than any of
+them, which is why it glares next to the phosphor.
 
 | | | |
 |---|---|---|
-| `background` | `#E9F1E7` | mist-green paper |
-| `foreground` | `#223A28` | green ink, never pure black |
-| `accent` / `green` | `#2E7A40` | the hero, darkened to read on paper |
-| `red` | `#B33944` | errors |
-| `muted` | `#A9BFAE` | |
-
-Regenerate its brand PNGs with `./generate-brand.py --light`, which paints the
-same three cards in paper values composited over `9-neo-white.jpg`.
+| `background` | `#131610` | the film's shadows, faintly warm-green |
+| `foreground` | `#93B298` | sage, never phosphor · 7.9 |
+| `accent` / `green` | `#5CAE66` | the hero, one rung down · 6.7 |
+| `red` | `#D98A92` | errors · 7.0 |
+| `muted` | `#33482F` | |
 
 | | | |
 |---|---|---|
@@ -290,7 +294,6 @@ same three cards in paper values composited over `9-neo-white.jpg`.
 
 ```bash
 ./generate-brand.py                     # unlock, preview-unlock and preview
-./generate-brand.py --light             # the same three, as the light overlay
 ./rain/generate-atlas.py                # the shader's glyph atlas
 ./generate-backgrounds.py --out /tmp/x.png --seed 42 --density 0.7
 

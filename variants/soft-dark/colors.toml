@@ -1,0 +1,49 @@
+mode = "dark"
+
+# --- soft-dark variant: the film's own shadows --------------------------------
+# The void (#080C08) is darker and colder than any black the film ever shows:
+# the pills scene sits at #171716, Neo's sleep at #0E170C, Morpheus in warm
+# ambers. So this lifts the surfaces to that range with a faint warm-green
+# cast, and takes the neon off the accent. Same hue axis (~126 deg), same
+# green hero, same ice-blue prompt and reserved red -- only the glare goes.
+background         = "#131610"
+darker_background  = "#0B0E09"
+dark_background    = "#0F120C"
+lighter_background = "#1B2117"
+
+# --- text ------------------------------------------------------------------
+foreground         = "#93B298"
+light_foreground   = "#9DBEA4"
+bright_foreground  = "#A8C6AE"
+dark_foreground    = "#7A9A80"
+muted              = "#33482F"
+
+accent               = "#5CAE66"
+selection            = "#1E3320"
+selection_background = "#5CAE66"
+selection_foreground = "#0E150F"
+
+# --- borders: soft phosphor, flat ------------------------------------------
+hyprland_active_border   = "rgba(4E8F5Aff)"
+hyprland_inactive_border = "rgba(33482Fcc)"
+active_border_color      = "#4E8F5A"
+active_tab_background    = "#4A8F57"
+
+# --- the ANSI ladder: the dark theme's hues, one rung down -------------------
+# Every working slot holds >= 4.5:1 against the lifted background (brown is
+# decorative, as in the dark theme).
+red     = "#D98A92"
+yellow  = "#9DBE6E"
+orange  = "#7BAE5A"
+green   = "#5CAE66"
+cyan    = "#7CBCA0"
+blue    = "#3FA45C"
+magenta = "#4CAF7E"
+brown   = "#57744A"
+
+bright_red     = "#E5979E"
+bright_yellow  = "#A9C47E"
+bright_green   = "#7CC473"
+bright_cyan    = "#8AC4A8"
+bright_blue    = "#5BAE68"
+bright_magenta = "#79D0A0"

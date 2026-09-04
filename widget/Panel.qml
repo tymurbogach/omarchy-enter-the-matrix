@@ -59,7 +59,7 @@ Panel {
 
   // The theme mode, not a rain piece: it never counts toward the summary, and
   // its switch lives below the four rain rows rather than among them.
-  readonly property bool lightOn: on("light")
+  readonly property bool softOn: on("soft")
 
   readonly property var rows: [
     { key: "wallpaper", label: "Background", description: "Rain on the desktop" },
@@ -82,13 +82,13 @@ Panel {
   }
 
   // --- the cursor -------------------------------------------------------------
-  // Four rain switches, then the Light switch, then two actions, in one list:
+  // Four rain switches, then the Soft switch, then two actions, in one list:
   // Up/Down walks it, Enter activates. Mouse hover moves the cursor to whatever
   // it is over, so the keyboard never lands somewhere the eye is not.
 
   property bool cursorActive: false
   property int cursorIndex: 0
-  readonly property int lightIndex: rows.length
+  readonly property int softIndex: rows.length
   readonly property int repairIndex: rows.length + 1
   readonly property int uninstallIndex: rows.length + 2
   readonly property int itemCount: rows.length + 3
@@ -100,7 +100,7 @@ Panel {
 
   function activateCursor() {
     if (cursorIndex < rows.length) togglePiece(rows[cursorIndex].key)
-    else if (cursorIndex === lightIndex) toggleLight()
+    else if (cursorIndex === softIndex) toggleSoft()
     else if (cursorIndex === repairIndex) repair()
     else uninstall()
   }
@@ -131,10 +131,10 @@ Panel {
     settle.restart()
   }
 
-  function toggleLight() {
+  function toggleSoft() {
     // A theme re-apply, and a boot re-derive with sudo when the splash is on:
     // visible, and the panel closes because the shell may go away with it.
-    runVisibly(cli + " light toggle")
+    runVisibly(cli + " soft toggle")
     root.close()
   }
 
@@ -322,20 +322,20 @@ Panel {
 
         Toggle {
           width: column.width
-          label: "Light"
-          description: "Mist-green paper instead of the dark void"
+          label: "Soft"
+          description: "The film's own shadows instead of the void"
           foreground: root.foreground
           accent: root.accent
           fontFamily: root.fontFamily
-          checked: root.lightOn
-          hasCursor: root.cursorActive && root.cursorIndex === root.lightIndex
+          checked: root.softOn
+          hasCursor: root.cursorActive && root.cursorIndex === root.softIndex
           onHovered: function(isHovered) {
-            if (isHovered) { root.cursorActive = true; root.cursorIndex = root.lightIndex }
+            if (isHovered) { root.cursorActive = true; root.cursorIndex = root.softIndex }
           }
           onClicked: {
             root.cursorActive = true
-            root.cursorIndex = root.lightIndex
-            root.toggleLight()
+            root.cursorIndex = root.softIndex
+            root.toggleSoft()
           }
         }
 

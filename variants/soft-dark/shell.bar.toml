@@ -1,0 +1,10 @@
+[bar]
+# Soft-dark variant: the bar drops below the windows, the way the dark theme's
+# does -- only the void is gone, lifted to the film's own shadows.
+background       = "#0B0E09"
+background-alpha = 1.0
+text             = "#93B298"
+active           = "#D98A92"
+scale-with-font  = true
+size-horizontal  = 26
+size-vertical    = 28
