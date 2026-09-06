@@ -148,14 +148,6 @@ resolve_widget_src() {
 echo "· plugin $PLUGIN_ID"
 stage_plugin "$PLUGIN_ID" "$HERE/$PLUGIN_SRC" "${PLUGIN_FILES[@]}"
 
-# The switchboard on the bar. A plugin of its own rather than another kind on
-# the rain: for a `bar-widget`, enabled means present in bar.layout, so folding
-# the two together would take the icon off the bar the moment both rain layers
-# were switched off. Fetched from its own repo -- see resolve_widget_src above.
-echo "· bar widget $WIDGET_ID"
-WIDGET_SRC_DIR=$(resolve_widget_src)
-stage_plugin "$WIDGET_ID" "$WIDGET_SRC_DIR" "${WIDGET_FILES[@]}"
-
 # --- the CLI ----------------------------------------------------------------
 
 echo "· $CLI in $BIN_DIR"
@@ -182,6 +174,24 @@ for hook in theme-set post-update; do
   mkdir -p "$HOOKS/$hook.d"
   install -m 755 "$HERE/hooks/$hook" "$HOOKS/$hook.d/$SLUG"
 done
+
+# --- the bar widget ---------------------------------------------------------
+# The switchboard on the bar. A plugin of its own rather than another kind on
+# the rain: for a `bar-widget`, enabled means present in bar.layout, so folding
+# the two together would take the icon off the bar the moment both rain layers
+# were switched off. Fetched from its own repo -- see resolve_widget_src above.
+#
+# LAST of the file copies, and deliberately: it is the only step here that can
+# fail on a first install (no cache to fall back on, so the clone is fatal). It
+# used to run right after the rain plugin, which meant a failed clone aborted
+# the script with a plugin already staged and neither `$CLI` nor
+# `$CLI-uninstall` anywhere on PATH -- a half-installed pack with no command to
+# inspect or remove it. Nothing above depends on the widget being staged, so
+# everything that can be installed is installed before the one step that can
+# stop the run.
+echo "· bar widget $WIDGET_ID"
+WIDGET_SRC_DIR=$(resolve_widget_src)
+stage_plugin "$WIDGET_ID" "$WIDGET_SRC_DIR" "${WIDGET_FILES[@]}"
 
 # --- the menu, which we no longer write ------------------------------------
 # The four switches used to be spliced into the user's extensions file, between

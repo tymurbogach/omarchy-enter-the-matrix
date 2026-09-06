@@ -199,7 +199,7 @@ hiding `label-pango` and every font but the three the initramfs would have.
 | `backgrounds/` | The carousel. `0-pills.jpg` is the default, so installing only the theme still gives you a wallpaper. `1-live-rain.png` is a still frame of the shader: thumbnail, marker and fallback in one — selecting it is what turns the desktop rain on, and the shader finds it by the `-live-` in its name. The rest are stills: seven from the film, three not. |
 | `unlock.png`, `preview-unlock.png` | The static boot mark, for anyone installing the theme without the pack. With the pack, `logo.png` goes invisible and the lines are typed instead. |
 | `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glyphs.png` | The plugin. |
-| `widget/` | The bar widget: one icon, four switches, Repair and Uninstall. |
+| *(not here)* | The bar widget — one icon, four switches, Repair and Uninstall — lives in its own repo, [omarchy-matrix-widget](https://github.com/tymurbogach/omarchy-matrix-widget), so it can be submitted to plugins.omarchy.org on its own. `install.sh` fetches it and caches it under `~/.local/share/omarchy-matrix/widget-src`; `provider.json`'s `widget.repo`/`widget.ref` say which repo and which ref. |
 | `provider.json` | The only file that names this provider — slug, plugin ids, Plymouth theme, the lines typed at boot. Everything else is machinery. |
 | `bin/` | `omarchy-matrix` (the switch CLI), the two derivers, `provider.py`, and `preview-plymouth.sh` — which runs the real boot splash in a window. |
 | `fonts/` | The face the boot splash is drawn in, shipped as a file rather than named as a dependency. See `fonts/README.md`. |

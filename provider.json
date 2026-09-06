@@ -38,10 +38,12 @@
     "id": "io.github.tymurbogach.enter-the-matrix.widget",
     "//repo": [
       "The widget lives in its own repo so it can be submitted to",
-      "plugins.omarchy.org as a single-manifest-at-root plugin (see",
-      "docs/superpowers/plans/2026-09-06-matrix-widget-manager-migration.md).",
-      "install.sh fetches and caches it; MATRIX_WIDGET_SRC overrides this for",
-      "local development against an uncommitted checkout."
+      "plugins.omarchy.org as a single-manifest-at-root plugin. install.sh",
+      "fetches and caches it; MATRIX_WIDGET_SRC overrides this for local",
+      "development against an uncommitted checkout. Why a fetch and not a git",
+      "submodule, and what the cache buys: see the trap headed \"The widget is",
+      "fetched from its own repo, not shipped in widget/\" under \"Traps already",
+      "paid for\" in CLAUDE.md."
     ],
     "repo": "https://github.com/tymurbogach/omarchy-matrix-widget",
     "ref": "main",
