@@ -154,7 +154,14 @@ def stage_clone(target, plugin_id, rain):
             continue  # the clone's carries its own id and clonedFrom; keep it
         shutil.copy2(source_file, staging / source_file.name)
 
-    shutil.copy2(target / "manifest.json", staging / "manifest.json")
+    # The clone's own manifest, plus a marker saying who rebuilds it. A backup
+    # tool has no other way to tell a derived directory from a hand-made one,
+    # and freezing a copy of this is precisely what the derivation exists to
+    # avoid: the frozen copy stops receiving Omarchy's own lock-screen fixes.
+    # omarchy-replicant reads omarchy.derivedBy and leaves the directory alone.
+    manifest_data = json.loads((target / "manifest.json").read_text())
+    manifest_data.setdefault("omarchy", {})["derivedBy"] = PROVIDER["cli"]
+    (staging / "manifest.json").write_text(json.dumps(manifest_data, indent=2) + "\n")
 
     for name in RAIN_FILES:
         shutil.copy2(rain / name, staging / name)
