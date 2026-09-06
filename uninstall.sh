@@ -45,15 +45,20 @@ KEEP_THEME=0
 [[ ${1:-} != "--keep-theme" ]] || KEEP_THEME=1
 
 echo "· handing Omarchy's lock back"
+lock_removed=0
 for dir in "$PLUGINS_DIR"/*.lock; do
   [[ -d $dir ]] || continue
   jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || continue
+  # Ours is the one carrying the rain: a lock clone somebody made for their own
+  # reasons has the same name shape and must survive even an uninstall.
+  [[ -f $dir/$RAIN_QML ]] || continue
   id=$(jq -r '.id' "$dir/manifest.json")
   # `plugin remove` is what re-enables omarchy.lock (cloneSourceRestores).
   # Deleting the directory by hand would leave the session with no lock enabled
   # at all.
   omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
     omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+  lock_removed=1
 done
 
 echo "· removing the rain plugin and the bar widget"
@@ -142,6 +147,34 @@ PY
 fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
+
+# Handing the lock back swapped which plugin owns the `lock` IPC target, and a
+# rescan does not unload the loser: the running shell can still hand the screen
+# to the clone whose files this script just deleted. Only a restart settles
+# that (see restart_shell_for_lock in the CLI). The registry gets a moment to
+# stop moving first -- a plugin scan still in flight when the shell goes down
+# segfaults quickshell (quickshell-mirror/quickshell#972), and the removals
+# above are exactly the workload that walks into it.
+if ((lock_removed)); then
+  previous="" steady=0 waited=0
+  sleep 0.3 # the watcher's own debounce: it waits 150ms past the last event
+  while ((waited < 40)); do
+    current=$(omarchy-plugin-list --json 2>/dev/null || echo "[]")
+    # `[]` is a shell that is not answering; three identical LIVE answers is the
+    # registry having settled.
+    if [[ $current != "[]" && $current == "$previous" ]]; then
+      steady=$((steady + 1))
+      ((steady < 3)) || break
+    else
+      steady=0
+    fi
+    previous="$current"
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+  echo "· restarting the shell so only Omarchy's lock is loaded"
+  omarchy-restart-shell >/dev/null 2>&1 || true
+fi
 
 # --- the theme itself ---------------------------------------------------------
 # Last, and only now: everything above still needed the theme directory to be

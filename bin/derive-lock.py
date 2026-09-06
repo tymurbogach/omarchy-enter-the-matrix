@@ -194,7 +194,8 @@ def main():
     rain = rain_source()
     target, plugin_id = existing_clone()
 
-    if target is None:
+    created = target is None
+    if created:
         # Same reasoning as derive-plymouth: a traceback here reads as a broken
         # pack. This one cannot lock anybody out -- no clone means Omarchy's own
         # lock is still the enabled one -- but say so plainly.
@@ -208,7 +209,21 @@ def main():
             die("the lock clone did not appear after creating it")
         print(f"Cloned Omarchy's lock as {plugin_id}")
 
-    stage_clone(target, plugin_id, rain)
+    try:
+        stage_clone(target, plugin_id, rain)
+    except SystemExit:
+        # A FIRST derive that cannot patch hands the lock straight back. Left in
+        # place, the raw clone stays enabled with Omarchy's own disabled by the
+        # clone -- an unpatched lock that `status` cannot tell apart from ours.
+        # `plugin remove` re-enables omarchy.lock (cloneSourceRestores), which
+        # is exactly the state this run started from.
+        if created:
+            subprocess.run(["omarchy-plugin-remove", plugin_id, "--yes"],
+                           check=False, capture_output=True)
+            if existing_clone()[0] is not None:
+                subprocess.run(["omarchy-plugin-remove", plugin_id],
+                               check=False, capture_output=True)
+        raise
 
     subprocess.run(["omarchy-shell", "shell", "rescanPlugins"],
                    check=False, capture_output=True)
