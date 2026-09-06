@@ -116,15 +116,15 @@ extending. **Nothing** under `/usr/share/omarchy/`, nor `hyprland.lua`, nor the
 background, nor the bar:
 
 ```
-~/.config/omarchy/plugins/matrix.rain/       the plugin
-~/.config/omarchy/plugins/matrix.control/    the bar widget
-~/.config/omarchy/enter-the-matrix.json      which pieces are on
+~/.config/omarchy/plugins/io.github.tymurbogach.enter-the-matrix/         the plugin
+~/.config/omarchy/plugins/io.github.tymurbogach.enter-the-matrix.widget/  the bar widget
+~/.config/omarchy/enter-the-matrix.json                                   which pieces are on
 ~/.config/omarchy/hooks/{theme-set,post-update}.d/enter-the-matrix
-~/.config/omarchy/shell.json                 one entry in the bar layout
+~/.config/omarchy/shell.json                                              one entry in the bar layout
 ~/.local/bin/{omarchy-matrix,derive-lock.py,derive-plymouth.py,provider.py}
 ~/.local/share/omarchy-matrix/provider.json
-~/.config/omarchy/plugins/<username>.lock    only while `lock` is on
-/usr/share/plymouth/themes/omarchy-matrix/   only while `boot` is on
+~/.config/omarchy/plugins/<username>.lock                                 only while `lock` is on
+/usr/share/plymouth/themes/omarchy-matrix/                                only while `boot` is on
 ```
 
 The last two are the derived pieces, and neither overwrites the original:

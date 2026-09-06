@@ -194,15 +194,17 @@ one more time.
 The nine seams the 2026-08-28 clean-room test turned up are closed. What is
 below came out of closing them.
 
-1. **`widget/Panel.qml` still writes the CLI's name down.** Every other file
-   asks `provider.json`; the widget cannot, because it would need the CLI to
-   find it. Either it reads `~/.local/share/omarchy-matrix/provider.json`
-   directly with a `FileView`, or that stays the provider's one line -- decide,
-   and write down which.
-2. **`~/.local/share/omarchy-matrix/` is a bootstrap constant in three files**
-   (the CLI, `bin/provider.py`, `uninstall.sh`). It cannot come from the file it
-   is used to find, but three copies of it is two too many.
-3. **The widget's panel does not say what a stood-down piece would do.** It
+One of them stayed open a while and is decided now: **the widget writes the
+CLI's name down, on purpose.** Every other file asks `provider.json`; the
+widget cannot, because it would need the CLI to find it, and reading
+`~/.local/share/omarchy-matrix/provider.json` with a FileView would only move
+the constant. `Panel.qml` carries `omarchy-matrix` as its one name, with a
+comment saying so.
+
+1. **`~/.local/share/omarchy-matrix/` is a bootstrap constant in five files**
+   (the CLI, `bin/provider.py`, `uninstall.sh` and both hooks). It cannot come
+   from the file it is used to find, but five copies of it is four too many.
+2. **The widget's panel does not say what a stood-down piece would do.** It
    ticks nothing and explains why at the top, which is right, but a switch that
    is on-but-stood-down currently reads exactly like one that is off.
 
