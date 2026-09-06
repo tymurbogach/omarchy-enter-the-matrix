@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "matrix.control",
+  "id": "io.github.tymurbogach.enter-the-matrix.widget",
   "name": "Matrix",
   "version": "1.0.0",
   "author": "tymurbogach",

@@ -23,7 +23,7 @@
   "repoUrl": "https://github.com/tymurbogach/omarchy-enter-the-matrix",
 
   "plugin": {
-    "id": "matrix.rain",
+    "id": "io.github.tymurbogach.enter-the-matrix",
     "dir": ".",
     "files": [
       "manifest.json",
@@ -35,7 +35,7 @@
   },
 
   "widget": {
-    "id": "matrix.control",
+    "id": "io.github.tymurbogach.enter-the-matrix.widget",
     "dir": "widget",
     "files": ["manifest.json", "Panel.qml"],
     "section": "right"
@@ -86,7 +86,7 @@
         "Unplug him."
       ],
       "reboot": [
-        "D\u00e9j\u00e0 vu.",
+        "Déjà vu.",
         "They changed something."
       ]
     },
