@@ -7,15 +7,21 @@
 # catches `omarchy refresh shell`, which rewrites shell.json wholesale and leaves
 # the plugin disabled -- re-applying the theme is the way back.
 #
-# The slug is asked for rather than written in: the pack is machinery plus one
-# provider, and provider.json is the only file that names the provider.
+# The CLI's name is asked for rather than written in: the pack is machinery plus
+# one provider, and provider.json is the only file that names the provider. The
+# one constant left is where install.sh puts it -- a hook has no other way to
+# find anything.
 
-command -v omarchy-matrix >/dev/null 2>&1 || exit 0
+provider="$HOME/.local/share/omarchy-matrix/provider.json"
+[[ -f $provider ]] || exit 0
+cli=$(jq -r '.cli // empty' "$provider" 2>/dev/null)
+[[ -n $cli ]] || exit 0
+command -v "$cli" >/dev/null 2>&1 || exit 0
 
-slug=$(omarchy-matrix provider slug 2>/dev/null) || exit 0
+slug=$("$cli" provider slug 2>/dev/null) || exit 0
 
 if [[ ${1:-} == "$slug" ]]; then
-  omarchy-matrix doctor >/dev/null 2>&1 || true
+  "$cli" doctor >/dev/null 2>&1 || true
 else
-  omarchy-matrix suspend >/dev/null 2>&1 || true
+  "$cli" suspend >/dev/null 2>&1 || true
 fi
