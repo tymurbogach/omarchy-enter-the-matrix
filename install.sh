@@ -34,7 +34,7 @@ command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 
 PROVIDER="$HERE/provider.json"
 [[ -f $PROVIDER ]] || { echo "cannot find $PROVIDER" >&2; exit 1; }
-eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCENT=\(.accent) PLUGIN_ID=\(.plugin.id) PLUGIN_SRC=\(.plugin.dir) WIDGET_ID=\(.widget.id) WIDGET_SRC=\(.widget.dir) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")"
+eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCENT=\(.accent) PLUGIN_ID=\(.plugin.id) PLUGIN_SRC=\(.plugin.dir) WIDGET_ID=\(.widget.id) WIDGET_REPO=\(.widget.repo) WIDGET_REF=\(.widget.ref) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")"
 mapfile -t PLUGIN_FILES < <(jq -r '.plugin.files[]' "$PROVIDER")
 mapfile -t WIDGET_FILES < <(jq -r '.widget.files[]' "$PROVIDER")
 
@@ -79,7 +79,7 @@ WARNING
 # dot-prefixed name is skipped by the plugin scanner on purpose: Omarchy uses
 # the same idiom for its own clone staging (PluginRegistry.qml:707).
 
-stage_plugin() { # <id> <source subdir> <file>...
+stage_plugin() { # <id> <absolute source dir> <file>...
   local id="$1" src="$2" f
   shift 2
   local dest="$PLUGINS_DIR/$id" staging="$PLUGINS_DIR/.$id.staging"
@@ -87,7 +87,7 @@ stage_plugin() { # <id> <source subdir> <file>...
   rm -rf "$staging"
   mkdir -p "$staging"
   for f in "$@"; do
-    cp -f "$HERE/$src/$f" "$staging/$f"
+    cp -f "$src/$f" "$staging/$f"
   done
 
   # Validated BEFORE it goes live: a folder that fails validation must never be
@@ -109,15 +109,44 @@ stage_plugin() { # <id> <source subdir> <file>...
   rm -rf "$retired"
 }
 
+# The widget lives in its own repo (see provider.json's "widget" comment). Fetch
+# it once into a persistent, non-plugins-dir cache and refresh it on every run,
+# rather than re-cloning from scratch every time -- this also runs from
+# `omarchy-matrix doctor` (via --sync), which should not need the network to
+# notice nothing changed. MATRIX_WIDGET_SRC bypasses all of this for local
+# development against an uncommitted checkout of the widget repo.
+WIDGET_CLONE="$SHARE_DIR/widget-src"
+
+resolve_widget_src() {
+  if [[ -n ${MATRIX_WIDGET_SRC:-} ]]; then
+    echo "$MATRIX_WIDGET_SRC"
+    return
+  fi
+
+  mkdir -p "$SHARE_DIR"
+  if [[ -d "$WIDGET_CLONE/.git" ]]; then
+    if ! git -C "$WIDGET_CLONE" fetch --depth 1 origin "$WIDGET_REF" >/dev/null 2>&1 ||
+       ! git -C "$WIDGET_CLONE" reset --hard FETCH_HEAD >/dev/null 2>&1; then
+      echo "  warning: could not refresh $WIDGET_REPO; using the cached copy" >&2
+    fi
+  else
+    rm -rf "$WIDGET_CLONE"
+    git clone --depth 1 --branch "$WIDGET_REF" -- "$WIDGET_REPO" "$WIDGET_CLONE" >/dev/null 2>&1 ||
+      { echo "  could not clone $WIDGET_REPO" >&2; exit 1; }
+  fi
+  echo "$WIDGET_CLONE"
+}
+
 echo "· plugin $PLUGIN_ID"
-stage_plugin "$PLUGIN_ID" "$PLUGIN_SRC" "${PLUGIN_FILES[@]}"
+stage_plugin "$PLUGIN_ID" "$HERE/$PLUGIN_SRC" "${PLUGIN_FILES[@]}"
 
 # The switchboard on the bar. A plugin of its own rather than another kind on
 # the rain: for a `bar-widget`, enabled means present in bar.layout, so folding
 # the two together would take the icon off the bar the moment both rain layers
-# were switched off.
+# were switched off. Fetched from its own repo -- see resolve_widget_src above.
 echo "· bar widget $WIDGET_ID"
-stage_plugin "$WIDGET_ID" "$WIDGET_SRC" "${WIDGET_FILES[@]}"
+WIDGET_SRC_DIR=$(resolve_widget_src)
+stage_plugin "$WIDGET_ID" "$WIDGET_SRC_DIR" "${WIDGET_FILES[@]}"
 
 # --- the CLI ----------------------------------------------------------------
 
