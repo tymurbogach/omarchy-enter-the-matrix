@@ -143,11 +143,22 @@ write_key() {
 
 # `omarchy plugin clone` decides the lock clone's id: <username>.lock. Discover
 # it rather than assume it, because on another machine the username differs.
+#
+# Ours is the one CARRYING the rain: the deriver copies $RAIN_QML into the clone
+# it builds. A plain `clonedFrom` match is not enough, twice over:
+#
+# - a first derive whose patch no longer fits aborts with the raw clone left
+#   enabled, and this answered for it: `status` ticked `✓ lock` while the
+#   screen locked to Omarchy's blurred wallpaper -- the exact lie the
+#   screenshot-the-lock rule exists against
+# - a clone somebody made for their own reasons has the same name shape, and
+#   remove_lock_clone would have destroyed it
 lock_clone_id() {
   local dir
   for dir in "$PLUGINS_DIR"/*.lock; do
     [[ -d $dir ]] || continue
     jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || continue
+    [[ -f $dir/$RAIN_QML ]] || continue
     jq -r '.id' "$dir/manifest.json"
     return 0
   done
@@ -165,8 +176,12 @@ lock_clone_id() {
 # made for their own reasons has the same name shape and must survive untouched.
 ours() {
   [[ -f "$1/$RAIN_QML" ]] && return 0
-  [[ -f "$1/manifest.json" ]] &&
-    [[ $(jq -r '.id // empty' "$1/manifest.json" 2>/dev/null) == "$PLUGIN_ID" ]]
+  [[ -f "$1/manifest.json" ]] || return 1
+  local id
+  id=$(jq -r '.id // empty' "$1/manifest.json" 2>/dev/null)
+  # The widget too: it ships no rain file, so without this its .bak piled up the
+  # way the lock clone's did.
+  [[ $id == "$PLUGIN_ID" || $id == "$WIDGET_ID" ]]
 }
 
 prune_backups() {
@@ -436,7 +451,7 @@ settle_plugin_scan() {
   # 150ms after the last file event before starting a rescan (shell.qml:61).
   sleep 0.3
 
-  while ((waited < 40)); do # 6s ceiling
+  while ((waited < 40)); do # ~4s ceiling, plus the debounce wait above
     forget_plugin_list
     current=$(plugin_list)
     # `[]` is what a shell that is not answering yields; steadiness there means
@@ -726,6 +741,10 @@ cmd_all() {
   for piece in wallpaper screensaver lock; do
     write_setting "$piece" "$value"
   done
+  # Wallpaper first, and actually APPLIED: writing the setting without this left
+  # `off` sitting on the live background's still frame, which reads exactly like
+  # rain that has frozen -- the state apply_wallpaper exists to leave.
+  apply_wallpaper
   apply_screensaver
   apply_lock
   cmd_status
@@ -735,7 +754,10 @@ usage() {
   cat <<USAGE
 Usage: $SELF <command>
 
-  on | off                            Turn the whole pack on or off
+  on | off                            Turn the pack on or off (wallpaper,
+                                      screensaver and lock -- not boot, which
+                                      needs sudo, and not the widget, which is
+                                      how you reach these switches)
   wallpaper|screensaver|lock|boot|widget on|off|toggle
                                       One piece at a time
   status [--is <piece>] [--json]      What is on
