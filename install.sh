@@ -125,6 +125,14 @@ resolve_widget_src() {
 
   mkdir -p "$SHARE_DIR"
   if [[ -d "$WIDGET_CLONE/.git" ]]; then
+    # provider.json's widget.repo may have moved since this cache was made (a
+    # rename, a migration to another org). Re-point origin at the CURRENT URL
+    # before every fetch, or a stale origin fetches forever from the old
+    # address while the warning below quotes the new one -- silently correct
+    # in its wording and silently wrong in what it just did. A failure here
+    # isn't fatal on its own: it just means the fetch that follows will fail
+    # too, which is what actually surfaces as the "could not refresh" warning.
+    git -C "$WIDGET_CLONE" remote set-url origin "$WIDGET_REPO" >/dev/null 2>&1 || true
     if ! git -C "$WIDGET_CLONE" fetch --depth 1 origin "$WIDGET_REF" >/dev/null 2>&1 ||
        ! git -C "$WIDGET_CLONE" reset --hard FETCH_HEAD >/dev/null 2>&1; then
       echo "  warning: could not refresh $WIDGET_REPO; using the cached copy" >&2
