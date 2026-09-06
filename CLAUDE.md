@@ -556,6 +556,16 @@ the first and last line of the file both read `shutdown` under
 by comparing `logo.png` inside Omarchy's *own* folder, and ours installs
 separately. Use `plymouth-set-default-theme` with no arguments.
 
+**A repair command that does not check the theme re-creates the state it
+exists to fix.** The pack was found raining under everforest: `theme set` had
+stood it down correctly at 14:52, and a manual `git pull && ./install.sh` that
+evening stood it back up, because `install.sh` ends in `doctor` and `doctor`
+applied every setting without asking which theme was current. The hook never
+failed -- the recovery path undid it. Now, under another theme, `doctor` only
+syncs files (and stands down anything still up), piece commands write the
+setting and defer the apply to the next `theme set`, and `status` says so when
+pieces are up while stood down. `boot` is exempt: it belongs to the system.
+
 **`qsb` is not on `PATH`** — it is at `/usr/lib/qt6/bin/qsb`. And the shipped
 `matrix.frag.qsb` was built with `--glsl 300es,330 --hlsl 50 --msl 12`. Different
 targets silently produce a different set of shader variants.

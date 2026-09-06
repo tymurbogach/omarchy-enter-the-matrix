@@ -647,7 +647,13 @@ cmd_status() {
   if ! pack_in_effect; then
     printf '  the pack is stood down: the current theme is \033[1m%s\033[0m, not %s\n' \
       "$(current_theme)" "$THEME_SLUG"
-    printf '  bring it back with: omarchy theme set %s\n\n' "$THEME_SLUG"
+    printf '  bring it back with: omarchy theme set %s\n' "$THEME_SLUG"
+    # Stood down should mean nothing enabled. Older versions of doctor got here
+    # with the pieces still up; say so instead of looking clean.
+    if plugin_enabled "$PLUGIN_ID" || plugin_enabled "$WIDGET_ID" || lock_clone_id >/dev/null 2>&1; then
+      printf '  \033[2mbut pieces of it are still up -- stand them down with: %s doctor\033[0m\n' "$SELF"
+    fi
+    echo
   fi
 
   for piece in "${PIECES[@]}"; do
@@ -686,6 +692,26 @@ cmd_doctor() {
   local failures=0
   echo "Checking the pack..."
   sync_files
+  # Under ANOTHER theme there is nothing to assert: the pack is stood down by
+  # design, and standing it up is exactly the bug this guards. install.sh ends
+  # in doctor, so any `git pull && ./install.sh` run while on somebody else's
+  # theme used to re-enable the plugin, the widget and the lock clone underneath
+  # it -- observed: suspended correctly at 14:52 when the theme changed, stood
+  # back up by a manual install that evening, raining under everforest.
+  #
+  # And if pieces are found UP while stood down -- a state only older versions
+  # of this command could produce -- doctor's job is to stand them down.
+  if ! pack_in_effect; then
+    if plugin_enabled "$PLUGIN_ID" || plugin_enabled "$WIDGET_ID" || lock_clone_id >/dev/null 2>&1; then
+      echo "  the theme is $(current_theme), but pieces of the pack are still up; standing them down"
+      cmd_suspend
+    else
+      echo "  stood down: the current theme is $(current_theme), not $THEME_SLUG"
+      echo "  nothing to repair; it all comes back with: omarchy theme set $THEME_SLUG"
+    fi
+    cmd_status
+    return 0
+  fi
   sync_screensaver
   sync_plugin || failures=1
   # The background too, when the piece is on. This is the other half of the ✓
@@ -741,12 +767,17 @@ cmd_all() {
   for piece in wallpaper screensaver lock; do
     write_setting "$piece" "$value"
   done
-  # Wallpaper first, and actually APPLIED: writing the setting without this left
-  # `off` sitting on the live background's still frame, which reads exactly like
-  # rain that has frozen -- the state apply_wallpaper exists to leave.
-  apply_wallpaper
-  apply_screensaver
-  apply_lock
+  # Under another theme the settings are the whole command: the pieces apply
+  # when the theme comes back (theme-set hook -> doctor). See cmd_doctor.
+  if pack_in_effect; then
+    # Wallpaper first, and actually APPLIED: writing the setting without this
+    # left `off` sitting on the live background's still frame, which reads
+    # exactly like rain that has frozen -- the state apply_wallpaper exists to
+    # leave.
+    apply_wallpaper
+    apply_screensaver
+    apply_lock
+  fi
   cmd_status
 }
 
@@ -803,7 +834,16 @@ wallpaper | screensaver | lock | boot | widget)
   toggle) [[ $(read_setting "$command") == "true" ]] && write_setting "$command" false || write_setting "$command" true ;;
   *) fail "unknown action: $action (use on, off or toggle)" ;;
   esac
-  apply_piece "$command"
+  # The theme-bound pieces only APPLY while their theme is current. Under
+  # another one, writing the setting is the whole command -- the piece comes up
+  # with the theme -- and applying anyway is how a hand run once stood the pack
+  # up under somebody else's (see cmd_doctor). `boot` is the exception: the
+  # splash belongs to the system, whichever theme is on.
+  if [[ $command == "boot" ]] || pack_in_effect; then
+    apply_piece "$command"
+  else
+    echo "$SELF: noted -- $command applies when the $THEME_SLUG theme is current"
+  fi
   ;;
 provider)
   # What the hooks ask when they need to know the provider's names. They are
