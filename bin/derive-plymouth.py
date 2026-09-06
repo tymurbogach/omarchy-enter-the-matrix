@@ -1459,9 +1459,21 @@ def theme_colour(key, theme_dir):
 
 def main():
     stage_only = "--stage-only" in sys.argv
-    theme_dir = Path(subprocess.run(["omarchy-theme-dir", SLUG],
-                                    capture_output=True, text=True,
-                                    check=True).stdout.strip())
+    # The one entry point that used to escape the die() treatment below: with
+    # the theme removed (omarchy theme remove) while boot is still on, this came
+    # out as a raw CalledProcessError traceback -- the failure shape the rest of
+    # this file is careful never to show, because it reads as a broken pack.
+    try:
+        theme_dir = Path(subprocess.run(["omarchy-theme-dir", SLUG],
+                                        capture_output=True, text=True,
+                                        check=True).stdout.strip())
+    except (OSError, subprocess.CalledProcessError):
+        die(f"cannot find the {SLUG} theme directory.\n"
+            f"  Reinstall it, or take the piece back with: {CLI} boot off")
+    if not (theme_dir / "colors.toml").is_file():
+        die(f"{theme_dir} has no colors.toml -- it does not look like the "
+            f"{SLUG} theme.\n"
+            f"  Reinstall it, or take the piece back with: {CLI} boot off")
 
     colours = (theme_colour("background", theme_dir),
                theme_colour("foreground", theme_dir),
