@@ -51,7 +51,7 @@ omarchy-matrix doctor            # assert everything again
 | `screensaver` | Rain when you go idle, on your `shell.json` idle timing. It behaves like Omarchy's own: the pointer is hidden, the mouse does not dismiss it, any key does. |
 | `lock` | Rain behind the password field. |
 | `boot` | The screen before login, typing out the four lines from the film — and two more on the way out, different for a shutdown and for a reboot. Needs your password and rebuilds the initramfs, so it never applies on its own. |
-| `widget` | The Matrix icon on the bar: the four switches above with a ✓ each, plus Repair and Uninstall. |
+| `widget` | The Matrix icon on the bar: the four switches above with a ✓ each, plus Repair and Uninstall. Lives in its own repo, [omarchy-matrix-widget](https://github.com/tymurbogach/omarchy-matrix-widget), fetched automatically by `install.sh` — see that repo if you want to add just the icon on its own. |
 
 The desktop rain is one more background in the carousel, `1-live-rain`.
 `omarchy-matrix wallpaper on` selects it for you.

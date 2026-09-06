@@ -583,6 +583,21 @@ derived, so every `lock off` used to leave a full copy behind — nine of them h
 piled up here. Ours are identified by the `MatrixRain.qml` inside; a lock clone
 somebody made for their own reasons has the same name shape and must survive.
 
+**The widget is fetched from its own repo, not shipped in `widget/`.** It moved
+to `omarchy-matrix-widget` so it could be submitted to `plugins.omarchy.org`
+as a single-manifest-at-root plugin without merging it into the rain plugin's
+manifest -- which would have collapsed the independent on/off toggle the
+two-plugin split exists for (see the `PluginRegistry.setEnabled` trap above).
+`install.sh` fetches and caches it under
+`~/.local/share/omarchy-matrix/widget-src`, refreshing on every run rather
+than re-cloning, so `omarchy-matrix doctor` (which runs `install.sh --sync`)
+degrades to a warning instead of failing outright when offline. A git
+submodule was considered and rejected: this repo's own clean-room test clones
+with plain `git clone`, no `--recurse-submodules`, and a submodule would
+silently leave that directory empty. `MATRIX_WIDGET_SRC=<path>` overrides the
+fetch for local development against an uncommitted checkout of the widget
+repo.
+
 ---
 
 ## Before you ship — the clean-room test
