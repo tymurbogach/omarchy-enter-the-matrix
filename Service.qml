@@ -50,31 +50,47 @@ Item {
   readonly property bool rainIsBackground: String(currentBackground).indexOf(liveMarker) >= 0
 
   // --- what the rest of the shell knows ----------------------------------
-  // Match by suffix rather than exact id: a clone of omarchy.lock is called
-  // <username>.lock, and that clone is exactly what the pack installs.
-  function serviceLike(suffix, property, fallback) {
+  // Both lookups below go through the shell's own firstPartyServiceFor(),
+  // the same call sleepwalker's StayAwake indicator uses. It used to be a
+  // hand-rolled suffix scan over shell._services (id.indexOf(".lock") /
+  // ".idle"), kept on the theory that a clone -- omarchy.lock becomes
+  // <username>.lock -- needed matching by suffix rather than by id.
+  // PluginRegistry.resolveEnabledId(), which firstPartyServiceFor() calls
+  // through, already resolves a clone back to its id (it walks
+  // installedPlugins for whichever enabled manifest has clonedFrom == the
+  // id asked for), so the suffix scan bought nothing and only added a
+  // second, less careful way to miss.
+  //
+  // Both misses default to NOT allowed / NOT locked, never the other way:
+  // idleServiceEnabled() used to default a miss to true, and a miss (the
+  // idle service not yet published in shell._services, e.g. a load-order
+  // race at shell startup) silently overrode "stay awake" for the rest of
+  // the shell's life. sessionLockedNow() was never that unsafe -- a miss
+  // only burns GPU behind a WlSessionLock overlay that already covers every
+  // layer -- but it is the same lookup and should fail the same way.
+  function idleServiceEnabled() {
     try {
-      var services = shell ? shell._services : null
-      if (!services) return fallback
-      for (var id in services) {
-        if (String(id).indexOf(suffix) !== String(id).length - suffix.length) continue
-        var instance = services[id]
-        if (instance && (property in instance)) return instance[property]
-      }
+      var service = shell ? shell.firstPartyServiceFor("omarchy.idle") : null
+      return service && ("idleEnabled" in service) ? !!service.idleEnabled : false
     } catch (e) {}
-    return fallback
+    return false
   }
+  readonly property bool idleAllowed: idleServiceEnabled()
 
+  function sessionLockedNow() {
+    try {
+      var service = shell ? shell.firstPartyServiceFor("omarchy.lock") : null
+      return service && ("locked" in service) ? !!service.locked : false
+    } catch (e) {}
+    return false
+  }
   // While the session is locked the lock's WlSessionLock is in charge, and by
   // protocol it covers every layer. Drawing underneath would only burn GPU.
-  readonly property bool sessionLocked: serviceLike(".lock", "locked", false)
+  readonly property bool sessionLocked: sessionLockedNow()
   // The screensaver is finished the moment the lock comes up. Otherwise it
   // reappeared over the desktop after unlocking without anyone asking for it,
   // since moving the mouse no longer dismisses it.
   onSessionLockedChanged: if (sessionLocked) dismissScreensaver()
-  // Respecting "stay awake" is what Omarchy's own idle service does: if the
-  // user asked not to sleep, we do not want a screensaver either.
-  readonly property bool idleAllowed: serviceLike(".idle", "idleEnabled", true)
 
   readonly property int screensaverSeconds: {
     var idle = shell && shell.shellConfig && shell.shellConfig.idle ? shell.shellConfig.idle : ({})
