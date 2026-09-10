@@ -216,11 +216,11 @@ There are two clones with different jobs:
 
 | Where | For what |
 |---|---|
-| `~/dev/omarchy-enter-the-matrix` | The working copy. **Edit and commit here.** |
+| `~/Projects/omarchy-enter-the-matrix` | The working copy. **Edit and commit here.** |
 | `~/.config/omarchy/themes/enter-the-matrix` | What `omarchy theme install` puts there. It gets regenerated — editing here loses the change. |
 
 ```bash
-cd ~/dev/omarchy-enter-the-matrix && git commit && git push
+cd ~/Projects/omarchy-enter-the-matrix && git commit && git push
 cd ~/.config/omarchy/themes/enter-the-matrix && git pull && ./install.sh
 ```
 
