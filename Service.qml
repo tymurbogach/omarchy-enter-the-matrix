@@ -28,11 +28,13 @@ Item {
   property var shell: null
 
   readonly property string home: Quickshell.env("HOME")
-  readonly property string configPath: home + "/.config/omarchy/matrix.json"
+  // The filename comes from provider.json's slug. It is written here by hand
+  // because QML cannot read the provider; tools/check.sh verifies the two agree.
+  readonly property string configPath: home + "/.config/omarchy/enter-the-matrix.json"
   readonly property string backgroundLink: home + "/.local/state/omarchy/current/background"
 
   // --- our own settings -------------------------------------------------
-  // They live in matrix.json rather than shell.json on purpose: `omarchy
+  // They live in enter-the-matrix.json rather than shell.json on purpose: `omarchy
   // refresh shell` rewrites shell.json wholesale and would take these with it.
   property bool wantWallpaper: true
   property bool wantScreensaver: true
