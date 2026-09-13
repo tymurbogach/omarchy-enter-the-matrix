@@ -143,7 +143,8 @@ sends keys down plymouthd's own pty instead, which nothing else can receive.
 **A summoned panel only takes the keyboard on the first summon after the shell
 starts.** `omarchy-shell shell summon <id>` maps the panel, but a later summon
 in the same shell process leaves the keys going to whatever had focus -- Escape
-does not even close it. Omarchy's own `omarchy.bluetooth` behaves identically,
+does not even close it, and neither does a second summon. Only a shell restart
+closes it. Omarchy's own `omarchy.bluetooth` behaves identically,
 so this is the environment, not the pack. It matters when testing: drive the
 widget's cursor with `wtype` right after `omarchy-restart-shell`, or the panel
 will sit there ignoring you and look like a bug of ours.
@@ -543,6 +544,42 @@ failure in any one of them is a failure to ship.
    was on before is on again.
 6. **Uninstall, and compare the machine against phase 1.** Anything still there
    is a bug, not a detail.
+
+### Running it without a keyboard or a password
+
+The phases need no keyboard. These commands drive every piece, and `grim`
+photographs the result:
+
+| Piece | Show it | Put it away |
+|---|---|---|
+| Wallpaper | `hyprctl dispatch 'hl.dsp.focus({ workspace = "5" })'`, on an empty workspace | the same call with your own workspace |
+| Screensaver | `omarchy-shell matrix screensaver start` | `omarchy-shell matrix screensaver stop` |
+| Lock | `omarchy-shell lock preview` | `omarchy-shell lock hidePreview` |
+| Widget panel | `omarchy-shell shell summon io.github.tymurbogach.enter-the-matrix.widget` | a shell restart (a second summon does not close it) |
+
+`hyprctl layers -j` lists `matrix-rain-wallpaper` while the desktop rain is
+mapped. `omarchy-shell matrix status` answers from inside the plugin, so it
+proves that the plugin reads the settings that the CLI writes.
+
+Without a terminal, `sudo` cannot ask for a password. The boot-splash steps then
+fail cleanly: uninstall prints "skipped", and the installed splash stays. So a
+run without a terminal cannot strip or reinstall the boot splash. Check the
+splash with `tools/preview-plymouth.sh`, which needs no sudo. Run the boot steps
+from a terminal before a release.
+
+Do not drive the widget with `wtype` unless you can confirm that the panel has
+the keyboard. If another window has the focus, the keys go there, and a
+terminal runs them. When you cannot confirm the focus, toggle through the CLI.
+Then test the widget's commands through the launcher, with the same argument
+that the widget sends:
+
+```bash
+"$OMARCHY_PATH/bin/omarchy-launch-floating-terminal-with-presentation" \
+  "'$HOME/.local/bin/omarchy-matrix' status"
+```
+
+Right after a shell restart, `omarchy plugin remove` can print "omarchy-shell is
+not responding". The removal still completes.
 
 Whatever this turns up belongs in the repo — as a fix, or as a written-down
 limitation. Rediscovering it on someone else's machine costs far more.
