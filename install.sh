@@ -113,11 +113,11 @@ stage_plugin() { # <id> <absolute source dir> <file>...
 }
 
 # The widget lives in its own repo (see provider.json's "widget" comment), pinned
-# to one commit. Fetched once into a persistent, non-plugins-dir cache and
-# refreshed on every run, rather than re-cloned from scratch every time -- this
-# also runs from `omarchy-matrix doctor` (via --sync), which must not need the
-# network to notice nothing changed. MATRIX_WIDGET_SRC bypasses all of this for
-# local development against an uncommitted checkout of the widget repo.
+# to one commit. The commit is fetched once into a cache outside the plugins
+# dir. If the cache is already at the pin, nothing touches the network. This
+# also runs from `omarchy-matrix doctor` (via --sync), which must work offline.
+# MATRIX_WIDGET_SRC bypasses all of this for local development against an
+# uncommitted checkout of the widget repo.
 # WIDGET_CLONE itself comes from pack_set_paths: the share dir's widget-src.
 
 resolve_widget_src() {

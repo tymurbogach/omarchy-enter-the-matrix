@@ -37,13 +37,13 @@
   "widget": {
     "id": "io.github.tymurbogach.enter-the-matrix.widget",
     "//repo": [
-      "The widget lives in its own repo so it can be submitted to",
-      "plugins.omarchy.org as a single-manifest-at-root plugin. install.sh",
-      "fetches and caches it; MATRIX_WIDGET_SRC overrides this for local",
-      "development against an uncommitted checkout. Why a fetch and not a git",
-      "submodule, and what the cache buys: see the trap headed \"The widget is",
-      "fetched from its own repo, not shipped in widget/\" under \"Traps already",
-      "paid for\" in CONTRIBUTING.md."
+      "The widget lives in its own repo, because a plugin repo holds one",
+      "manifest at its root. install.sh fetches the commit that \"ref\" names",
+      "(a full SHA) and caches it. A cache at that commit needs no network.",
+      "MATRIX_WIDGET_SRC overrides this for local development against an",
+      "uncommitted checkout. Why a fetch and not a git submodule: see the trap",
+      "headed \"The widget comes from its own repo\" under \"Traps already paid",
+      "for\" in CONTRIBUTING.md."
     ],
     "repo": "https://github.com/tymurbogach/omarchy-matrix-widget",
     "ref": "b251e380659d481ed3a1f8d3f5f9f907689836cc",
