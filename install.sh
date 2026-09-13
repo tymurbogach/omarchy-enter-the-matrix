@@ -83,6 +83,14 @@ stage_plugin() { # <id> <absolute source dir> <file>...
   shift 2
   local dest="$PLUGINS_DIR/$id" staging="$PLUGINS_DIR/.$id.staging"
 
+  # A folder carrying a .git checkout is managed by hand -- `omarchy plugin add`
+  # clones the repo there -- and staging over it would take the checkout with
+  # it. Leave it alone.
+  if [[ -e $dest/.git ]]; then
+    echo "  $id has a .git checkout; leaving it alone"
+    return 0
+  fi
+
   rm -rf "$staging"
   mkdir -p "$staging"
   for f in "$@"; do

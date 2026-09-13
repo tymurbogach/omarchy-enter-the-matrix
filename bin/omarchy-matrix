@@ -292,9 +292,18 @@ installed_pairs() {
 # A source file that is missing is not staleness either, it is a theme directory
 # that does not carry that file -- an older or a newer layout.
 files_outdated() {
-  local theme="$1" source target
+  local theme="$1" source target top
   while IFS='|' read -r source target; do
     [[ -f $source ]] || continue
+    # A plugin folder carrying a .git checkout is managed by hand, and
+    # install.sh leaves it alone for the same reason: judging it stale here
+    # would send --sync after a checkout nothing may overwrite.
+    case "$target" in
+    "$PLUGINS_DIR"/*)
+      top="${target#"$PLUGINS_DIR"/}"; top="${top%%/*}"
+      [[ -e $PLUGINS_DIR/$top/.git ]] && continue
+      ;;
+    esac
     [[ -f $target && ! $source -nt $target ]] || return 0
   done < <(installed_pairs "$theme")
   return 1
