@@ -8,7 +8,7 @@
 # nor Omarchy's background: the desktop rain draws on a layer of its own above
 # it. The only two things of Omarchy's that get replaced are the lock plugin and
 # the Plymouth theme, and neither ships as a frozen copy -- both are DERIVED
-# from whatever this machine has (see bin/derive-lock.py, bin/derive-plymouth.py).
+# from whatever this machine has (see lib/derive-lock.py, lib/derive-plymouth.py).
 #
 # To undo all of it: ./uninstall.sh
 
@@ -70,7 +70,7 @@ WARNING
 # Built in a staging directory and moved into place, rather than copied file by
 # file over the live one. Saving ANY file under ~/.config/omarchy/plugins/
 # hot-reloads that plugin, so the old way fired one reload per file -- eleven in
-# under a second, which is the two-instances trap idling (see CLAUDE.md). A
+# under a second, which is the two-instances trap idling (see CONTRIBUTING.md). A
 # dot-prefixed name is skipped by the plugin scanner on purpose: Omarchy uses
 # the same idiom for its own clone staging (PluginRegistry.qml:707).
 
@@ -149,7 +149,7 @@ resolve_widget_src() {
     fi
     if ! git -C "$WIDGET_CLONE" fetch --depth 1 origin "$WIDGET_REF" >/dev/null 2>&1 ||
        ! git -C "$WIDGET_CLONE" reset --hard FETCH_HEAD >/dev/null 2>&1; then
-      echo "  warning: could not refresh $WIDGET_REPO; using the cached copy" >&2
+      echo "  warning: could not fetch $WIDGET_REF from $WIDGET_REPO" >&2
     fi
   else
     rm -rf "$WIDGET_CLONE"
@@ -166,8 +166,12 @@ resolve_widget_src() {
   # (a hand pull, a branch of the same name) comes back here, and anything else
   # warns instead of staging a surprise.
   git -C "$WIDGET_CLONE" checkout -q --detach "$WIDGET_REF" >/dev/null 2>&1 || true
+  # Anything but the pin is not what this commit was tested with, and it can
+  # speak an older status protocol. Say so, and let the caller keep what is
+  # already staged.
   if [[ $(git -C "$WIDGET_CLONE" rev-parse HEAD 2>/dev/null) != "$WIDGET_REF" ]]; then
-    echo "  warning: widget cache is not at $WIDGET_REF; using it anyway" >&2
+    echo "  warning: the widget cache is not at $WIDGET_REF" >&2
+    return 1
   fi
   echo "$WIDGET_CLONE"
 }
@@ -200,8 +204,8 @@ ln -sfn "$SHARE_DIR/bin/$CLI" "$BIN_DIR/$CLI"
 clean_legacy_bins
 
 # --- the hooks --------------------------------------------------------------
-# theme-set: brings the pack back when you pick matrix, stands it down when you
-# pick anything else.
+# theme-set: brings the pack back when you pick this theme, stands it down when
+# you pick anything else.
 # post-update: re-derives the lock and the boot splash from the freshly updated
 # sources.
 #
@@ -233,19 +237,27 @@ done
 # LAST of the file copies, and deliberately: it is the only step here that can
 # fail on a first install (no cache to fall back on, so the clone is fatal). It
 # used to run right after the rain plugin, which meant a failed clone aborted
-# the script with a plugin already staged and neither `$CLI` nor
-# `$CLI-uninstall` anywhere on PATH -- a half-installed pack with no command to
-# inspect or remove it. Nothing above depends on the widget being staged, so
-# everything that can be installed is installed before the one step that can
-# stop the run.
+# the script with a plugin already staged and no `$CLI` on PATH: a
+# half-installed pack with no command to inspect or remove it. Nothing above
+# depends on the widget being staged, so everything that can be installed is
+# installed before the one step that can stop the run.
 echo "· bar widget $WIDGET_ID"
-WIDGET_SRC_DIR=$(resolve_widget_src)
-stage_plugin "$WIDGET_ID" "$WIDGET_SRC_DIR" "${WIDGET_FILES[@]}"
+if WIDGET_SRC_DIR=$(resolve_widget_src); then
+  stage_plugin "$WIDGET_ID" "$WIDGET_SRC_DIR" "${WIDGET_FILES[@]}"
+elif [[ -d $PLUGINS_DIR/$WIDGET_ID ]]; then
+  # Offline, or the pin cannot be reached: the widget already staged keeps
+  # working. A cache off the pin could stage a widget that does not speak this
+  # CLI's status protocol.
+  echo "  keeping the installed widget; run install.sh again when online" >&2
+else
+  echo "  could not install the bar widget; the rest of the pack is in place" >&2
+  exit 1
+fi
 
 # Everything above is a file copy, and that is all --sync is for: refreshing
 # what a `omarchy theme update` pulled into the theme directory. What follows
-# migrates old installs and switches pieces on, neither of which a refresh may
-# do behind the user's back.
+# prunes old backups and switches pieces on. A refresh may do neither behind
+# the user's back.
 if ((SYNC_ONLY)); then
   omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
   exit 0
@@ -345,16 +357,17 @@ cat <<EOF
 
   ${G}${BOLD}Done.${OFF}
 
-  ${BOLD}omarchy-matrix${OFF}                 ${DIM}the switchboard${OFF}
-  ${DIM}installed at${OFF} $BIN_DIR/omarchy-matrix
+  ${BOLD}$CLI${OFF}                 ${DIM}the switchboard${OFF}
+  ${DIM}installed at${OFF} $BIN_DIR/$CLI
 
-    omarchy-matrix status         ${DIM}what is on right now${OFF}
-    omarchy-matrix wallpaper off  ${DIM}any piece: wallpaper screensaver lock boot${OFF}
-    omarchy-matrix doctor         ${DIM}re-apply everything after 'omarchy refresh shell'${OFF}
+    $CLI status         ${DIM}what is on right now${OFF}
+    $CLI wallpaper off  ${DIM}any piece: wallpaper screensaver lock boot widget${OFF}
+    $CLI doctor         ${DIM}re-apply everything after 'omarchy refresh shell'${OFF}
+    $CLI uninstall      ${DIM}remove the pack and the theme${OFF}
 
   ${BOLD}The $DISPLAY_NAME icon on your bar${OFF}  ${DIM}the same switches, with a tick${OFF}
   ${DIM}and Repair and Uninstall beneath them. Not there? '$CLI widget on'${OFF}
 
   ${DIM}Note: 'omarchy theme set' rotates to the next background, so re-applying
-  the theme takes you off the rain. Back with: omarchy-matrix wallpaper on${OFF}
+  the theme takes you off the rain. Back with: $CLI wallpaper on${OFF}
 EOF
