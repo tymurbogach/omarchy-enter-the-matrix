@@ -277,7 +277,7 @@ sync_plugin() {
     # NOT `omarchy plugin add <repo-url>`: that would install the whole repo as
     # the plugin, bypassing the CLI, the hooks and the menu. install.sh copies in
     # the five files the plugin actually needs. It is the only supported path.
-    echo "  install it with: $(omarchy-theme-dir "$SLUG" 2>/dev/null || echo "~/.config/omarchy/themes/$SLUG")/install.sh" >&2
+    echo "  install it with: $(omarchy-theme-dir "$SLUG" 2>/dev/null || echo "$HOME/.config/omarchy/themes/$SLUG")/install.sh" >&2
     return 1
   }
 

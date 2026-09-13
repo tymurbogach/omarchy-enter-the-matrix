@@ -161,11 +161,11 @@ sys.exit('cannot find provider.json')
     local key=$1 fallback=$2 name
     name=$(sed -n "s/^ *$key *= *//p" "$STAGE/$THEME.plymouth" | sed 's/ [0-9]\+ *$//')
     [[ -n $name ]] || name=$fallback
-    fc-match -f %{file} "$name"
+    fc-match -f '%{file}' "$name"
   }
   FONT_MAIN=$(font_file Font sans-serif)
   FONT_MONO=$(font_file MonospaceFont monospace)
-  FONT_MONO_BOLD=$(fc-match -f %{file} "$(fc-match -f %{family} "$FONT_MONO" | sed 's/,.*//'):weight=bold")
+  FONT_MONO_BOLD=$(fc-match -f '%{file}' "$(fc-match -f '%{family}' "$FONT_MONO" | sed 's/,.*//'):weight=bold")
 
   mkdir -p "$OUT"
   echo "$SELF: previewing $THEME"

@@ -1,5 +1,8 @@
 # lib/pack.sh -- the shell the pack's scripts share. Sourced, never executed.
 # shellcheck shell=bash
+# SC2034 off: HOOKS, CONFIG and friends are read by the scripts that source
+# this file, which shellcheck cannot see.
+# shellcheck disable=SC2034
 #
 # Defines only: sourcing it changes nothing but what is defined here, and every
 # function works with or without `set -e` (callers check return codes
