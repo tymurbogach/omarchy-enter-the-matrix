@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Paint a still frame of the rain, as a one-off.
 
-    ./generate-backgrounds.py --out /tmp/test.png
-    ./generate-backgrounds.py --out /tmp/test.png --seed 99 --density 0.7
+    ./tools/generate-backgrounds.py --out /tmp/test.png
+    ./tools/generate-backgrounds.py --out /tmp/test.png --seed 99 --density 0.7
 
 It generates NOTHING on its own any more, and that is deliberate: it used to
 carry a preset table, and the last entry in it (`5-minimal`) painted a field
@@ -11,7 +11,7 @@ ships is now committed -- the stills and `1-live-rain.png` alike -- so an
 argument-less run had one job left, and it was to overwrite a file somebody had
 deliberately removed. `--out` is required.
 
-What it paints is **a frame of the rain/matrix.frag shader**, not a rain of its
+What it paints is **a frame of the tools/matrix.frag shader**, not a rain of its
 own: the same glyphs, the same colours, the same head-at-the-bottom geometry.
 That is what makes the still background and the animated one look alike -- the
 still one is the thumbnail in the carousel and the marker that switches the
@@ -36,7 +36,7 @@ CELL_W, CELL_H = 30, 64
 FONT = "Noto-Sans-CJK-JP"
 
 # The same ones as `ttfx matrix --rain-symbols`. Duplicated on purpose from
-# rain/generate-atlas.py: they are two independent programs, and a cross-import
+# tools/generate-atlas.py: they are two independent programs, and a cross-import
 # between them would be more fragile than these four lines.
 GLYPHS = [
     "2", "5", "9", "8", "Z", "*", ")", ":", ".", '"', "=", "+", "-", "¦", "|", "_",

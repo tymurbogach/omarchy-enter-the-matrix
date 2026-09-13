@@ -13,7 +13,7 @@ way around that.
 
 What is **not** done is publishing a frozen copy. That plugin carries the PAM
 and fingerprint flows, and an old copy is the last one you want.
-`bin/derive-lock.py` always starts from **your** Omarchy's `LockView.qml` and
+`lib/derive-lock.py` always starts from **your** Omarchy's `LockView.qml` and
 applies one minimal change: it drops the blurred wallpaper and puts the rain
 there. The other ~200 lines are yours. A `post-update.d` hook derives it again
 after every `omarchy update`, so Omarchy's fixes keep arriving.
@@ -31,7 +31,7 @@ and what `omarchy plymouth set-by-theme` lets a theme change is three things:
 background colour, text colour and **one still PNG**. No animation fits through
 that door.
 
-`bin/derive-plymouth.py` starts from your machine's `omarchy.script` and turns
+`lib/derive-plymouth.py` starts from your machine's `omarchy.script` and turns
 it into Neo's monitor. Upper left, one line at a time, the screen clearing
 between them, in the theme's own `green` -- taken from colors.toml rather than
 repeated in provider.json, so the pack has one green rather than two that drift
@@ -179,7 +179,7 @@ Details that explain the design, each of them forced by something:
   padlock, box and bullets -- comes up instead, whole. Verified by deleting one
   and photographing the result.
 
-You do not have to reboot to see any of it. `bin/preview-plymouth.sh` runs the
+You do not have to reboot to see any of it. `tools/preview-plymouth.sh` runs the
 real splash in a window, through Plymouth's own X11 renderer, inside a user
 namespace that needs no `sudo` and cannot touch your actual boot -- down to
 hiding `label-pango` and every font but the three the initramfs would have.
@@ -201,12 +201,10 @@ hiding `label-pango` and every font but the three the initramfs would have.
 | `manifest.json`, `Service.qml`, `MatrixRain.qml`, `matrix.frag.qsb`, `glyphs.png` | The plugin. |
 | *(not here)* | The bar widget — one icon, four switches, Repair and Uninstall — lives in its own repo, [omarchy-matrix-widget](https://github.com/tymurbogach/omarchy-matrix-widget), so it can be submitted to plugins.omarchy.org on its own. `install.sh` fetches it and caches it under `~/.local/share/omarchy-matrix/widget-src`; `provider.json`'s `widget.repo`/`widget.ref` say which repo and which ref. |
 | `provider.json` | The only file that names this provider — slug, plugin ids, Plymouth theme, the lines typed at boot. Everything else is machinery. |
-| `bin/` | `omarchy-matrix` (the switch CLI), the two derivers, `provider.py`, and `preview-plymouth.sh` — which runs the real boot splash in a window. |
+| `bin/` | `omarchy-matrix`, the one command on PATH (a link to the share dir). |
+| `lib/` | The shared shell (`pack.sh`), the two derivers and `provider.py` — the machinery the CLI, `install.sh` and `uninstall.sh` run from the share dir. |
+| `tools/` | Dev tools, never installed: `preview-plymouth.sh`, `generate-brand.py`, `generate-backgrounds.py`, `generate-atlas.py` and the `matrix.frag` shader source. |
 | `fonts/` | The face the boot splash is drawn in, shipped as a file rather than named as a dependency. See `fonts/README.md`. |
-| `hooks/` | The self-repair on theme change and update. |
-| `rain/` | The shader sources: `matrix.frag` and the atlas generator. |
-| `generate-brand.py` | Regenerates `unlock.png`, `preview-unlock.png` and `preview.png`. Nothing here is an untouchable binary. |
-| `generate-backgrounds.py` | Paints a still frame of the rain to `--out`. It generates none of the shipped backgrounds — see Regenerating. |
 
 ### About the borders
 
@@ -272,13 +270,13 @@ here, rather than pretending the hex came off a frame.
 ### Regenerating
 
 ```bash
-./generate-brand.py                     # unlock, preview-unlock and preview
-./rain/generate-atlas.py                # the shader's glyph atlas
-./generate-backgrounds.py --out /tmp/x.png --seed 42 --density 0.7
+./tools/generate-brand.py                # unlock, preview-unlock and preview
+./tools/generate-atlas.py               # the shader's glyph atlas
+./tools/generate-backgrounds.py --out /tmp/x.png --seed 42 --density 0.7
 
 # recompile the shader (qsb is not on PATH; qt6-shadertools puts it here)
 /usr/lib/qt6/bin/qsb --glsl 300es,330 --hlsl 50 --msl 12 \
-    -o matrix.frag.qsb rain/matrix.frag
+    -o matrix.frag.qsb tools/matrix.frag
 ```
 
 **The backgrounds are not regenerated.** `generate-backgrounds.py` requires

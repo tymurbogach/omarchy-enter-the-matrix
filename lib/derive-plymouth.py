@@ -36,7 +36,7 @@ rewriting it -- the last registration wins -- so not one line of the passphrase
 path is edited. Escape hatches remain `omarchy plymouth reset` and
 `plymouth.enable=0` on the kernel line.
 
-Verify it with `bin/preview-plymouth.sh`, which runs this for real in a window.
+Verify it with `tools/preview-plymouth.sh`, which runs this for real in a window.
 """
 
 import os
@@ -1498,7 +1498,7 @@ def main():
             shutil.rmtree(out, ignore_errors=True)
             shutil.copytree(staging, out)
             print(f"  staged at {out} (not installed)")
-            print(f"  see it: bin/preview-plymouth.sh <scenario>")
+            print(f"  see it: tools/preview-plymouth.sh <scenario>")
             return
 
         # The four privileged steps. sudo may have nowhere to ask for a

@@ -9,7 +9,7 @@ import QtQuick
 // the trail never looked right.
 //
 // The shader comes from bjarneo/quickshell (MIT), with its procedural glyphs
-// swapped for an atlas of the real katakana ttfx uses. See rain/matrix.frag.
+// swapped for an atlas of the real katakana ttfx uses. See tools/matrix.frag.
 //
 // running=false stops the clock: with no property changing, the ShaderEffect
 // does not render again, so the GPU drops to zero and the last frame stays

@@ -33,6 +33,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
 
 SYMBOLS = [
     "2", "5", "9", "8", "Z", "*", ")", ":", ".", '"', "=", "+", "-", "¦", "|", "_",
@@ -102,7 +103,7 @@ def check_margins(path):
 def main():
     assert len(SYMBOLS) <= COLS * ROWS, "the symbols do not fit the grid"
     # The atlas lives at the repo root, next to the MatrixRain.qml that loads it.
-    output = os.path.join(HERE, os.pardir, "glyphs.png")
+    output = os.path.join(ROOT, "glyphs.png")
 
     # Row by row and then stacked: +append/-append keep the order, whereas
     # -montage reorders on its own.

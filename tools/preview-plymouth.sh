@@ -32,7 +32,7 @@
 # fallbacks and line breaking that the real boot does not have. Pass --pango to
 # see the difference.
 #
-#   ./bin/preview-plymouth.sh scenario.sh [--out DIR] [--theme NAME]
+#   ./tools/preview-plymouth.sh scenario.sh [--out DIR] [--theme NAME]
 #                             [--stage DIR] [--mode NAME] [--pango] [--keep]
 #
 # --mode is what plymouthd is started with, and therefore what the theme's
@@ -128,14 +128,15 @@ if [[ ${MX_PREVIEW_STAGE:-} != inner ]]; then
   [[ -n ${DISPLAY:-} ]] || die "no DISPLAY: plymouth's X11 renderer needs Xwayland"
 
   # The theme name, and where its files come from. Default: whatever the
-  # provider calls its Plymouth theme, staged but not installed.
+  # provider calls its Plymouth theme, staged but not installed. Read from the
+  # repo beside this script -- never from the installed share copy, which may
+  # belong to another version.
   if [[ -z $THEME ]]; then
     THEME=$(python3 -c "
 import json, pathlib, sys
-for p in (pathlib.Path.home() / '.local/share/omarchy-matrix/provider.json',
-          pathlib.Path('$HERE').parent / 'provider.json'):
-    if p.is_file():
-        print(json.loads(p.read_text())['plymouth']['theme']); sys.exit()
+p = pathlib.Path('$HERE').parent / 'provider.json'
+if p.is_file():
+    print(json.loads(p.read_text())['plymouth']['theme']); sys.exit()
 sys.exit('cannot find provider.json')
 ") || die "cannot work out the theme name; pass --theme"
   fi

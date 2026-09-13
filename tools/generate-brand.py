@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the matrix theme's three identity PNGs.
 
-    ./generate-brand.py
+    ./tools/generate-brand.py
 
   · unlock.png          the Plymouth boot mark (with alpha; Plymouth paints it
                         over `background` from colors.toml). A line half typed
@@ -25,6 +25,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE) # outputs land in the repo root, not in tools/
 MONO = "JetBrainsMono Nerd Font, monospace"
 CJK = "Noto Sans CJK JP"
 
@@ -216,16 +217,16 @@ def preview(w=1800, h=1012):
 
 
 def main():
-    unlock = os.path.join(HERE, "unlock.png")
+    unlock = os.path.join(ROOT, "unlock.png")
     render(brand(), 1108, 523, unlock)
     print(f"  unlock.png  {os.path.getsize(unlock) // 1024} KB")
 
-    pu = os.path.join(HERE, "preview-unlock.png")
+    pu = os.path.join(ROOT, "preview-unlock.png")
     render(preview_unlock(), 1920, 1080, pu)
     subprocess.run(["magick", pu, "-strip", "-dither", "None", "-colors", "256", pu], check=True)
     print(f"  preview-unlock.png  {os.path.getsize(pu) // 1024} KB")
 
-    background = next(iter(sorted(glob.glob(os.path.join(HERE, "backgrounds", "*-live-*")))), "")
+    background = next(iter(sorted(glob.glob(os.path.join(ROOT, "backgrounds", "*-live-*")))), "")
     if not os.path.exists(background):
         print("  ! no backgrounds/*-live-* found. That file is committed, not "
               "generated: restore it from git rather than regenerating it.",
@@ -233,7 +234,7 @@ def main():
         return 1
     with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as fh:
         overlay = fh.name
-    p = os.path.join(HERE, "preview.png")
+    p = os.path.join(ROOT, "preview.png")
     try:
         render(preview(), 1800, 1012, overlay)
         subprocess.run(
