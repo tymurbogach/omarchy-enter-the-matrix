@@ -593,7 +593,9 @@ cmd_status() {
     # `settings` is what you asked for, `active` is what is happening. They are
     # not the same question -- see is_active -- and the widget draws its ticks
     # from `active` so that one definition serves both it and the text below.
+    # `schema` versions this document: readers take 1 and reject anything else.
     jq -n \
+      --argjson schema 1 \
       --argjson w "$(read_setting wallpaper)" --argjson s "$(read_setting screensaver)" \
       --argjson l "$(read_setting lock)" --argjson b "$(read_setting boot)" \
       --argjson aw "$(active_of wallpaper)" --argjson as "$(active_of screensaver)" \
@@ -601,7 +603,7 @@ cmd_status() {
       --argjson g "$(read_setting widget)" --argjson ag "$(active_of widget)" \
       --argjson effect "$(pack_in_effect && echo true || echo false)" \
       --arg theme "$(current_theme)" --arg name "$DISPLAY_NAME" --arg slug "$SLUG" \
-      '{name: $name, slug: $slug, theme: $theme, active: $effect,
+      '{schema: $schema, name: $name, slug: $slug, theme: $theme, active: $effect,
         settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b, widget: $g},
         pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab, widget: $ag}}'
     return

@@ -206,6 +206,19 @@ hiding `label-pango` and every font but the three the initramfs would have.
 | `tools/` | Dev tools, never installed: `preview-plymouth.sh`, `generate-brand.py`, `generate-backgrounds.py`, `generate-atlas.py` and the `matrix.frag` shader source. |
 | `fonts/` | The face the boot splash is drawn in, shipped as a file rather than named as a dependency. See `fonts/README.md`. |
 
+### status --json
+
+The one document the widget reads, and the one definition of the ✓. Fields:
+
+| Field | What it is |
+|---|---|
+| `schema` | The protocol version, currently 1. Readers take 1 and reject anything else, so either side can grow without silent misreads. |
+| `name`, `slug` | The provider's display name and theme slug, from `provider.json`. |
+| `theme` | The current theme, from Omarchy's state directory. |
+| `active` | Whether the pack is in effect: the current theme is ours. `boot` is exempt, since the splash belongs to the system. |
+| `settings` | What was asked for, per piece, from the pack's own settings file. |
+| `pieces` | What is happening now, per piece: asked for AND in effect AND applied (the live background selected, the plugin enabled, our lock in charge, our splash installed). |
+
 ### About the borders
 
 The theme sets the border **colour** (`hyprland_active_border`, flat green) but
