@@ -24,7 +24,7 @@ import sys
 from pathlib import Path
 
 # Loaded by path rather than by name: this file is also exec'd straight from a
-# spec in the repo's verification snippet, where bin/ is not on sys.path.
+# spec in the repo's verification snippet, where lib/ is not on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from provider import PROVIDER  # noqa: E402
 
@@ -115,9 +115,13 @@ def is_ours(directory):
 
 
 def existing_clone():
-    """Any lock clone, ours or not: clonedFrom is the discovery, is_ours is
-    the ownership verdict, and the two are asked separately on purpose. A raw
-    clone this run just made has neither mark yet and still has to be found."""
+    """The lock clone to derive into: ours first, then any raw clone.
+
+    clonedFrom is the discovery and is_ours the ownership verdict. A raw clone
+    that this run just made has neither mark yet and still has to be found.
+    Ours comes back first, so a foreign clone that sorts earlier cannot hide it
+    and stop `lock on` with a refusal that is not true."""
+    first_raw = (None, None)
     for directory in sorted(PLUGINS.glob("*.lock")):
         manifest = directory / "manifest.json"
         if not manifest.is_file():
@@ -126,26 +130,13 @@ def existing_clone():
             data = json.loads(manifest.read_text())
         except ValueError:
             continue
-        if data.get("omarchy", {}).get("clonedFrom") == "omarchy.lock":
+        if data.get("omarchy", {}).get("clonedFrom") != "omarchy.lock":
+            continue
+        if is_ours(directory):
             return directory, data["id"]
-    return None, None
-
-
-def foreign_clone():
-    """A lock clone that is not ours. Adopting it would patch somebody's own
-    lock, and `lock off` would then delete it."""
-    for directory in sorted(PLUGINS.glob("*.lock")):
-        manifest = directory / "manifest.json"
-        if not manifest.is_file():
-            continue
-        try:
-            data = json.loads(manifest.read_text())
-        except ValueError:
-            continue
-        if data.get("omarchy", {}).get("clonedFrom") == "omarchy.lock" \
-                and not is_ours(directory):
-            return directory
-    return None
+        if first_raw[0] is None:
+            first_raw = (directory, data["id"])
+    return first_raw
 
 
 def rain_source():

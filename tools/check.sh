@@ -165,7 +165,7 @@ check_repo_hygiene() {
 # first half and must come back as foreign everywhere.
 
 check_ownership() {
-  section "lock ownership fixtures (M4)"
+  section "ownership fixtures (lock clones, legacy files)"
   # In a subshell: the fixture provider would clobber this shell's names.
   (
     local tmp rain="CheckRain.qml"
@@ -194,7 +194,7 @@ JSON
     lock_is_ours "$PLUGINS_DIR/ours-rain.lock" || { echo "  FAIL: bash: rain-carrying clone is not ours" >&2; exit 1; }
     lock_is_ours "$PLUGINS_DIR/handmade.lock" && { echo "  FAIL: bash: hand-made clone counts as ours" >&2; exit 1; }
     lock_is_ours "$PLUGINS_DIR/other.lock" && { echo "  FAIL: bash: non-clone counts as ours" >&2; exit 1; }
-    OMARCHY_MATRIX_PROVIDER="$tmp/provider.json" python3 - "$ROOT/lib/derive-lock.py" "$tmp" <<'PY'
+    OMARCHY_MATRIX_PROVIDER="$tmp/provider.json" python3 - "$ROOT/lib/derive-lock.py" "$tmp" <<'PY' || exit 1
 import importlib.util as u, sys
 from pathlib import Path
 deriver, tmp = sys.argv[1], Path(sys.argv[2])
@@ -206,10 +206,24 @@ assert m.is_ours(tmp / "plugins/ours-derived.lock"), "derived clone is not ours"
 assert m.is_ours(tmp / "plugins/ours-rain.lock"), "rain-carrying clone is not ours"
 assert not m.is_ours(tmp / "plugins/handmade.lock"), "hand-made clone counts as ours"
 assert not m.is_ours(tmp / "plugins/other.lock"), "non-clone counts as ours"
+# handmade.lock sorts before both of ours: discovery must still hand back ours.
 target, _ = m.existing_clone()
 assert target is not None, "discovery finds no clone at all"
-assert (m.foreign_clone() or Path()).name == "handmade.lock", m.foreign_clone()
+assert m.is_ours(target), f"discovery prefers a foreign clone over ours: {target}"
 PY
+    # clean_legacy_bins takes back only files that carry the pack's marker.
+    # SC2034: clean_legacy_bins (in lib/pack.sh) reads SHARE_DIR.
+    # shellcheck disable=SC2034
+    BIN_DIR="$tmp/bin" SHARE_DIR="$tmp/share"
+    mkdir -p "$BIN_DIR/__pycache__"
+    echo "from provider import PROVIDER" >"$BIN_DIR/derive-lock.py"
+    echo "print('mine')" >"$BIN_DIR/provider.py"
+    touch "$BIN_DIR/__pycache__/provider.cpython-314.pyc" "$BIN_DIR/__pycache__/other.cpython-314.pyc"
+    clean_legacy_bins
+    [[ ! -e $BIN_DIR/derive-lock.py ]] || { echo "  FAIL: the old deriver stayed on PATH" >&2; exit 1; }
+    [[ -f $BIN_DIR/provider.py ]] || { echo "  FAIL: a provider.py of the user's own was deleted" >&2; exit 1; }
+    [[ -f $BIN_DIR/__pycache__/other.cpython-314.pyc ]] || { echo "  FAIL: bytecode of another program was deleted" >&2; exit 1; }
+    [[ ! -e $BIN_DIR/__pycache__/provider.cpython-314.pyc ]] || { echo "  FAIL: the pack's bytecode stayed" >&2; exit 1; }
   ) || failures=$((failures + 1))
 }
 

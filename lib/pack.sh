@@ -127,14 +127,29 @@ restart_shell() {
   omarchy-restart-shell >/dev/null 2>&1 || return 1
 }
 
+# Remove <file> only if it contains <marker>, a line that only the pack's own old
+# copy of that file carries. Never fails.
+remove_if_marked() { # <file> <marker>
+  [[ -f $1 ]] && grep -qF -- "$2" "$1" && rm -f "$1"
+  return 0
+}
+
 # One release only: the previous layout put the derivers, provider.py and a copy
-# of uninstall.sh straight on PATH. Take them back once, guarded by a marker,
-# with the .pyc caches beside them.
+# of uninstall.sh straight on PATH. Take them back once. Each file is matched by
+# its content, not by its name alone: `provider.py` is a plausible name for a
+# file of the user's own, and a first install with no old layout runs this too.
+# The bytecode cache gets the same care, because other programs share it.
 clean_legacy_bins() {
   [[ ! -f $SHARE_DIR/.layout-v2 ]] || return 0
-  rm -f "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
-    "$BIN_DIR/provider.py" "$BIN_DIR/$CLI-uninstall"
-  rm -rf "$BIN_DIR/__pycache__"
+  remove_if_marked "$BIN_DIR/derive-lock.py" "from provider import PROVIDER"
+  remove_if_marked "$BIN_DIR/derive-plymouth.py" "from provider import PROVIDER"
+  remove_if_marked "$BIN_DIR/provider.py" "OMARCHY_MATRIX_PROVIDER"
+  remove_if_marked "$BIN_DIR/$CLI-uninstall" "handing Omarchy's lock back"
+  local name
+  for name in provider derive-lock derive-plymouth derivar-lock derivar-plymouth; do
+    rm -f "$BIN_DIR/__pycache__/$name".*.pyc
+  done
+  rmdir "$BIN_DIR/__pycache__" 2>/dev/null || true
   find "$SHARE_DIR" -name '*.pyc' -delete 2>/dev/null || true
-  touch "$SHARE_DIR/.layout-v2"
+  mkdir -p "$SHARE_DIR" && touch "$SHARE_DIR/.layout-v2"
 }
