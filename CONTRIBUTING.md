@@ -1,216 +1,12 @@
-# CLAUDE.md — omarchy-enter-the-matrix
+# CONTRIBUTING — omarchy-enter-the-matrix
 
-A theme **and** a shell plugin for Omarchy 4, published from one repo. This file
-is the working agreement for anyone — human or agent — changing it.
+English everywhere: code, docs, comments, commit messages. The repo is public
+and Omarchy's world is English.
 
-Everything here is in English because the repo is public and Omarchy's world is
-English. Keep it that way: comments, messages, filenames, commit messages.
+Run `./tools/check.sh` before pushing. It covers what needs no Omarchy
+session. The clean-room test at the end decides whether a change ships.
 
----
-
-## Rule 0 — Omarchy is the source of truth, and it moves
-
-**Invoke the `/omarchy` skill before touching anything under `~/.config/omarchy`,
-`~/.config/hypr`, the bar, the lock, themes or backgrounds.** It carries the
-current layout, the command surface and the safe extension points.
-
-**Read Omarchy's own source instead of guessing.** It is right there and it is
-readable:
-
-```bash
-cat $(which omarchy-theme-set)              # how a theme is actually staged
-cat /usr/share/omarchy/shell/plugins/lock/LockView.qml
-cat /usr/share/omarchy/default/plymouth/omarchy.script
-omarchy commands --json                     # every command, machine-readable
-```
-
-Half the design decisions in this repo came from reading that source and finding
-the ceiling. None came from assuming.
-
-**Never edit anything under `/usr/share/omarchy/`.** It belongs to the package
-and `omarchy update` overwrites it. Reading is safe and encouraged.
-
-**Pin what you tested against.** `install.sh` carries `TESTED_ON`, and the
-derivers abort loudly when a patch no longer fits. Update those, don't silence
-them.
-
----
-
-## Rule 1 — A request to review is not a request to change
-
-"Have a look at X", "why does Y happen", "check Z" means: investigate, measure,
-**report**. Propose the fix and wait. It does not authorise editing, committing
-or pushing.
-
-This is written down because it went wrong. Asked to *look into* why the
-screensaver was showing Omarchy's default, the diagnosis was right — and then a
-menu file was edited, committed and pushed unasked, breaking a row the user
-looks at every day.
-
-**If the fix looks obvious and one line long, it is still not yours.** Say so and
-wait.
-
----
-
-## Rule 2 — Verify what you changed, not what you were thinking about
-
-Before claiming something works, check **the artefact as the user sees it**.
-
-- ❌ "the menu action launches the right program"
-- ✅ "the menu row renders with its icon and its label **and** launches the right
-  program"
-
-That same session shipped a menu row with no icon and the raw id as its label,
-because only the action was tested.
-
-If you genuinely cannot verify it from here, **say so** instead of assuming.
-Then verify everything you *can*: syntax, generated output, cross-references, a
-simulation of the merge.
-
-**The boot splash is no longer on that list.** `bin/preview-plymouth.sh` runs
-the real thing — real script, real callbacks, real password dialog — in a
-window, and `grim` photographs it. No sudo, no reboot, and it cannot touch the
-machine's actual boot. What still needs a reboot is only whether `mkinitcpio`
-carried the theme in, and whether the DRM renderer agrees with the X11 one about
-the panel. Everything else is a screenshot away, so take it.
-
-Verifications that actually caught bugs in this repo, worth repeating:
-
-```bash
-# Regenerate and prove nothing moved: this must come out byte-identical.
-# Only the atlas is regenerated -- generate-backgrounds.py needs --out and
-# writes nowhere by default, so no background is reproducible from source any
-# more; they are all committed stills.
-md5sum glyphs.png
-./rain/generate-atlas.py
-md5sum glyphs.png
-
-# The boot splash, as a picture rather than as a hope
-./bin/derive-plymouth.py --stage-only
-printf 'pause 3\nshot splash\n' > /tmp/s.sh
-./bin/preview-plymouth.sh /tmp/s.sh --out /tmp/shots
-
-# The lock patch still applies to the installed Omarchy
-python3 -c "import importlib.util as u; s=u.spec_from_file_location('d','bin/derive-lock.py'); \
-m=u.module_from_spec(s); s.loader.exec_module(m); m.patch((m.SOURCE/'LockView.qml').read_text())"
-
-# The pack installs from a clean clone, the way a stranger gets it
-git clone https://github.com/tymurbogach/omarchy-enter-the-matrix /tmp/check
-omarchy-plugin-validate /tmp/check
-```
-
----
-
-## Rule 3 — Additive only. Derive, never freeze.
-
-The pack must not overwrite Omarchy's originals, and must not leave the system
-worse than it found it.
-
-Two pieces genuinely cannot be done any other way — the lock, because a
-`WlSessionLock` is exclusive by protocol, and the boot splash, because Plymouth
-themes only take colours and one still PNG. **Both are derived, never shipped as
-a copy:**
-
-- `bin/derive-lock.py` starts from *this machine's* `LockView.qml`
-- `bin/derive-plymouth.py` starts from *this machine's* `omarchy.script`
-
-Both apply a minimal patch, assert the anchor appears exactly once, and **abort
-with a clear message** rather than half-patching. A `post-update.d` hook re-runs
-them after every `omarchy update`, so Omarchy's fixes keep flowing through.
-
-Everything else is additive: the plugin draws on its own layer-shell surfaces and
-`omarchy.background` is never cloned or disabled.
-
-**If a new feature seems to need a frozen copy of Omarchy code, that is the
-signal to look for the extension point you have not found yet.** The desktop
-rain looked like it needed a clone of `omarchy.background` for weeks. It did not.
-
----
-
-## Rule 4 — Never leave the machine unable to lock or boot
-
-The two derived pieces are the two that can lock someone out.
-
-- **Lock:** hand it back with `omarchy plugin remove <clone>`, which re-enables
-  `omarchy.lock` through `cloneSourceRestores`. *Disabling* the clone leaves
-  **zero** locks enabled, because cloning put Omarchy's own into
-  `disabledPlugins`. Test with `omarchy-shell lock preview` — never by locking.
-- **Boot:** on an encrypted disk, Plymouth is also what asks for the passphrase.
-  The patch touches no password callback, and the theme installs *alongside*
-  Omarchy's rather than over it. Escape hatches: `omarchy plymouth reset`, or
-  `plymouth.enable=0` on the kernel line from the boot loader.
-
----
-
-## Rule 5 — Everything is a layer. Off must mean gone.
-
-The pack is a **layer over Omarchy**, not a fork of it. Four things follow, and
-none of them is negotiable.
-
-**Every piece switches on its own.** `wallpaper`, `screensaver`, `lock`, `boot` —
-each one off, on and back with no side effect on the other three, and with no
-step in the middle that says "now re-apply the theme". A piece that only works
-while the others are on is not a layer, it is a fork.
-
-**Picking another theme stands everything down.** Nothing rains, nothing is
-ticked, no plugin is left enabled. `enter-the-matrix.json` is kept, so coming
-back to the theme restores exactly what was there. `boot` is the one documented
-exception: Plymouth belongs to the system, not to the theme.
-
-**Off must remove, not merely deactivate.** If a piece wrote something, its `off`
-takes it back — including anything outside `$HOME`. It is not enough for
-`uninstall.sh` to clean up: someone who never uninstalls, and only turns a piece
-off, must still end up with a clean machine.
-
-> Written down because it was broken, and in the one place hardest to notice:
-> `boot off` called `omarchy-plymouth-reset` and left
-> `/usr/share/plymouth/themes/omarchy-matrix/` on disk forever, while
-> `uninstall.sh` deleted it only when it happened to be the active theme. Turning
-> the piece off was the exact case both missed.
-
-**Nothing of Omarchy's may be left disabled.** The lock is the sharp edge:
-handing it back always goes through `omarchy plugin remove`, never
-`plugin disable`. See Rule 4.
-
----
-
-## Where this is going
-
-The pack is a **theme plus a layer**, and the layer is now two shell plugins:
-`matrix.rain` draws, `matrix.control` is one icon on the bar that owns the
-switches. Nothing of the pack is written into a file that is not its own any
-more -- the block that used to be spliced into `omarchy-menu.jsonc` is gone, and
-the only shared file it touches is `shell.json`, through Omarchy's own
-`omarchy plugin enable`, which is what that command is for.
-
-The four pieces are not matrix-specific: they are *wallpaper, screensaver, lock
-and boot as a set*, and matrix is one provider of that set. `provider.json` is
-the seam -- the only file that names the provider. Keep it that way: new work
-adds to the machinery and asks the descriptor, rather than writing `matrix` down
-one more time.
-
-### The list, in the order it is worth doing
-
-The nine seams the 2026-08-28 clean-room test turned up are closed. What is
-below came out of closing them.
-
-One of them stayed open a while and is decided now: **the widget writes the
-CLI's name down, on purpose.** Every other file asks `provider.json`; the
-widget cannot, because it would need the CLI to find it, and reading
-`~/.local/share/omarchy-matrix/provider.json` with a FileView would only move
-the constant. `Panel.qml` carries `omarchy-matrix` as its one name, with a
-comment saying so.
-
-1. **`~/.local/share/omarchy-matrix/` is a bootstrap constant in five files**
-   (the CLI, `bin/provider.py`, `uninstall.sh` and both hooks). It cannot come
-   from the file it is used to find, but five copies of it is four too many.
-2. **The widget's panel does not say what a stood-down piece would do.** It
-   ticks nothing and explains why at the top, which is right, but a switch that
-   is on-but-stood-down currently reads exactly like one that is off.
-
----
-
-## How to work on this repo
+## Workflow
 
 There are two clones with different jobs:
 
@@ -224,18 +20,12 @@ cd ~/Projects/omarchy-enter-the-matrix && git commit && git push
 cd ~/.config/omarchy/themes/enter-the-matrix && git pull && ./install.sh
 ```
 
-A detour, deliberately: it is the exact path anyone installing the pack takes, so
-mistakes surface here rather than on their machine.
-
-Renaming or adding a background needs `omarchy theme set enter-the-matrix`
-afterwards — the state directory only picks up new filenames when the theme is
-re-applied.
-
 ### Commit messages explain the WHY
 
 Not what changed — `git diff` says that. Why it changed, what was tried, what the
 constraint was. Several commits here are the only record of a limitation that
-would otherwise be rediscovered the hard way.
+would otherwise be rediscovered the hard way. No credit lines for any AI
+assistant, ever — neither in commits, nor in PR descriptions.
 
 ---
 
@@ -264,7 +54,7 @@ error, `hl.dsp.focus` wants a direction rather than a window, and
 matters: a preview script that assumed focus had moved then drove `wtype`, and
 typed a test passphrase and its Return into the terminal the user was working
 in. **Never aim `wtype` at a window you have not confirmed is focused** — it has
-no target, it types wherever the compositor is pointing. `bin/preview-plymouth.sh`
+no target, it types wherever the compositor is pointing. `tools/preview-plymouth.sh`
 sends keys down plymouthd's own pty instead, which nothing else can receive.
 
 **A summoned panel only takes the keyboard on the first summon after the shell
@@ -329,7 +119,7 @@ burst in reverse — rename it to `.<id>.retired` first and delete that.
 enabled plugins and the bar layout are recorded. There is no post-refresh hook.
 Recovery is `omarchy-matrix doctor`, or re-applying the theme. Verified on this
 machine: after a refresh, `doctor` restored `matrix.rain`, the lock clone (with
-`omarchy.lock` disabled again) and the `matrix.control` entry in the bar. It
+`omarchy.lock` disabled again) and the widget entry in the bar. It
 restores the pack and nothing else -- the user's own plugins and bar order come
 back from Omarchy's own `shell.json.bak.<timestamp>`.
 
@@ -375,7 +165,7 @@ screen, and BOX_ASPECT alone cannot know that.** It is baked from this
 machine's font metrics; the panel's vertical anchor (`entry.y`, Omarchy's own
 idea of where its dialog goes) is boot-time and can sit low enough that there
 is not BOX_ASPECT's worth of room under it. Caught by photographing the real
-render at this panel's own resolution with `bin/preview-plymouth.sh`, not by
+render at this panel's own resolution with `tools/preview-plymouth.sh`, not by
 the math -- the box simply had no bottom border in the shot. Two fixes, not
 one: the panel is lifted a fixed fraction of the screen height off `entry.y`
 rather than sitting exactly on it, AND the height is clamped against
@@ -388,7 +178,7 @@ names, and `label-freetype` resolves a family by shelling out to
 `/usr/bin/fc-match` — which is not in the initramfs. So `"DejaVu Serif 30"`
 renders as a serif on your desktop and as `/usr/share/fonts/Plymouth.ttf` at
 boot, with nothing to warn you. Anything whose exact shape matters must arrive
-as a PNG. `bin/preview-plymouth.sh` reproduces all three restrictions, which is
+as a PNG. `tools/preview-plymouth.sh` reproduces all three restrictions, which is
 the only reason this was found before shipping.
 
 **But `Font=` in the .plymouth DOES decide which TTF that is**, and the note
@@ -610,15 +400,15 @@ silently leave that directory empty. `MATRIX_WIDGET_SRC=<path>` overrides the
 fetch for local development against an uncommitted checkout of the widget
 repo.
 
----
 
 ## Before you ship — the clean-room test
 
 The cheap checks first:
 
 ```bash
-bash -n install.sh uninstall.sh bin/omarchy-matrix hooks/*
-python3 -m py_compile bin/*.py *.py rain/*.py
+bash -n install.sh uninstall.sh bin/omarchy-matrix lib/pack.sh tools/*.sh
+python3 -m py_compile lib/*.py tools/*.py
+./tools/check.sh                          # cheap and coherence checks
 omarchy-plugin-validate .                  # must pass, or nobody can install it
 ```
 
@@ -628,15 +418,12 @@ diff is not this test. Neither is `./install.sh` from the working copy — that
 path runs with `~/.local/bin` already warm, the hooks already in place and a
 `enter-the-matrix.json` full of yesterday's answers.
 
-Six phases, in order. Each is verified as the user sees it (Rule 2), and a
+Six phases, in order. Each is verified as the user sees it -- the artefact on screen, not what the commands say -- and a
 failure in any one of them is a failure to ship.
 
 1. **Strip the machine.** `./uninstall.sh` first, then hunt the residue by hand:
-   plugin backups matching `~/.config/omarchy/plugins/.*.bak.*`, stale binaries
-   in `~/.local/bin`, `~/.local/share/omarchy-matrix/`,
-   `/usr/share/plymouth/themes/omarchy-matrix/`, the `matrix.control` entry in
-   `shell.json`'s bar layout, any marker block left inside `omarchy-menu.jsonc`
-   by an older install, `~/.config/omarchy/enter-the-matrix.json`, the theme
+   plugin backups matching `~/.config/omarchy/plugins/.*.bak.*`, the `omarchy-matrix` symlink and any stale helpers (`derive-lock.py`, `derive-plymouth.py`, `provider.py`, `omarchy-matrix-uninstall`) in `~/.local/bin`, `~/.local/share/omarchy-matrix/`,
+   `/usr/share/plymouth/themes/omarchy-matrix/`, the widget entry in `shell.json`'s bar layout, `~/.config/omarchy/enter-the-matrix.json`, the theme
    directory, and the `~/.local/state/omarchy/toggles/screensaver-off` flag.
    The repo was called `omarchy-matrix` until 2026-08-31, so a machine that saw
    an older install also has `~/.config/omarchy/matrix.json`,
@@ -651,7 +438,7 @@ failure in any one of them is a failure to ship.
    `omarchy-shell lock preview` and `grim` it. For the widget it means a
    screenshot of the bar **and** of the open panel: an icon that occupies zero
    pixels answers every other check correctly. For the boot splash it means
-   `bin/preview-plymouth.sh` — the typed line, the passphrase dialog with a
+   `tools/preview-plymouth.sh` — the typed line, the passphrase dialog with a
    handful of dots in it, and the progress track at 0 %, part way and full, all
    photographed. Neither the bullets nor the track can be reached by a scenario
    on its own: see the trap below for the doctored stage that gets you there. And

@@ -213,9 +213,9 @@ one thing the theme is about making move.
 - **[DESIGN.md](DESIGN.md)** — why the lock and the boot splash are derived
   rather than copied, what is in each file, the palette, and how to regenerate
   the assets.
-- **[CLAUDE.md](CLAUDE.md)** — the working agreement for this repo: the rules,
-  the two-clone workflow, and a list of traps that each cost real debugging time.
-  Read it before changing anything. `AGENTS.md` is a short pointer to it.
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** — the workflow, the traps that each
+  cost real debugging time, and the clean-room test that decides whether a
+  change ships. Read it before changing anything.
 
 ## Credits
 
