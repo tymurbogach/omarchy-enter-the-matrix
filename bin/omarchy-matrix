@@ -547,7 +547,9 @@ apply_lock() {
   before=$(enabled_locks)
 
   if [[ $(read_setting lock) == "true" ]]; then
-    "$(dirname "${BASH_SOURCE[0]}")/derive-lock.py" || return 1
+    # The deriver resolves provider.json on its own, and could find a different
+    # one than this CLI did (a working copy beside an install). Hand it ours.
+    OMARCHY_MATRIX_PROVIDER="$PROVIDER" "$(dirname "${BASH_SOURCE[0]}")/derive-lock.py" || return 1
   else
     if lock_clone_id >/dev/null; then
       remove_lock_clone
@@ -598,7 +600,7 @@ apply_boot() {
   # this machine's omarchy.script and adds the animation, leaving Omarchy's own
   # theme untouched in its folder. Going back is `omarchy plymouth reset`.
   if [[ $(read_setting boot) == "true" ]]; then
-    "$(dirname "${BASH_SOURCE[0]}")/derive-plymouth.py" || return 1
+    OMARCHY_MATRIX_PROVIDER="$PROVIDER" "$(dirname "${BASH_SOURCE[0]}")/derive-plymouth.py" || return 1
   else
     # Only reset when OUR theme is the one installed. Resetting unconditionally
     # rebuilt the initramfs for nothing, and worse, it dragged somebody who had
