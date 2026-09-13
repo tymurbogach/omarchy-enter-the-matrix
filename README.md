@@ -12,7 +12,7 @@ film.
 The theme, on its own:
 
 ```bash
-omarchy theme install https://github.com/tymurbogach/omarchy-enter-the-matrix
+omarchy theme install https://github.com/tymurbogach/omarchy-enter-the-matrix-theme
 ```
 
 The pack, on top of it (optional):
