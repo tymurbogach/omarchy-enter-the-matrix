@@ -6,6 +6,89 @@ and Omarchy's world is English.
 Run `./tools/check.sh` before pushing. It covers what needs no Omarchy
 session. The clean-room test at the end decides whether a change ships.
 
+## Rules
+
+Five rules decide every change. Each one is written down because breaking it
+cost real time.
+
+### 1. Omarchy is the source of truth, and it moves
+
+Read Omarchy's own source instead of guessing. It is readable:
+
+```bash
+cat $(which omarchy-theme-set)          # how a theme is staged
+cat /usr/share/omarchy/shell/plugins/lock/LockView.qml
+cat /usr/share/omarchy/default/plymouth/omarchy.script
+omarchy commands --json                 # every command, machine-readable
+```
+
+Never edit anything under `/usr/share/omarchy/`. The package owns it, and
+`omarchy update` overwrites it. Reading it is safe.
+
+Pin what you tested against. `install.sh` carries `TESTED_ON`, and the derivers
+abort when a patch no longer fits. Update those values. Do not silence the
+aborts.
+
+### 2. Verify what you changed, as the user sees it
+
+Check the result on screen, not only the code path. A menu row that launches
+the right program can still render with no icon and a raw id as its label. If
+you cannot verify something, say so. Then verify what you can: syntax,
+generated output, cross-references.
+
+`tools/preview-plymouth.sh` runs the real boot splash in a window, and `grim`
+photographs it. Only two things still need a reboot. One is whether
+`mkinitcpio` carried the theme in. The other is whether the DRM renderer agrees
+with the X11 renderer about the panel.
+
+### 3. Additive only. Derive, never freeze
+
+The pack must not overwrite Omarchy's originals. Two pieces cannot work any
+other way, and both are derived from this machine's source:
+
+- The lock, because a `WlSessionLock` is exclusive by protocol.
+  `lib/derive-lock.py` starts from the installed `LockView.qml`.
+- The boot splash, because a Plymouth theme takes colours and one still image.
+  `lib/derive-plymouth.py` starts from the installed `omarchy.script`.
+
+Each deriver applies a minimal patch and asserts that its anchor appears
+exactly once. If the anchor does not fit, the deriver aborts with a clear
+message. The `post-update` hook derives both again after every `omarchy update`.
+
+If a feature seems to need a frozen copy of Omarchy code, look for the
+extension point you have not found yet. The desktop rain looked like it needed
+a clone of `omarchy.background` for weeks. It did not.
+
+### 4. Never leave the machine unable to lock or boot
+
+The two derived pieces are the two that can lock someone out.
+
+- Lock: hand it back with `omarchy plugin remove <clone>`. That command
+  re-enables `omarchy.lock`. Disabling the clone leaves zero locks enabled.
+  Test with `omarchy-shell lock preview`, never by locking.
+- Boot: on an encrypted disk, Plymouth also asks for the passphrase. The patch
+  touches no password callback, and the theme installs beside Omarchy's. The
+  escape hatches are `omarchy plymouth reset`, and `plymouth.enable=0` on the
+  kernel line from the boot loader.
+
+### 5. Everything is a layer. Off must mean gone
+
+- Each piece (`wallpaper`, `screensaver`, `lock`, `boot`) switches on and off
+  alone, with no side effect on the other three.
+- Another theme stands everything down: nothing rains, nothing is ticked, and
+  no plugin stays enabled. `enter-the-matrix.json` stays, so coming back
+  restores the same state. `boot` is the one exception, because Plymouth
+  belongs to the system and not to the theme.
+- Off removes what the piece wrote, including files outside `$HOME`. A user who
+  never uninstalls must still end up with a clean machine.
+- Nothing of Omarchy's stays disabled.
+
+### Open work
+
+The widget's panel does not say what a stood-down piece would do. It ticks
+nothing and explains why at the top. A switch that is on but stood down reads
+exactly like a switch that is off.
+
 ## Workflow
 
 There are two clones with different jobs:
@@ -339,7 +422,7 @@ makes it look like something only a callback can know; it is not. plymouthd sets
 the mode before it loads the theme, so the whole storyboard can be *selected* at
 load time rather than swapped mid-flight. Proven rather than assumed: probes at
 the first and last line of the file both read `shutdown` under
-`--mode=shutdown`. `bin/preview-plymouth.sh --mode NAME` exists for exactly this
+`--mode=shutdown`. `tools/preview-plymouth.sh --mode NAME` exists for exactly this
 -- it is how the exit splashes are photographed without turning the machine off.
 
 **`omarchy plymouth current` cannot see our boot theme.** It identifies a theme
