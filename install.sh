@@ -57,7 +57,6 @@ PLUGIN_DIR="$PLUGINS_DIR/$PLUGIN_ID"
 BIN_DIR="$HOME/.local/bin"
 SHARE_DIR="$HOME/.local/share/omarchy-matrix"
 HOOKS="$HOME/.config/omarchy/hooks"
-MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 CONFIG="$HOME/.config/omarchy/$SLUG.json"
 
 version=$(omarchy version 2>/dev/null || echo unknown)
@@ -193,34 +192,6 @@ echo "· bar widget $WIDGET_ID"
 WIDGET_SRC_DIR=$(resolve_widget_src)
 stage_plugin "$WIDGET_ID" "$WIDGET_SRC_DIR" "${WIDGET_FILES[@]}"
 
-# --- the menu, which we no longer write ------------------------------------
-# The four switches used to be spliced into the user's extensions file, between
-# markers. That was the last thing the pack wrote into a file that is not its
-# own, and it put the switches three clicks deep under Style. They live on the
-# bar now, so the block is taken back out -- including from installs that
-# predate the widget.
-
-if [[ -f $MENU ]] && grep -q '>>> omarchy-matrix' "$MENU"; then
-  echo "· removing the old menu block (the switches are on the bar now)"
-  python3 - "$MENU" <<'PY'
-import sys, pathlib, re
-menu = pathlib.Path(sys.argv[1])
-text = menu.read_text()
-
-# Take the newline install.sh used to put BEFORE the block, not just the block:
-# without the leading \n? every install/uninstall cycle left one more blank line
-# behind. Nine had stacked up in a file that is not ours to litter.
-text = re.sub(r"\n?[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
-              "", text, flags=re.S)
-
-# And collect what the older versions already left there. Blank lines directly
-# after the opening brace mean nothing in JSONC and every one of them is ours.
-opening = text.index("{")
-text = text[:opening + 1] + re.sub(r"^\n(?:[ \t]*\n)+", "\n", text[opening + 1:])
-menu.write_text(text)
-PY
-fi
-
 # Everything above is a file copy, and that is all --sync is for: refreshing
 # what a `omarchy theme update` pulled into the theme directory. What follows
 # migrates old installs and switches pieces on, neither of which a refresh may
@@ -230,27 +201,7 @@ if ((SYNC_ONLY)); then
   exit 0
 fi
 
-# --- migrate an older install ----------------------------------------------
-# This used to live in a clone of omarchy.background, a clone of
-# omarchy-screensaver in ~/.local/bin and a PATH block inside hypr/autostart.lua.
-# None of that is needed any more, and removing it hands a Hyprland file back
-# the way it was.
-
-old_background=$(omarchy-plugin-list --json 2>/dev/null |
-  jq -r '.[] | select(.id | endswith(".background")) | select(.firstParty | not) | .id' | head -1)
-if [[ -n ${old_background:-} ]]; then
-  echo "· removing the old background clone ($old_background)"
-  omarchy-plugin-remove "$old_background" --yes >/dev/null 2>&1 ||
-    omarchy-plugin-remove "$old_background" >/dev/null 2>&1 || true
-fi
-
-# The clone itself, and the timestamped copies an even older install.sh left
-# beside it. Both are ours: Omarchy's own launcher is on PATH and is untouched.
-if compgen -G "$BIN_DIR/omarchy-screensaver*" >/dev/null; then
-  echo "· removing the old omarchy-screensaver clone"
-  rm -f "$BIN_DIR"/omarchy-screensaver "$BIN_DIR"/omarchy-screensaver.bak.*
-fi
-
+# --- stale plugin backups --------------------------------------------------
 # `omarchy plugin remove` renames rather than deletes, so every clone the pack
 # ever handed back is still on disk as .<id>.bak.<timestamp>. Ours are the ones
 # carrying the rain's QML; a clone somebody made themselves has the same name
@@ -265,29 +216,6 @@ for dir in "$PLUGINS_DIR"/.*.bak.*; do
   fi
 done
 ((pruned == 0)) || echo "· removed $pruned stale plugin backup(s) of ours"
-
-AUTOSTART="$HOME/.config/hypr/autostart.lua"
-if [[ -f $AUTOSTART ]] && grep -q 'hl.env("PATH"' "$AUTOSTART"; then
-  echo "· removing the PATH priority from hypr/autostart.lua (no longer needed)"
-  cp "$AUTOSTART" "$AUTOSTART.bak.$(date +%s)"
-  python3 - "$AUTOSTART" <<'PY'
-import sys, pathlib, re
-f = pathlib.Path(sys.argv[1])
-text = f.read_text()
-# The whole block: the comment that explains it, the five lines of code and the
-# final hl.env. It is recognised by the hl.env("PATH") and walked back up to the
-# first adjacent comment.
-pattern = re.compile(
-    r"\n*(?:^--[^\n]*\n)*^local home = os\.getenv\(\"HOME\"\)\n"
-    r"^local local_bin[^\n]*\n(?:^[^\n]*\n)*?^hl\.env\(\"PATH\"[^\n]*\)\n",
-    re.M)
-new, n = pattern.subn("\n", text)
-if n != 1:
-    print("  warning: PATH block not recognised; leaving it alone", file=sys.stderr)
-else:
-    f.write_text(new.rstrip("\n") + "\n")
-PY
-fi
 
 # --- switch it on -----------------------------------------------------------
 # Interactive when there is a terminal to ask on, and silent-but-identical to

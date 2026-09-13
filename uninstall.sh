@@ -33,7 +33,6 @@ CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
 PREVIOUS_THEME=$(jq -r '.previousTheme // empty' "$CONFIG" 2>/dev/null || echo "")
 
 HOOKS="$HOME/.config/omarchy/hooks"
-MENU="$HOME/.config/omarchy/extensions/omarchy-menu.jsonc"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
 THEME_DIR="$HOME/.config/omarchy/themes/$THEME_SLUG"
 
@@ -121,30 +120,8 @@ rm -f "$BIN_DIR/$CLI-uninstall"
 rm -f "$HOME/.config/omarchy/$THEME_SLUG.json"
 # Where install.sh keeps provider.json, so the CLI could read it from anywhere.
 rm -rf "$SHARE_DIR"
-# Left by a much older version of the pack, which cloned omarchy-screensaver into
-# ~/.local/bin instead of drawing the screensaver itself.
-rm -f "$BIN_DIR"/omarchy-screensaver "$BIN_DIR"/omarchy-screensaver.bak.*
 # Where derive-plymouth.py --stage-only leaves a build for inspection.
 rm -rf "$HOME/.cache/$CLI"
-
-if [[ -f $MENU ]]; then
-  python3 - "$MENU" <<'PY'
-import sys, pathlib, re
-f = pathlib.Path(sys.argv[1])
-text = f.read_text()
-# Take the newline install.sh puts BEFORE the block, not just the block: without
-# the leading \n? every install/uninstall cycle left one more blank line behind.
-# Nine had stacked up in a file that is not ours to litter.
-text = re.sub(r"\n?[ \t]*// >>> omarchy-matrix.*?// <<< omarchy-matrix[ \t]*\n",
-              "", text, flags=re.S)
-
-# And collect what the older versions already left there. Blank lines directly
-# after the opening brace mean nothing in JSONC and every one of them is ours.
-opening = text.index("{")
-text = text[:opening + 1] + re.sub(r"^\n(?:[ \t]*\n)+", "\n", text[opening + 1:])
-f.write_text(text)
-PY
-fi
 
 omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 

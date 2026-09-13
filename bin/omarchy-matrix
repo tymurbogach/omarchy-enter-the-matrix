@@ -304,10 +304,6 @@ sync_files() {
   local theme
   theme=$(theme_dir) || return 0
   [[ -n $theme && -x $theme/install.sh ]] || return 0
-  # An install.sh old enough not to know --sync would run the whole thing --
-  # questions, boot splash and all -- from inside a doctor that is only meant to
-  # refresh files. Ask before calling.
-  grep -q -- '--sync' "$theme/install.sh" 2>/dev/null || return 0
   files_outdated "$theme" || return 0
   echo "  the theme directory has moved on; refreshing the pack's copies"
   "$theme/install.sh" --sync || echo "  could not refresh them; run $theme/install.sh" >&2

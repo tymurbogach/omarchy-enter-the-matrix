@@ -28,11 +28,6 @@ like it should work — the manifest is at the root — but it installs the whol
 repository as the plugin and skips the CLI, the hooks and the bar widget, which
 is most of the pack.
 
-> **Installed this before it was renamed?** Run `omarchy-matrix-uninstall` first.
-> The repo used to be `omarchy-matrix`, so the theme installed under the name
-> `matrix`; it is `enter-the-matrix` now, and the old install is a separate one
-> that will not be picked up or replaced.
-
 ## The pieces
 
 Five switches, each one on and off on its own, from the **Matrix icon on your
