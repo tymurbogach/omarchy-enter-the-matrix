@@ -144,21 +144,30 @@ write_key() {
 # `omarchy plugin clone` decides the lock clone's id: <username>.lock. Discover
 # it rather than assume it, because on another machine the username differs.
 #
-# Ours is the one CARRYING the rain: the deriver copies $RAIN_QML into the clone
-# it builds. A plain `clonedFrom` match is not enough, twice over:
+# One rule decides whether a lock clone is ours -- here, in uninstall.sh and in
+# derive-lock.py: cloned from omarchy.lock AND (marked as derived by this CLI
+# OR carrying the rain). A plain `clonedFrom` match is not enough, twice over:
 #
 # - a first derive whose patch no longer fits aborts with the raw clone left
 #   enabled, and this answered for it: `status` ticked `✓ lock` while the
 #   screen locked to Omarchy's blurred wallpaper -- the exact lie the
 #   screenshot-the-lock rule exists against
-# - a clone somebody made for their own reasons has the same name shape, and
-#   remove_lock_clone would have destroyed it
+# - a clone somebody made for their own reasons has the same name shape. The
+#   deriver once adopted such a clone, patched it, and `lock off` then deleted
+#   it. It must survive untouched.
+lock_is_ours() {
+  local dir="$1" derived
+  [[ -d $dir ]] || return 1
+  jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || return 1
+  derived=$(jq -r '.omarchy.derivedBy // empty' "$dir/manifest.json" 2>/dev/null)
+  [[ $derived == "$CLI" ]] && return 0
+  [[ -f $dir/$RAIN_QML ]]
+}
+
 lock_clone_id() {
   local dir
   for dir in "$PLUGINS_DIR"/*.lock; do
-    [[ -d $dir ]] || continue
-    jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || continue
-    [[ -f $dir/$RAIN_QML ]] || continue
+    lock_is_ours "$dir" || continue
     jq -r '.id' "$dir/manifest.json"
     return 0
   done

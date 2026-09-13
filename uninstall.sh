@@ -48,9 +48,11 @@ lock_removed=0
 for dir in "$PLUGINS_DIR"/*.lock; do
   [[ -d $dir ]] || continue
   jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || continue
-  # Ours is the one carrying the rain: a lock clone somebody made for their own
-  # reasons has the same name shape and must survive even an uninstall.
-  [[ -f $dir/$RAIN_QML ]] || continue
+  # The same ownership rule as the CLI's lock_is_ours: derived by this pack or
+  # carrying the rain. A lock clone somebody made for their own reasons has the
+  # same name shape and must survive even an uninstall.
+  derived=$(jq -r '.omarchy.derivedBy // empty' "$dir/manifest.json" 2>/dev/null)
+  [[ $derived == "$CLI" || -f $dir/$RAIN_QML ]] || continue
   id=$(jq -r '.id' "$dir/manifest.json")
   # `plugin remove` is what re-enables omarchy.lock (cloneSourceRestores).
   # Deleting the directory by hand would leave the session with no lock enabled

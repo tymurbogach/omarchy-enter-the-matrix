@@ -98,7 +98,26 @@ def patch(text):
     return text[:start] + REPLACEMENT + text[end:]
 
 
+def is_ours(directory):
+    """The one ownership rule, shared with the CLI and uninstall.sh."""
+    manifest = directory / "manifest.json"
+    if not manifest.is_file():
+        return False
+    try:
+        data = json.loads(manifest.read_text())
+    except ValueError:
+        return False
+    if data.get("omarchy", {}).get("clonedFrom") != "omarchy.lock":
+        return False
+    if data.get("omarchy", {}).get("derivedBy") == PROVIDER["cli"]:
+        return True
+    return (directory / RAIN_QML).is_file()
+
+
 def existing_clone():
+    """Any lock clone, ours or not: clonedFrom is the discovery, is_ours is
+    the ownership verdict, and the two are asked separately on purpose. A raw
+    clone this run just made has neither mark yet and still has to be found."""
     for directory in sorted(PLUGINS.glob("*.lock")):
         manifest = directory / "manifest.json"
         if not manifest.is_file():
@@ -110,6 +129,23 @@ def existing_clone():
         if data.get("omarchy", {}).get("clonedFrom") == "omarchy.lock":
             return directory, data["id"]
     return None, None
+
+
+def foreign_clone():
+    """A lock clone that is not ours. Adopting it would patch somebody's own
+    lock, and `lock off` would then delete it."""
+    for directory in sorted(PLUGINS.glob("*.lock")):
+        manifest = directory / "manifest.json"
+        if not manifest.is_file():
+            continue
+        try:
+            data = json.loads(manifest.read_text())
+        except ValueError:
+            continue
+        if data.get("omarchy", {}).get("clonedFrom") == "omarchy.lock" \
+                and not is_ours(directory):
+            return directory
+    return None
 
 
 def rain_source():
@@ -208,6 +244,11 @@ def main():
         if target is None:
             die("the lock clone did not appear after creating it")
         print(f"Cloned Omarchy's lock as {plugin_id}")
+    elif not is_ours(target):
+        die(f"{target} is a lock clone of yours, not of this pack -- it "
+            f"is not marked as derived by {PROVIDER['cli']} and carries "
+            f"no {RAIN_QML}. Rename it or remove it yourself first; "
+            f"deriving over it would patch your own lock.")
 
     try:
         stage_clone(target, plugin_id, rain)
