@@ -46,7 +46,7 @@
       "paid for\" in CLAUDE.md."
     ],
     "repo": "https://github.com/tymurbogach/omarchy-matrix-widget",
-    "ref": "main",
+    "ref": "aa7e8f94f9399b4c11227fcba770681eecf89436",
     "files": ["manifest.json", "Panel.qml"],
     "section": "right"
   },

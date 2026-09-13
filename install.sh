@@ -112,19 +112,24 @@ stage_plugin() { # <id> <absolute source dir> <file>...
   rm -rf "$retired"
 }
 
-# The widget lives in its own repo (see provider.json's "widget" comment). Fetch
-# it once into a persistent, non-plugins-dir cache and refresh it on every run,
-# rather than re-cloning from scratch every time -- this also runs from
-# `omarchy-matrix doctor` (via --sync), which should not need the network to
-# notice nothing changed. MATRIX_WIDGET_SRC bypasses all of this for local
-# development against an uncommitted checkout of the widget repo.
-WIDGET_CLONE="$SHARE_DIR/widget-src"
+# The widget lives in its own repo (see provider.json's "widget" comment), pinned
+# to one commit. Fetched once into a persistent, non-plugins-dir cache and
+# refreshed on every run, rather than re-cloned from scratch every time -- this
+# also runs from `omarchy-matrix doctor` (via --sync), which must not need the
+# network to notice nothing changed. MATRIX_WIDGET_SRC bypasses all of this for
+# local development against an uncommitted checkout of the widget repo.
+# WIDGET_CLONE itself comes from pack_set_paths: the share dir's widget-src.
 
 resolve_widget_src() {
   if [[ -n ${MATRIX_WIDGET_SRC:-} ]]; then
     echo "$MATRIX_WIDGET_SRC"
     return
   fi
+
+  # Pinned to a commit, never a branch: a branch moves under the cache, and only
+  # a full SHA can be fetched by SHA below.
+  [[ $WIDGET_REF =~ ^[0-9a-f]{40}$ ]] ||
+    { echo "  provider's widget.ref is not a 40-hex SHA: $WIDGET_REF" >&2; exit 1; }
 
   mkdir -p "$SHARE_DIR"
   if [[ -d "$WIDGET_CLONE/.git" ]]; then
@@ -136,14 +141,33 @@ resolve_widget_src() {
     # isn't fatal on its own: it just means the fetch that follows will fail
     # too, which is what actually surfaces as the "could not refresh" warning.
     git -C "$WIDGET_CLONE" remote set-url origin "$WIDGET_REPO" >/dev/null 2>&1 || true
+    # Already at the pin: stay offline. A pinned cache needs no network to know
+    # nothing changed.
+    if [[ $(git -C "$WIDGET_CLONE" rev-parse HEAD 2>/dev/null) == "$WIDGET_REF" ]]; then
+      echo "$WIDGET_CLONE"
+      return
+    fi
     if ! git -C "$WIDGET_CLONE" fetch --depth 1 origin "$WIDGET_REF" >/dev/null 2>&1 ||
        ! git -C "$WIDGET_CLONE" reset --hard FETCH_HEAD >/dev/null 2>&1; then
       echo "  warning: could not refresh $WIDGET_REPO; using the cached copy" >&2
     fi
   else
     rm -rf "$WIDGET_CLONE"
-    git clone --depth 1 --branch "$WIDGET_REF" -- "$WIDGET_REPO" "$WIDGET_CLONE" >/dev/null 2>&1 ||
-      { echo "  could not clone $WIDGET_REPO" >&2; exit 1; }
+    mkdir -p "$WIDGET_CLONE"
+    if ! git -C "$WIDGET_CLONE" init -q >/dev/null 2>&1 ||
+       ! git -C "$WIDGET_CLONE" remote add origin "$WIDGET_REPO" >/dev/null 2>&1 ||
+       ! git -C "$WIDGET_CLONE" fetch --depth 1 origin "$WIDGET_REF" >/dev/null 2>&1 ||
+       ! git -C "$WIDGET_CLONE" reset --hard FETCH_HEAD >/dev/null 2>&1; then
+      echo "  could not clone $WIDGET_REPO" >&2
+      exit 1
+    fi
+  fi
+  # Detached at the pin, whatever the remote calls it now: a cache that drifted
+  # (a hand pull, a branch of the same name) comes back here, and anything else
+  # warns instead of staging a surprise.
+  git -C "$WIDGET_CLONE" checkout -q --detach "$WIDGET_REF" >/dev/null 2>&1 || true
+  if [[ $(git -C "$WIDGET_CLONE" rev-parse HEAD 2>/dev/null) != "$WIDGET_REF" ]]; then
+    echo "  warning: widget cache is not at $WIDGET_REF; using it anyway" >&2
   fi
   echo "$WIDGET_CLONE"
 }
