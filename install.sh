@@ -279,17 +279,23 @@ echo
 omarchy-restart-shell >/dev/null 2>&1 || true
 
 # The boot splash is last because it is the only piece that needs a password and
-# rebuilds the initramfs.
+# rebuilds the initramfs. Without a terminal there is nobody to ask, and a
+# cached sudo grant would rebuild the initramfs unasked -- so it is skipped,
+# with the command that enables it later.
 if ! "$BIN_DIR/$CLI" status --is boot 2>/dev/null; then
   echo
   echo "  ${BOLD}Boot splash${OFF} — the screen before login, typing out the four lines"
   echo "  from the film. ${DIM}Writes to /usr/share/plymouth and rebuilds the initramfs,"
   echo "  so it asks for your password.${OFF}"
-  if ask "Install it" "you can also do this later"; then
-    "$BIN_DIR/$CLI" boot on || echo "  skipped — the rest of the pack is installed and working" >&2
+  if ((INTERACTIVE)); then
+    if ask "Install it" "you can also do this later"; then
+      "$BIN_DIR/$CLI" boot on || echo "  skipped — the rest of the pack is installed and working" >&2
+    else
+      "$BIN_DIR/$CLI" boot off >/dev/null 2>&1 || true
+      echo "  ${DIM}skipped. Turn it on later with: $CLI boot on${OFF}"
+    fi
   else
-    "$BIN_DIR/$CLI" boot off >/dev/null 2>&1 || true
-    echo "  ${DIM}skipped. Turn it on later with: omarchy-matrix boot on${OFF}"
+    echo "  ${DIM}skipped (no terminal here). Turn it on later with: $CLI boot on${OFF}"
   fi
 fi
 
