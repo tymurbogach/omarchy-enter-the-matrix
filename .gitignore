@@ -1,8 +1,5 @@
-# Sobras de los generadores
-.fila*.png
-*.nitido.png
-__pycache__/
+# Scratch rows from tools/generate-atlas.py
+tools/.row*.png
 
-# Agent worktrees and settings: not part of the theme
-.claude/
-docs/superpowers/
+# Python caches
+__pycache__/
