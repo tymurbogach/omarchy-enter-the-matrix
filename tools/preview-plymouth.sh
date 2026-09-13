@@ -2,7 +2,7 @@
 # Run the boot splash in a window, on this machine, and photograph it.
 #
 # The boot splash used to be the one piece of the pack that could not be
-# checked without rebooting, so CLAUDE.md said as much and every change to it
+# checked without rebooting, so the docs said as much and every change to it
 # went out on faith. It does not have to be that way.
 #
 # `plymouthd` ships an X11 renderer (/usr/lib/plymouth/renderers/x11.so). Point

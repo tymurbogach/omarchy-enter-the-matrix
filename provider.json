@@ -43,7 +43,7 @@
       "development against an uncommitted checkout. Why a fetch and not a git",
       "submodule, and what the cache buys: see the trap headed \"The widget is",
       "fetched from its own repo, not shipped in widget/\" under \"Traps already",
-      "paid for\" in CLAUDE.md."
+      "paid for\" in CONTRIBUTING.md."
     ],
     "repo": "https://github.com/tymurbogach/omarchy-matrix-widget",
     "ref": "2a6a0ca7940affea4123719cc332e8244ec09bf3",
@@ -82,7 +82,7 @@
       "",
       "The exits are SHORT: the splash lives until the machine does, which is a",
       "couple of seconds. Only the first line is reliably seen, so the first line",
-      "is the payoff -- see EXIT_PACE in bin/derive-plymouth.py, which types",
+      "is the payoff -- see EXIT_PACE in lib/derive-plymouth.py, which types",
       "these faster and holds them for less than the boot's.",
       "",
       "Shutdown answers the boot: it opens by waking Mr. Anderson and closes by",

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Undoes the Matrix pack and leaves Omarchy the way it was.
+# Undoes the pack and leaves Omarchy the way it was.
 #
-#   ./uninstall.sh
+#   ./uninstall.sh [--keep-theme]      installed: omarchy-matrix uninstall
 #
-# The theme itself is NOT touched: it stays a normal Omarchy theme, with its
-# colours and its backgrounds. What goes is the moving parts.
+# The theme directory goes too, unless --keep-theme keeps it as an ordinary
+# Omarchy theme with its colours and its backgrounds.
 
 set -uo pipefail
 
@@ -35,17 +35,15 @@ fi
 THEME_DIR="$HOME/.config/omarchy/themes/$SLUG"
 
 # Read before anything is deleted: the theme step-off at the very bottom needs
-# it, and matrix.json is removed long before then. The theme-set hook records it
-# every time you pick another theme, because Omarchy overwrites
+# it, and the settings file is removed long before then. The theme-set hook
+# records it every time you pick another theme, because Omarchy overwrites
 # current/theme.name before it calls that hook -- afterwards nobody knows.
 PREVIOUS_THEME=$(jq -r '.previousTheme // empty' "$CONFIG" 2>/dev/null || echo "")
 
-THEME_DIR="$HOME/.config/omarchy/themes/$SLUG"
-
 # The theme goes too, unless you say otherwise. It used to be kept -- it is a
 # perfectly good theme on its own -- but "uninstall" that leaves a directory
-# behind is not what anybody means by the word, and the menu row that calls this
-# is labelled Uninstall, not Disable.
+# behind is not what anybody means by the word, and the widget button that
+# calls this is labelled Uninstall, not Disable.
 #
 # Only --keep-theme modifies the run. Anything else -- including --help -- must
 # never fall through into deleting things: `omarchy-matrix uninstall --help`
@@ -53,14 +51,14 @@ THEME_DIR="$HOME/.config/omarchy/themes/$SLUG"
 case "${1:-}" in
 "" | --keep-theme) ;;
 -h | --help)
-  echo "Usage: omarchy-matrix uninstall [--keep-theme]"
+  echo "Usage: $CLI uninstall [--keep-theme]"
   echo
-  echo "Undoes the Matrix pack and leaves Omarchy the way it was. The theme"
+  echo "Undoes the $DISPLAY_NAME pack and leaves Omarchy the way it was. The theme"
   echo "goes too, unless --keep-theme keeps it as an ordinary Omarchy theme."
   exit 0
   ;;
 *)
-  echo "omarchy-matrix uninstall: unknown option: $1 (use --keep-theme)" >&2
+  echo "$CLI uninstall: unknown option: $1 (use --keep-theme)" >&2
   exit 1
   ;;
 esac
@@ -214,9 +212,9 @@ rm -rf "$THEME_DIR"
 rm -f "$HOME/.local/state/omarchy/backgrounds/$SLUG"
 rm -rf "$HOME/.config/omarchy/backgrounds/$SLUG"
 
-cat <<'DONE'
+cat <<DONE
 
-Done. Nothing of the Matrix pack is left, the theme included.
+Done. Nothing of the $DISPLAY_NAME pack is left, the theme included.
 
 Omarchy's own lock, screensaver and boot splash are back.
 DONE

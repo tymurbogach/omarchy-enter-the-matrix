@@ -2,7 +2,7 @@
 
 The [README](README.md) says what the pack does. This says why, and it is mostly
 a record of ceilings found by reading Omarchy's source rather than guessing. If
-you are changing the pack, [CLAUDE.md](CLAUDE.md) is the one to read first — it
+you are changing the pack, read [CONTRIBUTING.md](CONTRIBUTING.md) first. It
 carries the rules and the traps.
 
 ## The lock
@@ -322,6 +322,6 @@ That is a detour, but it is exactly the path anyone installing the pack takes,
 so mistakes surface on your machine rather than on theirs.
 
 Editing `Service.qml` can skip the detour by copying it straight into
-`~/.config/omarchy/plugins/matrix.rain/`, but **finish with `omarchy restart
+`~/.config/omarchy/plugins/io.github.tymurbogach.enter-the-matrix/`, but **finish with `omarchy restart
 shell`**: hot reloads can leave two instances alive, the old one still answering
 IPC while the new one paints, and the symptom is maddening.

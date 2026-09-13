@@ -405,7 +405,7 @@ enabled_locks() {
 # screenshot of `omarchy-shell lock preview` showed the truth.
 #
 # `rescanPlugins` does not unload the loser; a restart does. This is the trap
-# already written down in CLAUDE.md, reaching the one piece where being wrong is
+# already written down in CONTRIBUTING.md, reaching the one piece where being wrong is
 # invisible until you lock the screen.
 restart_shell_for_lock() {
   echo "  restarting the shell so only one lock plugin is loaded"
@@ -759,7 +759,7 @@ Usage: $SELF <command>
   status [--is <piece>] [--json]      What is on
   doctor                              Assert everything again
   suspend                             Stand the pack down, keeping your settings
-  uninstall [--keep-theme]             Remove the pack (execs uninstall.sh)
+  uninstall [--keep-theme]            Remove the pack (execs uninstall.sh)
 
 Pieces:
   wallpaper    Rain on the desktop (selects the live background)
