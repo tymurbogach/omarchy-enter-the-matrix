@@ -271,14 +271,17 @@ sleep 0.5
 echo
 "$BIN_DIR/$CLI" doctor
 
-# One restart at the end, and only here. Two reasons, both paid for:
+# One restart at the end, and only here. Three reasons, all paid for:
 #
 # - A hot reload is not enough for a bar widget that has just appeared or
 #   changed shape. Watched here: the icon's slot stayed 0 px wide through
 #   several reloads and only took its size after a restart.
 # - It guarantees exactly one instance of every plugin the pack touches, which
 #   is the two-instances trap closed rather than dodged.
-omarchy-restart-shell >/dev/null 2>&1 || true
+# - restart_shell lets the plugin scan settle first: a rescan still in flight
+#   when the shell goes down segfaults quickshell (#972), and staging two
+#   plugins plus a lock clone is exactly that workload.
+restart_shell || true
 
 # The boot splash is last because it is the only piece that needs a password and
 # rebuilds the initramfs. Without a terminal there is nobody to ask, and a
