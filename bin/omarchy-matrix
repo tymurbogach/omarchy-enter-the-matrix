@@ -25,18 +25,18 @@ fail() {
 
 # --- the provider -----------------------------------------------------------
 # The pack is machinery plus one provider, and provider.json is the only file
-# that names the provider. bin/provider.py resolves it the same way for the two
+# that names the provider. lib/provider.py resolves it the same way for the two
 # derivers: keep the two in step.
 #
-#   $OMARCHY_MATRIX_PROVIDER          an explicit override, and what tests use
-#   ~/.local/share/omarchy-matrix/    where install.sh puts it -- readable even
-#                                     while another theme is current, which is
-#                                     exactly when `suspend` and `lock off` run
-#   next to this script               a working copy, with nothing installed
+# The CLI finds its own root by resolving itself: installed, it is a symlink
+# into the share dir's bin/, and in a working copy it sits in the repo's bin/.
+# Either way the root beside bin/ holds provider.json and lib/. The share dir
+# outlives theme switches, which is exactly when `suspend` and `lock off` run.
+# An explicit $OMARCHY_MATRIX_PROVIDER still wins, and is what tests use.
+ROOT=$(dirname "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")")
 for candidate in \
   "${OMARCHY_MATRIX_PROVIDER:-}" \
-  "$HOME/.local/share/omarchy-matrix/provider.json" \
-  "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/provider.json"; do
+  "$ROOT/provider.json"; do
   [[ -n $candidate && -f $candidate ]] || continue
   PROVIDER="$candidate"
   break
@@ -49,6 +49,7 @@ eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) DISPLAY_NAME=\(.displayName)
 
 CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
 PLUGINS_DIR="$HOME/.config/omarchy/plugins"
+SHARE_DIR="$HOME/.local/share/$CLI"
 PIECES=(wallpaper screensaver lock boot widget)
 
 # --- state ------------------------------------------------------------------
@@ -278,18 +279,18 @@ installed_pairs() {
   # The widget is deliberately ABSENT from this list, unlike .plugin.files[]
   # above. The rain plugin's sources still live in the theme directory, so a
   # `git pull` on the theme is exactly the event this comparison is for. The
-  # widget's do not: it is fetched from its own repo into
-  # ~/.local/share/omarchy-matrix/widget-src, so there is nothing under the
-  # theme directory to compare it against. install.sh refreshes that clone on
-  # every run, including the --sync this function ends up calling.
-  echo "$theme/bin/$CLI|$HOME/.local/bin/$CLI"
-  echo "$theme/bin/derive-lock.py|$HOME/.local/bin/derive-lock.py"
-  echo "$theme/bin/derive-plymouth.py|$HOME/.local/bin/derive-plymouth.py"
-  echo "$theme/bin/provider.py|$HOME/.local/bin/provider.py"
-  echo "$theme/uninstall.sh|$HOME/.local/bin/$CLI-uninstall"
+  # widget's do not: it is fetched from its own repo into the share dir's
+  # widget-src, so there is nothing under the theme directory to compare it
+  # against. install.sh refreshes that clone on every run, including the --sync
+  # this function ends up calling.
+  echo "$theme/bin/$CLI|$SHARE_DIR/bin/$CLI"
+  echo "$theme/lib/derive-lock.py|$SHARE_DIR/lib/derive-lock.py"
+  echo "$theme/lib/derive-plymouth.py|$SHARE_DIR/lib/derive-plymouth.py"
+  echo "$theme/lib/provider.py|$SHARE_DIR/lib/provider.py"
+  echo "$theme/uninstall.sh|$SHARE_DIR/uninstall.sh"
   echo "$theme/hooks/theme-set|$HOME/.config/omarchy/hooks/theme-set.d/$THEME_SLUG"
   echo "$theme/hooks/post-update|$HOME/.config/omarchy/hooks/post-update.d/$THEME_SLUG"
-  echo "$theme/provider.json|$HOME/.local/share/omarchy-matrix/provider.json"
+  echo "$theme/provider.json|$SHARE_DIR/provider.json"
 }
 
 # NEWER, not merely different. "Different" is the wrong question and it bit on
@@ -549,7 +550,7 @@ apply_lock() {
   if [[ $(read_setting lock) == "true" ]]; then
     # The deriver resolves provider.json on its own, and could find a different
     # one than this CLI did (a working copy beside an install). Hand it ours.
-    OMARCHY_MATRIX_PROVIDER="$PROVIDER" "$(dirname "${BASH_SOURCE[0]}")/derive-lock.py" || return 1
+    OMARCHY_MATRIX_PROVIDER="$PROVIDER" "$ROOT/lib/derive-lock.py" || return 1
   else
     if lock_clone_id >/dev/null; then
       remove_lock_clone
@@ -600,7 +601,7 @@ apply_boot() {
   # this machine's omarchy.script and adds the animation, leaving Omarchy's own
   # theme untouched in its folder. Going back is `omarchy plymouth reset`.
   if [[ $(read_setting boot) == "true" ]]; then
-    OMARCHY_MATRIX_PROVIDER="$PROVIDER" "$(dirname "${BASH_SOURCE[0]}")/derive-plymouth.py" || return 1
+    OMARCHY_MATRIX_PROVIDER="$PROVIDER" "$ROOT/lib/derive-plymouth.py" || return 1
   else
     # Only reset when OUR theme is the one installed. Resetting unconditionally
     # rebuilt the initramfs for nothing, and worse, it dragged somebody who had
@@ -810,6 +811,7 @@ Usage: $SELF <command>
   status [--is <piece>] [--json]      What is on
   doctor                              Assert everything again
   suspend                             Stand the pack down, keeping your settings
+  uninstall [--keep-theme]             Remove the pack (execs uninstall.sh)
 
 Pieces:
   wallpaper    Rain on the desktop (selects the live background)
@@ -829,6 +831,7 @@ off) cmd_all false ;;
 status) cmd_status "$@" ;;
 doctor) cmd_doctor ;;
 suspend) cmd_suspend ;;
+uninstall) exec "$ROOT/uninstall.sh" "$@" ;;
 wallpaper | screensaver | lock | boot | widget)
   action="${1:-toggle}"
   case "$action" in

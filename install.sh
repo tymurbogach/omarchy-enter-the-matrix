@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the Matrix pack: the rain plugin, the CLI, the hooks and the menu.
+# Installs the Matrix pack: the rain plugin, the bar widget, the CLI and the hooks.
 #
 #   ./install.sh            interactive when there is a terminal
 #   ./install.sh --sync     copy the files and nothing else
@@ -156,19 +156,35 @@ echo "· plugin $PLUGIN_ID"
 stage_plugin "$PLUGIN_ID" "$HERE/$PLUGIN_SRC" "${PLUGIN_FILES[@]}"
 
 # --- the CLI ----------------------------------------------------------------
+# The share dir mirrors the repo: bin/ holds the one command, lib/ its python,
+# provider.json its names, uninstall.sh its own undo. ~/.local/bin holds only a
+# symlink, so the command resolves its root -- and everything else -- from
+# itself, and no file writes the share path by hand.
 
-echo "· $CLI in $BIN_DIR"
-mkdir -p "$BIN_DIR" "$SHARE_DIR"
-install -m 755 "$HERE/bin/$CLI" "$BIN_DIR/$CLI"
-install -m 755 "$HERE/bin/derive-lock.py" "$BIN_DIR/derive-lock.py"
-install -m 755 "$HERE/bin/derive-plymouth.py" "$BIN_DIR/derive-plymouth.py"
+echo "· $CLI in $BIN_DIR (a link to the share dir)"
+mkdir -p "$BIN_DIR" "$SHARE_DIR/bin" "$SHARE_DIR/lib"
+install -m 755 "$HERE/bin/$CLI" "$SHARE_DIR/bin/$CLI"
+install -m 755 "$HERE/lib/derive-lock.py" "$SHARE_DIR/lib/derive-lock.py"
+install -m 755 "$HERE/lib/derive-plymouth.py" "$SHARE_DIR/lib/derive-plymouth.py"
 # Imported by both derivers, and the python half of the provider lookup.
-install -m 644 "$HERE/bin/provider.py" "$BIN_DIR/provider.py"
+install -m 644 "$HERE/lib/provider.py" "$SHARE_DIR/lib/provider.py"
 install -m 644 "$PROVIDER" "$SHARE_DIR/provider.json"
 # uninstall.sh lives in the theme directory, and `omarchy theme remove` deletes
-# that directory and nothing else -- leaving the whole pack installed with no
-# script left to undo it. So a copy goes on PATH, where it outlives the theme.
-install -m 755 "$HERE/uninstall.sh" "$BIN_DIR/$CLI-uninstall"
+# that directory and nothing else -- so a copy goes to the share dir, where it
+# outlives the theme, and `$CLI uninstall` execs it from there.
+install -m 755 "$HERE/uninstall.sh" "$SHARE_DIR/uninstall.sh"
+ln -sfn "$SHARE_DIR/bin/$CLI" "$BIN_DIR/$CLI"
+
+# One release only: the previous layout put the derivers, provider.py and a copy
+# of uninstall.sh straight on PATH. Take them back once, guarded by a marker,
+# with the .pyc caches beside them.
+if [[ ! -f $SHARE_DIR/.layout-v2 ]]; then
+  rm -f "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
+    "$BIN_DIR/provider.py" "$BIN_DIR/$CLI-uninstall"
+  rm -rf "$BIN_DIR/__pycache__"
+  find "$SHARE_DIR" -name '*.pyc' -delete 2>/dev/null || true
+  touch "$SHARE_DIR/.layout-v2"
+fi
 
 # --- the hooks --------------------------------------------------------------
 # theme-set: brings the pack back when you pick matrix, stands it down when you

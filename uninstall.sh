@@ -40,6 +40,24 @@ THEME_DIR="$HOME/.config/omarchy/themes/$THEME_SLUG"
 # perfectly good theme on its own -- but "uninstall" that leaves a directory
 # behind is not what anybody means by the word, and the menu row that calls this
 # is labelled Uninstall, not Disable.
+#
+# Only --keep-theme modifies the run. Anything else -- including --help -- must
+# never fall through into deleting things: `omarchy-matrix uninstall --help`
+# reaches here, and printing usage is all it may do.
+case "${1:-}" in
+"" | --keep-theme) ;;
+-h | --help)
+  echo "Usage: omarchy-matrix uninstall [--keep-theme]"
+  echo
+  echo "Undoes the Matrix pack and leaves Omarchy the way it was. The theme"
+  echo "goes too, unless --keep-theme keeps it as an ordinary Omarchy theme."
+  exit 0
+  ;;
+*)
+  echo "omarchy-matrix uninstall: unknown option: $1 (use --keep-theme)" >&2
+  exit 1
+  ;;
+esac
 KEEP_THEME=0
 [[ ${1:-} != "--keep-theme" ]] || KEEP_THEME=1
 
@@ -111,16 +129,17 @@ for dir in "$PLUGINS_DIR"/.*.bak.*; do
   fi
 done
 
-echo "· removing hooks, the old menu block and the CLI"
+echo "· removing hooks, the CLI and the share dir"
 rm -f "$HOOKS/theme-set.d/$THEME_SLUG" "$HOOKS/post-update.d/$THEME_SLUG"
-rm -f "$BIN_DIR/$CLI" "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
-  "$BIN_DIR/provider.py"
-# Including this script, when it is the copy on PATH that is running. Unlinking
-# a running bash script is safe -- the open inode survives to the last line --
-# but truncating it is not, so never rewrite it here.
-rm -f "$BIN_DIR/$CLI-uninstall"
+rm -f "$BIN_DIR/$CLI"
+# The previous layout put these straight on PATH; take them back too.
+rm -f "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
+  "$BIN_DIR/provider.py" "$BIN_DIR/$CLI-uninstall"
+rm -rf "$BIN_DIR/__pycache__"
 rm -f "$HOME/.config/omarchy/$THEME_SLUG.json"
-# Where install.sh keeps provider.json, so the CLI could read it from anywhere.
+# Where install.sh keeps the CLI, its python, provider.json and this script.
+# Unlinking the running script is safe -- the open inode survives to the last
+# line -- but truncating it is not, so never rewrite it here.
 rm -rf "$SHARE_DIR"
 # Where derive-plymouth.py --stage-only leaves a build for inspection.
 rm -rf "$HOME/.cache/$CLI"

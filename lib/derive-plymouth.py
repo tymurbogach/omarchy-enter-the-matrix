@@ -49,7 +49,7 @@ import tempfile
 from pathlib import Path
 
 # Loaded by path rather than by name: this file may be exec'd from a spec, or
-# run from ~/.local/bin, where bin/ is not on sys.path either way.
+# run from the share dir's lib/, where lib/ is not on sys.path either way.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from provider import PROVIDER  # noqa: E402
 
