@@ -220,8 +220,9 @@ installed_pairs() {
   echo "$theme/lib/provider.py|$SHARE_DIR/lib/provider.py"
   echo "$theme/lib/pack.sh|$SHARE_DIR/lib/pack.sh"
   echo "$theme/uninstall.sh|$SHARE_DIR/uninstall.sh"
-  echo "$theme/hooks/theme-set|$HOME/.config/omarchy/hooks/theme-set.d/$SLUG"
-  echo "$theme/hooks/post-update|$HOME/.config/omarchy/hooks/post-update.d/$SLUG"
+  # The hooks are deliberately ABSENT too: install.sh generates their wrappers
+  # on every run (including the --sync this function ends up calling), so there
+  # is no theme source to compare and nothing to go stale.
   echo "$theme/provider.json|$SHARE_DIR/provider.json"
 }
 
@@ -527,6 +528,48 @@ apply_piece() {
   esac
 }
 
+# --- hooks ------------------------------------------------------------------
+# What install.sh generates into ~/.config/omarchy/hooks/*.d/<slug> is a
+# four-line wrapper calling back here, so the logic lives in one place and the
+# generated file carries no provider names at all.
+
+# Picking our theme returns the pack; picking any other stands it down, keeping
+# the settings. Also the net that catches `omarchy refresh shell`.
+cmd_hook_theme_set() {
+  if [[ ${1:-} == "$SLUG" ]]; then
+    cmd_doctor >/dev/null 2>&1 || true
+  else
+    cmd_suspend >/dev/null 2>&1 || true
+  fi
+}
+
+# After `omarchy update`: the lock and the boot splash are derived from
+# Omarchy's sources, so derive them again from the fresh ones.
+cmd_hook_post_update() {
+  # doctor's staleness check refreshes the pack's copies first, and re-asserts
+  # the plugin AND re-derives the lock when that piece is on -- so there is no
+  # second `lock on` here: against the same updated source the same patch fails
+  # the same way, and the only thing a retry added was the work.
+  cmd_doctor >/dev/null 2>&1 || true
+
+  # The boot splash needs sudo, and there is a terminal here.
+  if is_active boot; then
+    apply_boot || echo "$DISPLAY_NAME: could not re-derive the boot splash" >&2
+  fi
+
+  # doctor's failure mode, when nobody watches stdout: the patch no longer fits
+  # the updated LockView.qml. Say so -- but only when the piece is wanted and
+  # the pack is in effect.
+  local state
+  state=$(cmd_status --json) || return 0
+  [[ $(jq -r '.active and .settings.lock' <<<"$state") == "true" ]] || return 0
+  [[ $(jq -r '.pieces.lock' <<<"$state") == "true" ]] && return 0
+
+  omarchy-notification-send -g 󱄄 "$DISPLAY_NAME" \
+    "Omarchy's lock has changed and the rain patch no longer fits. Native lock for now." \
+    2>/dev/null || true
+}
+
 # --- commands ---------------------------------------------------------------
 
 cmd_status() {
@@ -735,6 +778,16 @@ status) cmd_status "$@" ;;
 doctor) cmd_doctor ;;
 suspend) cmd_suspend ;;
 uninstall) exec "$ROOT/uninstall.sh" "$@" ;;
+hook)
+  # What the generated hooks call back into. Not for hands: no output, no
+  # questions, failures swallowed the way a hook expects.
+  event="${1:-}"; shift || true
+  case "$event" in
+  theme-set) cmd_hook_theme_set "$@" ;;
+  post-update) cmd_hook_post_update "$@" ;;
+  *) fail "unknown hook: $event" ;;
+  esac
+  ;;
 wallpaper | screensaver | lock | boot | widget)
   action="${1:-toggle}"
   case "$action" in
@@ -766,13 +819,6 @@ wallpaper | screensaver | lock | boot | widget)
   else
     echo "$SELF: noted -- $command applies when the $SLUG theme is current"
   fi
-  ;;
-provider)
-  # What the hooks ask when they need to know the provider's names. They are
-  # installed once and then live in ~/.config/omarchy/hooks, where they have no
-  # idea where provider.json ended up -- this script does.
-  [[ $# -gt 0 ]] || fail "provider needs a key, e.g. slug or plugin.id"
-  jq -r ".$1" "$PROVIDER"
   ;;
 -h | --help | help) usage ;;
 *) usage; exit 1 ;;
