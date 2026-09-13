@@ -111,7 +111,8 @@ the system, not to the theme.
 
 While the pack is stood down the widget **ticks nothing** and
 `omarchy-matrix status` says why. The ✓ means "this is happening now", not "you
-have it configured".
+have it configured". If a piece is on in your settings but has no ✓, the
+widget's panel and `status` both give the reason.
 
 ## Remove
 
