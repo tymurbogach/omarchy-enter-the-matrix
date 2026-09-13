@@ -791,19 +791,6 @@ hook)
 wallpaper | screensaver | lock | boot | widget)
   action="${1:-toggle}"
   case "$action" in
-  show)
-    # This is what Omarchy's menu row calls. Its stock action is
-    # `omarchy-launch-screensaver force`, and that `force` skips the
-    # screensaver-off flag on purpose. Without this, asking for it from the menu
-    # brought up Omarchy's own with random effects even with the piece ticked.
-    [[ $command == "screensaver" ]] || fail "'show' only applies to screensaver"
-    if [[ $(read_setting screensaver) == "true" ]]; then
-      omarchy-shell "$IPC" screensaver start >/dev/null
-    else
-      omarchy-launch-screensaver force
-    fi
-    exit 0
-    ;;
   on) write_setting "$command" true ;;
   off) write_setting "$command" false ;;
   toggle) [[ $(read_setting "$command") == "true" ]] && write_setting "$command" false || write_setting "$command" true ;;
