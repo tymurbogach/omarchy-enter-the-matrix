@@ -166,7 +166,7 @@ if ((KEEP_THEME)); then
 Done. The theme was kept and works like any other Omarchy theme.
 
 To remove that too:
-  $CLI-uninstall     (or: rm -rf $THEME_DIR)
+  omarchy theme remove $THEME_SLUG
 DONE
   exit 0
 fi
