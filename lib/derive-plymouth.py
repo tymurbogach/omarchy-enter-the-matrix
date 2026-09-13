@@ -14,22 +14,6 @@ every `omarchy update`.
 It installs as a SEPARATE theme under /usr/share/plymouth/themes/, so Omarchy's
 own is never overwritten: going back is `omarchy plymouth reset`.
 
-    ./derive-plymouth.py --stage-only    # build it, no sudo
-    ./derive-plymouth.py                 # build and install
-
-What it draws is Neo's monitor:
-
-    Wake up, Neo...█                     upper left, one line at a time, the
-                                         screen clearing between them
-
-           > ••••••••█                   and in the middle, where Omarchy puts
-                                         its dialog, the passphrase as a
-                                         terminal rather than a rounded box
-
-    ████████▒▒▒▒▒▒▒▒  42%                and, once it is answered, the boot's
-                                         progress on the same grid: one track,
-                                         drawn twice, at two brightnesses
-
 MIND: if your disk is encrypted, Plymouth is also what asks for the passphrase
 at boot. The patch adds a display-password callback AFTER Omarchy's rather than
 rewriting it -- the last registration wins -- so not one line of the passphrase
@@ -132,19 +116,6 @@ FONT = "JetBrainsMono Nerd Font"
 FONT_FILE = "fonts/TerminessNerdFont-Regular.ttf"
 
 BLOCK = "█"                 # full block: the progress track is a row of these
-# One typed character of the passphrase. A circle, and NOT any kind of block.
-#
-# It used to be a character too -- `▊` first (rejected: butts against `█` in
-# the shared row, see the trap this cost in CLAUDE.md), then `•`, then a dash
-# to match the film's own boxed prompt. It is a circle now on direct
-# instruction, and this time it is DRAWN rather than typeset: TerminessNerdFont
-# (a Terminus derivative, and Terminus is a bitmap face at heart) renders `●`
-# as a blocky octagon, not a disc -- visible only by rendering it and looking,
-# not by its measured ink share, which reads close to `•`'s. No glyph in this
-# font gives a clean circle at any size, so the typed mask lives in its own
-# image, `keydots.png`: `mask_diameter`, in splash_assets(), draws one circle
-# per cell directly with ImageMagick, on the same grid the font-rendered
-# track and digits share.
 # The progress readout's characters, as one strip to crop cells out of. Baked
 # for the same reason everything else here is: at boot the font is whatever the
 # initramfs happens to hold, and digits in a face that does not match the box
@@ -957,9 +928,9 @@ def dialog_block(metrics):
         BOX_ROW_FRAC=metrics["BOX_ROW_FRAC"],
         CELL_ASPECT=metrics["CELL_ASPECT"],
         DENIED_HOLD=DENIED_HOLD, GRANTED_HOLD=GRANTED_HOLD,
-        KEY_CELLS=KEY_CELLS, BAR_CELLS=BAR_CELLS, BAR_GAP_CELLS=BAR_GAP_CELLS,
+        KEY_CELLS=KEY_CELLS, BAR_CELLS=BAR_CELLS,
         ROW_CELLS=max(KEY_CELLS, BAR_CELLS + BAR_GAP_CELLS + PCT_CELLS),
-        PCT_CELLS=PCT_CELLS, ATLAS_CELLS=len(ATLAS), TRACK_ALPHA=TRACK_ALPHA,
+        ATLAS_CELLS=len(ATLAS), TRACK_ALPHA=TRACK_ALPHA,
         PROMPT_WIDTH=PROMPT_WIDTH,
         PROMPT_PROBE=literal("Please enter passphrase for disk nvme0n1p2 (cryptroot):"),
         CAPS_TEXT=literal("[ CAPS LOCK ]"),
