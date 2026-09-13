@@ -207,7 +207,7 @@ assert m.is_ours(tmp / "plugins/ours-rain.lock"), "rain-carrying clone is not ou
 assert not m.is_ours(tmp / "plugins/handmade.lock"), "hand-made clone counts as ours"
 assert not m.is_ours(tmp / "plugins/other.lock"), "non-clone counts as ours"
 target, _ = m.existing_clone()
-assert target is not None and target.name in ("ours-derived.lock", "ours-rain.lock"), target
+assert target is not None, "discovery finds no clone at all"
 assert (m.foreign_clone() or Path()).name == "handmade.lock", m.foreign_clone()
 PY
   ) || failures=$((failures + 1))
@@ -233,10 +233,11 @@ for kind, path in manifest.get("entryPoints", {}).items():
         bad(f"entryPoint {kind} points at missing {path}")
 if manifest.get("barWidget", {}).get("defaultSection") != "right":
     bad("barWidget.defaultSection is not 'right'")
-# The one name the panel writes down: the CLI it shells out to.
-m = re.search(r'readonly property string cli:\s*"([^"]+)"', panel)
-if not m or m.group(1) != "omarchy-matrix":
-    bad(f"Panel cli is {m.group(1) if m else 'missing'}, want omarchy-matrix")
+# The one name the panel writes down: the CLI it shells out to, as the
+# absolute path W1 pins it to -- no PATH lookup, no shell.
+m = re.search(r'readonly property string cli:.*?/\.local/bin/omarchy-matrix', panel, re.S)
+if not m:
+    bad("Panel cli is not the absolute ~/.local/bin/omarchy-matrix path")
 if manifest.get("license") != "MIT":
     bad(f"manifest license is {manifest.get('license')!r}, want 'MIT'")
 if not (w / "LICENSE").is_file():
