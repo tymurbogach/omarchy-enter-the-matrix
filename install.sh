@@ -34,7 +34,10 @@ command -v omarchy >/dev/null || { echo "this needs Omarchy" >&2; exit 1; }
 
 PROVIDER="$HERE/provider.json"
 [[ -f $PROVIDER ]] || { echo "cannot find $PROVIDER" >&2; exit 1; }
-eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCENT=\(.accent) PLUGIN_ID=\(.plugin.id) PLUGIN_SRC=\(.plugin.dir) WIDGET_ID=\(.widget.id) WIDGET_REPO=\(.widget.repo) WIDGET_REF=\(.widget.ref) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")"
+# shellcheck source=lib/pack.sh
+. "$HERE/lib/pack.sh" || { echo "cannot load $HERE/lib/pack.sh" >&2; exit 1; }
+pack_load_provider "$PROVIDER" || exit 1
+pack_set_paths
 mapfile -t PLUGIN_FILES < <(jq -r '.plugin.files[]' "$PROVIDER")
 mapfile -t WIDGET_FILES < <(jq -r '.widget.files[]' "$PROVIDER")
 
@@ -51,13 +54,6 @@ if [[ $HERE == "$HOME/.config/omarchy/themes/"* && $here_name != "$SLUG" ]]; the
   echo "The folder name comes from the repo name; the two have to agree." >&2
   exit 1
 fi
-
-PLUGINS_DIR="$HOME/.config/omarchy/plugins"
-PLUGIN_DIR="$PLUGINS_DIR/$PLUGIN_ID"
-BIN_DIR="$HOME/.local/bin"
-SHARE_DIR="$HOME/.local/share/omarchy-matrix"
-HOOKS="$HOME/.config/omarchy/hooks"
-CONFIG="$HOME/.config/omarchy/$SLUG.json"
 
 version=$(omarchy version 2>/dev/null || echo unknown)
 [[ $version == $TESTED_ON* ]] || cat >&2 <<WARNING
@@ -168,6 +164,8 @@ install -m 755 "$HERE/lib/derive-lock.py" "$SHARE_DIR/lib/derive-lock.py"
 install -m 755 "$HERE/lib/derive-plymouth.py" "$SHARE_DIR/lib/derive-plymouth.py"
 # Imported by both derivers, and the python half of the provider lookup.
 install -m 644 "$HERE/lib/provider.py" "$SHARE_DIR/lib/provider.py"
+# Sourced by the CLI and both scripts; without it nothing runs.
+install -m 644 "$HERE/lib/pack.sh" "$SHARE_DIR/lib/pack.sh"
 install -m 644 "$PROVIDER" "$SHARE_DIR/provider.json"
 # uninstall.sh lives in the theme directory, and `omarchy theme remove` deletes
 # that directory and nothing else -- so a copy goes to the share dir, where it
@@ -175,16 +173,7 @@ install -m 644 "$PROVIDER" "$SHARE_DIR/provider.json"
 install -m 755 "$HERE/uninstall.sh" "$SHARE_DIR/uninstall.sh"
 ln -sfn "$SHARE_DIR/bin/$CLI" "$BIN_DIR/$CLI"
 
-# One release only: the previous layout put the derivers, provider.py and a copy
-# of uninstall.sh straight on PATH. Take them back once, guarded by a marker,
-# with the .pyc caches beside them.
-if [[ ! -f $SHARE_DIR/.layout-v2 ]]; then
-  rm -f "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
-    "$BIN_DIR/provider.py" "$BIN_DIR/$CLI-uninstall"
-  rm -rf "$BIN_DIR/__pycache__"
-  find "$SHARE_DIR" -name '*.pyc' -delete 2>/dev/null || true
-  touch "$SHARE_DIR/.layout-v2"
-fi
+clean_legacy_bins
 
 # --- the hooks --------------------------------------------------------------
 # theme-set: brings the pack back when you pick matrix, stands it down when you
@@ -226,15 +215,12 @@ if ((SYNC_ONLY)); then
 fi
 
 # --- stale plugin backups --------------------------------------------------
-# `omarchy plugin remove` renames rather than deletes, so every clone the pack
-# ever handed back is still on disk as .<id>.bak.<timestamp>. Ours are the ones
-# carrying the rain's QML; a clone somebody made themselves has the same name
-# shape and is left alone.
+# `omarchy plugin remove` renames rather than deletes; prune_backups (in
+# lib/pack.sh) takes ours back. Counted here so the run says what it did.
 pruned=0
 for dir in "$PLUGINS_DIR"/.*.bak.*; do
   [[ -d $dir ]] || continue
-  id=$(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null)
-  if [[ -f $dir/$RAIN_QML || $id == "$PLUGIN_ID" || $id == "$WIDGET_ID" ]]; then
+  if ours "$dir"; then
     rm -rf "$dir"
     pruned=$((pruned + 1))
   fi

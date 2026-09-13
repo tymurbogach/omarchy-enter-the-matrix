@@ -43,13 +43,12 @@ for candidate in \
 done
 [[ -n ${PROVIDER:-} ]] || fail "cannot find provider.json. Re-run the pack's install.sh."
 
-# One jq for all of it: this runs on every menu tick and every toggle.
-eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) DISPLAY_NAME=\(.displayName) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) WIDGET_SECTION=\(.widget.section) PLYMOUTH_THEME=\(.plymouth.theme) IPC=\(.ipc) RAIN_QML=\(.rainFiles[0]) PLUGIN_SRC=\(.plugin.dir)"' "$PROVIDER")" ||
-  fail "$PROVIDER is not valid JSON"
+# Shared shell: provider names, paths, ownership, plugin list, settle, restart.
+# shellcheck source=../lib/pack.sh
+. "$ROOT/lib/pack.sh" || fail "cannot load $ROOT/lib/pack.sh"
+pack_load_provider "$PROVIDER" || fail "$PROVIDER is not valid JSON"
+pack_set_paths
 
-CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
-PLUGINS_DIR="$HOME/.config/omarchy/plugins"
-SHARE_DIR="$HOME/.local/share/$CLI"
 PIECES=(wallpaper screensaver lock boot widget)
 
 # --- state ------------------------------------------------------------------
@@ -67,7 +66,7 @@ current_theme() {
 }
 
 pack_in_effect() {
-  [[ $(current_theme) == "$THEME_SLUG" ]]
+  [[ $(current_theme) == "$SLUG" ]]
 }
 
 # `boot` does not follow the theme, so its tick asks the system instead: is our
@@ -144,27 +143,8 @@ write_key() {
 
 # `omarchy plugin clone` decides the lock clone's id: <username>.lock. Discover
 # it rather than assume it, because on another machine the username differs.
-#
-# One rule decides whether a lock clone is ours -- here, in uninstall.sh and in
-# derive-lock.py: cloned from omarchy.lock AND (marked as derived by this CLI
-# OR carrying the rain). A plain `clonedFrom` match is not enough, twice over:
-#
-# - a first derive whose patch no longer fits aborts with the raw clone left
-#   enabled, and this answered for it: `status` ticked `✓ lock` while the
-#   screen locked to Omarchy's blurred wallpaper -- the exact lie the
-#   screenshot-the-lock rule exists against
-# - a clone somebody made for their own reasons has the same name shape. The
-#   deriver once adopted such a clone, patched it, and `lock off` then deleted
-#   it. It must survive untouched.
-lock_is_ours() {
-  local dir="$1" derived
-  [[ -d $dir ]] || return 1
-  jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || return 1
-  derived=$(jq -r '.omarchy.derivedBy // empty' "$dir/manifest.json" 2>/dev/null)
-  [[ $derived == "$CLI" ]] && return 0
-  [[ -f $dir/$RAIN_QML ]]
-}
-
+# Whether a folder is ours is lock_is_ours in lib/pack.sh: the one rule shared
+# with uninstall.sh and derive-lock.py.
 lock_clone_id() {
   local dir
   for dir in "$PLUGINS_DIR"/*.lock; do
@@ -173,34 +153,6 @@ lock_clone_id() {
     return 0
   done
   return 1
-}
-
-# `omarchy plugin remove` does not delete a folder, it renames it to
-# .<id>.bak.<timestamp>. That is the right call for a plugin somebody wrote by
-# hand, and the wrong one for ours: the lock clone is DERIVED and rebuilds from
-# Omarchy's own source in a second, so a backup of it is litter. Nine of them had
-# piled up here during development before anyone noticed.
-#
-# Ours is a folder carrying the provider's rain QML -- the deriver copies it into
-# every folder the pack owns -- or the rain plugin itself. A lock clone somebody
-# made for their own reasons has the same name shape and must survive untouched.
-ours() {
-  [[ -f "$1/$RAIN_QML" ]] && return 0
-  [[ -f "$1/manifest.json" ]] || return 1
-  local id
-  id=$(jq -r '.id // empty' "$1/manifest.json" 2>/dev/null)
-  # The widget too: it ships no rain file, so without this its .bak piled up the
-  # way the lock clone's did.
-  [[ $id == "$PLUGIN_ID" || $id == "$WIDGET_ID" ]]
-}
-
-prune_backups() {
-  local dir
-  for dir in "$PLUGINS_DIR"/.*.bak.*; do
-    [[ -d $dir ]] || continue
-    if ours "$dir"; then rm -rf "$dir"; fi
-  done
-  return 0
 }
 
 # The pack's only footprint outside $HOME. `omarchy plymouth reset` puts
@@ -214,27 +166,6 @@ remove_plymouth_theme() {
   local dir="/usr/share/plymouth/themes/$PLYMOUTH_THEME"
   [[ -d $dir ]] || return 0
   sudo rm -rf "$dir"
-}
-
-# `omarchy plugin list` is a process, and one `status` now asks it five or six
-# times. Read it once and forget it whenever we change something.
-PLUGIN_LIST=""
-
-plugin_list() {
-  [[ -n $PLUGIN_LIST ]] || PLUGIN_LIST=$(omarchy-plugin-list --json 2>/dev/null || echo "[]")
-  echo "$PLUGIN_LIST"
-}
-
-forget_plugin_list() {
-  PLUGIN_LIST=""
-}
-
-plugin_enabled() {
-  plugin_list | jq -e --arg id "$1" 'any(.[]; .id == $id and .enabled)' >/dev/null 2>&1
-}
-
-plugin_known() {
-  plugin_list | jq -e --arg id "$1" 'any(.[]; .id == $id)' >/dev/null 2>&1
 }
 
 # A lock is ours AND actually in charge. Merely having the clone on disk is not
@@ -265,7 +196,7 @@ nudge_shell() {
 # `doctor`, which the theme-set hook calls on every `omarchy theme set <slug>`.
 
 theme_dir() {
-  omarchy-theme-dir "$THEME_SLUG" 2>/dev/null
+  omarchy-theme-dir "$SLUG" 2>/dev/null
 }
 
 # Every file install.sh copies out of the theme directory, paired with where it
@@ -287,9 +218,10 @@ installed_pairs() {
   echo "$theme/lib/derive-lock.py|$SHARE_DIR/lib/derive-lock.py"
   echo "$theme/lib/derive-plymouth.py|$SHARE_DIR/lib/derive-plymouth.py"
   echo "$theme/lib/provider.py|$SHARE_DIR/lib/provider.py"
+  echo "$theme/lib/pack.sh|$SHARE_DIR/lib/pack.sh"
   echo "$theme/uninstall.sh|$SHARE_DIR/uninstall.sh"
-  echo "$theme/hooks/theme-set|$HOME/.config/omarchy/hooks/theme-set.d/$THEME_SLUG"
-  echo "$theme/hooks/post-update|$HOME/.config/omarchy/hooks/post-update.d/$THEME_SLUG"
+  echo "$theme/hooks/theme-set|$HOME/.config/omarchy/hooks/theme-set.d/$SLUG"
+  echo "$theme/hooks/post-update|$HOME/.config/omarchy/hooks/post-update.d/$SLUG"
   echo "$theme/provider.json|$SHARE_DIR/provider.json"
 }
 
@@ -344,7 +276,7 @@ sync_plugin() {
     # NOT `omarchy plugin add <repo-url>`: that would install the whole repo as
     # the plugin, bypassing the CLI, the hooks and the menu. install.sh copies in
     # the five files the plugin actually needs. It is the only supported path.
-    echo "  install it with: $(omarchy-theme-dir "$THEME_SLUG" 2>/dev/null || echo "~/.config/omarchy/themes/$THEME_SLUG")/install.sh" >&2
+    echo "  install it with: $(omarchy-theme-dir "$SLUG" 2>/dev/null || echo "~/.config/omarchy/themes/$SLUG")/install.sh" >&2
     return 1
   }
 
@@ -455,35 +387,8 @@ enabled_locks() {
 # Ours is the workload that walks into it: `suspend` disables two plugins,
 # removes the lock clone, prunes its backup and restarts the shell, all inside
 # one second. Fifteen coredumps in three days, every one of them a `theme set`
-# away from matrix.
-#
-# So let the registry stop moving first. This NARROWS the window; it cannot
-# close it, and it is deliberately incapable of blocking a theme change.
-settle_plugin_scan() {
-  local previous="" current="" steady=0 waited=0
-
-  # Nothing to observe before the watcher's own debounce has elapsed: it waits
-  # 150ms after the last file event before starting a rescan (shell.qml:61).
-  sleep 0.3
-
-  while ((waited < 40)); do # ~4s ceiling, plus the debounce wait above
-    forget_plugin_list
-    current=$(plugin_list)
-    # `[]` is what a shell that is not answering yields; steadiness there means
-    # nothing. Three identical live answers is the registry having settled.
-    if [[ $current != "[]" && $current == "$previous" ]]; then
-      steady=$((steady + 1))
-      ((steady < 3)) || break
-    else
-      steady=0
-    fi
-    previous="$current"
-    sleep 0.1
-    waited=$((waited + 1))
-  done
-
-  forget_plugin_list
-}
+# away from matrix. The settle itself lives in lib/pack.sh, shared with
+# uninstall.sh, which removes the same folders.
 
 # Swapping which plugin owns the lock leaves BOTH loaded in the running shell.
 # Quickshell then hands the `lock` IPC target to one of them and refuses the
@@ -502,9 +407,8 @@ settle_plugin_scan() {
 # already written down in CLAUDE.md, reaching the one piece where being wrong is
 # invisible until you lock the screen.
 restart_shell_for_lock() {
-  settle_plugin_scan
   echo "  restarting the shell so only one lock plugin is loaded"
-  omarchy-restart-shell >/dev/null 2>&1 || return 1
+  restart_shell || return 1
 }
 
 # Waits for a STEADY answer, not for the first one. Measured here: `lock off`
@@ -538,8 +442,7 @@ wait_for_lock() {
 remove_lock_clone() {
   local id
   id=$(lock_clone_id) || return 0
-  omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
-    omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+  remove_plugin "$id"
   prune_backups
 }
 
@@ -654,7 +557,7 @@ cmd_status() {
       --argjson al "$(active_of lock)" --argjson ab "$(active_of boot)" \
       --argjson g "$(read_setting widget)" --argjson ag "$(active_of widget)" \
       --argjson effect "$(pack_in_effect && echo true || echo false)" \
-      --arg theme "$(current_theme)" --arg name "$DISPLAY_NAME" --arg slug "$THEME_SLUG" \
+      --arg theme "$(current_theme)" --arg name "$DISPLAY_NAME" --arg slug "$SLUG" \
       '{name: $name, slug: $slug, theme: $theme, active: $effect,
         settings: {wallpaper: $w, screensaver: $s, lock: $l, boot: $b, widget: $g},
         pieces: {wallpaper: $aw, screensaver: $as, lock: $al, boot: $ab, widget: $ag}}'
@@ -663,8 +566,8 @@ cmd_status() {
 
   if ! pack_in_effect; then
     printf '  the pack is stood down: the current theme is \033[1m%s\033[0m, not %s\n' \
-      "$(current_theme)" "$THEME_SLUG"
-    printf '  bring it back with: omarchy theme set %s\n' "$THEME_SLUG"
+      "$(current_theme)" "$SLUG"
+    printf '  bring it back with: omarchy theme set %s\n' "$SLUG"
     # Stood down should mean nothing enabled. Older versions of doctor got here
     # with the pieces still up; say so instead of looking clean.
     if plugin_enabled "$PLUGIN_ID" || plugin_enabled "$WIDGET_ID" || lock_clone_id >/dev/null 2>&1; then
@@ -723,8 +626,8 @@ cmd_doctor() {
       echo "  the theme is $(current_theme), but pieces of the pack are still up; standing them down"
       cmd_suspend
     else
-      echo "  stood down: the current theme is $(current_theme), not $THEME_SLUG"
-      echo "  nothing to repair; it all comes back with: omarchy theme set $THEME_SLUG"
+      echo "  stood down: the current theme is $(current_theme), not $SLUG"
+      echo "  nothing to repair; it all comes back with: omarchy theme set $SLUG"
     fi
     cmd_status
     return 0
@@ -760,7 +663,7 @@ cmd_suspend() {
   # of on whichever stock theme happens to sort first.
   local leaving
   leaving=$(current_theme)
-  [[ -z $leaving || $leaving == "$THEME_SLUG" ]] || write_string previousTheme "$leaving"
+  [[ -z $leaving || $leaving == "$SLUG" ]] || write_string previousTheme "$leaving"
 
   ! plugin_enabled "$PLUGIN_ID" || omarchy-plugin-disable "$PLUGIN_ID" >/dev/null
   forget_plugin_list
@@ -861,7 +764,7 @@ wallpaper | screensaver | lock | boot | widget)
   if [[ $command == "boot" ]] || pack_in_effect; then
     apply_piece "$command"
   else
-    echo "$SELF: noted -- $command applies when the $THEME_SLUG theme is current"
+    echo "$SELF: noted -- $command applies when the $SLUG theme is current"
   fi
   ;;
 provider)

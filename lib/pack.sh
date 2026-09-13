@@ -1,0 +1,137 @@
+# lib/pack.sh -- the shell the pack's scripts share. Sourced, never executed.
+# shellcheck shell=bash
+#
+# Defines only: sourcing it changes nothing but what is defined here, and every
+# function works with or without `set -e` (callers check return codes
+# explicitly). Each script resolves PROVIDER its own way, then calls
+# pack_load_provider and pack_set_paths before anything else.
+
+# One jq for every name the machinery needs. The provider owns them all;
+# nothing else writes a provider name down.
+pack_load_provider() {
+  if [[ -z ${1:-} || ! -f $1 ]]; then
+    echo "pack: cannot find provider.json" >&2
+    return 1
+  fi
+  eval "$(jq -r '@sh "SLUG=\(.slug) DISPLAY_NAME=\(.displayName) CLI=\(.cli) ACCENT=\(.accent) PLUGIN_ID=\(.plugin.id) PLUGIN_SRC=\(.plugin.dir) WIDGET_ID=\(.widget.id) WIDGET_SECTION=\(.widget.section) WIDGET_REPO=\(.widget.repo) WIDGET_REF=\(.widget.ref) PLYMOUTH_THEME=\(.plymouth.theme) IPC=\(.ipc) RAIN_QML=\(.rainFiles[0])"' "$1")" ||
+    { echo "pack: $1 is not valid JSON" >&2; return 1; }
+}
+
+# Every path the machinery writes, derived from $HOME and the provider's names.
+# Needs SLUG and CLI from pack_load_provider first.
+pack_set_paths() {
+  BIN_DIR="$HOME/.local/bin"
+  SHARE_DIR="$HOME/.local/share/$CLI"
+  PLUGINS_DIR="$HOME/.config/omarchy/plugins"
+  HOOKS="$HOME/.config/omarchy/hooks"
+  CONFIG="$HOME/.config/omarchy/$SLUG.json"
+  WIDGET_CLONE="$SHARE_DIR/widget-src"
+}
+
+# Whether a lock clone is ours: cloned from omarchy.lock AND (marked as derived
+# by this CLI OR carrying the rain). A clone somebody made for their own
+# reasons matches the first half and must survive untouched -- the deriver once
+# adopted such a clone, patched it, and `lock off` then deleted it.
+lock_is_ours() {
+  local dir="$1" derived
+  [[ -d $dir ]] || return 1
+  jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || return 1
+  derived=$(jq -r '.omarchy.derivedBy // empty' "$dir/manifest.json" 2>/dev/null)
+  [[ $derived == "$CLI" ]] && return 0
+  [[ -f $dir/$RAIN_QML ]]
+}
+
+# Whether a plugin backup is ours and may go: the rain inside, or one of our
+# ids. A lock clone somebody made themselves has the same name shape and stays.
+ours() {
+  [[ -f "$1/$RAIN_QML" ]] && return 0
+  [[ -f "$1/manifest.json" ]] || return 1
+  local id
+  id=$(jq -r '.id // empty' "$1/manifest.json" 2>/dev/null)
+  [[ $id == "$PLUGIN_ID" || $id == "$WIDGET_ID" ]]
+}
+
+# `omarchy plugin remove` renames rather than deletes, so every folder it took
+# away is still on disk as .<id>.bak.<timestamp>. Take ours back.
+prune_backups() {
+  local dir
+  for dir in "$PLUGINS_DIR"/.*.bak.*; do
+    [[ -d $dir ]] || continue
+    if ours "$dir"; then rm -rf "$dir"; fi
+  done
+  return 0
+}
+
+# Remove one plugin, however the installed omarchy-plugin-remove asks to be
+# called. Never fails: callers decide what a missing plugin means.
+remove_plugin() {
+  omarchy-plugin-remove "$1" --yes >/dev/null 2>&1 ||
+    omarchy-plugin-remove "$1" >/dev/null 2>&1 || true
+}
+
+# `omarchy plugin list` is a process, and one `status` asks it five or six
+# times. Read it once and forget it whenever something changes.
+PLUGIN_LIST=""
+
+plugin_list() {
+  [[ -n $PLUGIN_LIST ]] || PLUGIN_LIST=$(omarchy-plugin-list --json 2>/dev/null || echo "[]")
+  echo "$PLUGIN_LIST"
+}
+
+forget_plugin_list() {
+  PLUGIN_LIST=""
+}
+
+plugin_enabled() {
+  plugin_list | jq -e --arg id "$1" 'any(.[]; .id == $id and .enabled)' >/dev/null 2>&1
+}
+
+plugin_known() {
+  plugin_list | jq -e --arg id "$1" 'any(.[]; .id == $id)' >/dev/null 2>&1
+}
+
+# A plugin rescan still in flight when the shell goes down SEGFAULTS quickshell
+# (quickshell-mirror/quickshell#972): the scan finishes mid-teardown and asks an
+# IPC registry the teardown already freed. Let the registry stop moving first --
+# three identical live answers -- which NARROWS the window without blocking
+# anything. Nothing to observe before the watcher's own 150ms debounce elapses.
+settle_plugin_scan() {
+  local previous="" current="" steady=0 waited=0
+
+  sleep 0.3
+
+  while ((waited < 40)); do # ~4s ceiling, plus the debounce wait above
+    forget_plugin_list
+    current=$(plugin_list)
+    # `[]` is a shell that is not answering; steadiness there means nothing.
+    if [[ $current != "[]" && $current == "$previous" ]]; then
+      steady=$((steady + 1))
+      ((steady < 3)) || break
+    else
+      steady=0
+    fi
+    previous="$current"
+    sleep 0.1
+    waited=$((waited + 1))
+  done
+
+  forget_plugin_list
+}
+
+# Settle the scan, then restart the shell. Callers say why themselves.
+restart_shell() {
+  settle_plugin_scan
+  omarchy-restart-shell >/dev/null 2>&1 || return 1
+}
+
+# One release only: the previous layout put the derivers, provider.py and a copy
+# of uninstall.sh straight on PATH. Take them back once, guarded by a marker,
+# with the .pyc caches beside them.
+clean_legacy_bins() {
+  [[ ! -f $SHARE_DIR/.layout-v2 ]] || return 0
+  rm -f "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
+    "$BIN_DIR/provider.py" "$BIN_DIR/$CLI-uninstall"
+  rm -rf "$BIN_DIR/__pycache__"
+  find "$SHARE_DIR" -name '*.pyc' -delete 2>/dev/null || true
+  touch "$SHARE_DIR/.layout-v2"
+}

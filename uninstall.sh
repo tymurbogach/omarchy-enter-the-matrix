@@ -8,23 +8,31 @@
 
 set -uo pipefail
 
-# provider.json is the only file that names the provider. Look for it where
-# install.sh put it first, then beside this script -- this runs both from PATH,
-# with the theme directory possibly already gone, and from a working copy.
-BIN_DIR="$HOME/.local/bin"
-SHARE_DIR="$HOME/.local/share/omarchy-matrix"
+# provider.json is the only file that names the provider. This runs both from the
+# share dir (`<cli> uninstall` execs it there, with the theme directory possibly
+# already gone) and from a working copy. Learn the names from beside this script
+# first, then prefer the share copy: that is the live install.
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# shellcheck source=lib/pack.sh
+. "$HERE/lib/pack.sh" || { echo "cannot load $HERE/lib/pack.sh" >&2; exit 1; }
 
-for candidate in "${OMARCHY_MATRIX_PROVIDER:-}" "$SHARE_DIR/provider.json" "$HERE/provider.json"; do
+PROVIDER=""
+for candidate in "${OMARCHY_MATRIX_PROVIDER:-}" "$HERE/provider.json"; do
   [[ -n $candidate && -f $candidate ]] || continue
   PROVIDER="$candidate"
   break
 done
-[[ -n ${PROVIDER:-} ]] || { echo "cannot find provider.json; nothing to undo" >&2; exit 1; }
+[[ -n $PROVIDER ]] || { echo "cannot find provider.json; nothing to undo" >&2; exit 1; }
+pack_load_provider "$PROVIDER" || exit 1
+pack_set_paths
+if [[ -z ${OMARCHY_MATRIX_PROVIDER:-} && $PROVIDER != "$SHARE_DIR/provider.json" &&
+  -f $SHARE_DIR/provider.json ]]; then
+  PROVIDER="$SHARE_DIR/provider.json"
+  pack_load_provider "$PROVIDER" || exit 1
+  pack_set_paths
+fi
 
-eval "$(jq -r '@sh "THEME_SLUG=\(.slug) CLI=\(.cli) PLUGIN_ID=\(.plugin.id) WIDGET_ID=\(.widget.id) PLYMOUTH_THEME=\(.plymouth.theme) RAIN_QML=\(.rainFiles[0])"' "$PROVIDER")"
-
-CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
+THEME_DIR="$HOME/.config/omarchy/themes/$SLUG"
 
 # Read before anything is deleted: the theme step-off at the very bottom needs
 # it, and matrix.json is removed long before then. The theme-set hook records it
@@ -32,9 +40,7 @@ CONFIG="$HOME/.config/omarchy/$THEME_SLUG.json"
 # current/theme.name before it calls that hook -- afterwards nobody knows.
 PREVIOUS_THEME=$(jq -r '.previousTheme // empty' "$CONFIG" 2>/dev/null || echo "")
 
-HOOKS="$HOME/.config/omarchy/hooks"
-PLUGINS_DIR="$HOME/.config/omarchy/plugins"
-THEME_DIR="$HOME/.config/omarchy/themes/$THEME_SLUG"
+THEME_DIR="$HOME/.config/omarchy/themes/$SLUG"
 
 # The theme goes too, unless you say otherwise. It used to be kept -- it is a
 # perfectly good theme on its own -- but "uninstall" that leaves a directory
@@ -64,26 +70,18 @@ KEEP_THEME=0
 echo "· handing Omarchy's lock back"
 lock_removed=0
 for dir in "$PLUGINS_DIR"/*.lock; do
-  [[ -d $dir ]] || continue
-  jq -e '.omarchy.clonedFrom == "omarchy.lock"' "$dir/manifest.json" >/dev/null 2>&1 || continue
-  # The same ownership rule as the CLI's lock_is_ours: derived by this pack or
-  # carrying the rain. A lock clone somebody made for their own reasons has the
-  # same name shape and must survive even an uninstall.
-  derived=$(jq -r '.omarchy.derivedBy // empty' "$dir/manifest.json" 2>/dev/null)
-  [[ $derived == "$CLI" || -f $dir/$RAIN_QML ]] || continue
+  lock_is_ours "$dir" || continue
   id=$(jq -r '.id' "$dir/manifest.json")
   # `plugin remove` is what re-enables omarchy.lock (cloneSourceRestores).
   # Deleting the directory by hand would leave the session with no lock enabled
   # at all.
-  omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
-    omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+  remove_plugin "$id"
   lock_removed=1
 done
 
 echo "· removing the rain plugin and the bar widget"
 for id in "$PLUGIN_ID" "$WIDGET_ID"; do
-  omarchy-plugin-remove "$id" --yes >/dev/null 2>&1 ||
-    omarchy-plugin-remove "$id" >/dev/null 2>&1 || true
+  remove_plugin "$id"
 done
 
 echo "· handing Omarchy's screensaver back"
@@ -116,27 +114,17 @@ if [[ -d "/usr/share/plymouth/themes/$PLYMOUTH_THEME" && ${live_plymouth:-} != "
     echo "  skipped — remove it later with: sudo rm -rf /usr/share/plymouth/themes/$PLYMOUTH_THEME" >&2
 fi
 
-# `omarchy plugin remove` renames rather than deletes: every folder it took away
-# above is still on disk as .<id>.bak.<timestamp>, and a development machine had
-# nine of them. Only folders carrying the rain's QML are removed -- a lock clone
-# somebody made for their own reasons has the same name shape and stays.
+# `omarchy plugin remove` renames rather than deletes: every folder taken away
+# above is still on disk as .<id>.bak.<timestamp>. Take ours back (in
+# lib/pack.sh); a lock clone somebody made themselves stays.
 echo "· removing the plugin backups the pack left behind"
-for dir in "$PLUGINS_DIR"/.*.bak.*; do
-  [[ -d $dir ]] || continue
-  id=$(jq -r '.id // empty' "$dir/manifest.json" 2>/dev/null)
-  if [[ -f $dir/$RAIN_QML || $id == "$PLUGIN_ID" || $id == "$WIDGET_ID" ]]; then
-    rm -rf "$dir"
-  fi
-done
+prune_backups
 
 echo "· removing hooks, the CLI and the share dir"
-rm -f "$HOOKS/theme-set.d/$THEME_SLUG" "$HOOKS/post-update.d/$THEME_SLUG"
+rm -f "$HOOKS/theme-set.d/$SLUG" "$HOOKS/post-update.d/$SLUG"
 rm -f "$BIN_DIR/$CLI"
-# The previous layout put these straight on PATH; take them back too.
-rm -f "$BIN_DIR/derive-lock.py" "$BIN_DIR/derive-plymouth.py" \
-  "$BIN_DIR/provider.py" "$BIN_DIR/$CLI-uninstall"
-rm -rf "$BIN_DIR/__pycache__"
-rm -f "$HOME/.config/omarchy/$THEME_SLUG.json"
+clean_legacy_bins
+rm -f "$CONFIG"
 # Where install.sh keeps the CLI, its python, provider.json and this script.
 # Unlinking the running script is safe -- the open inode survives to the last
 # line -- but truncating it is not, so never rewrite it here.
@@ -149,29 +137,12 @@ omarchy-shell shell rescanPlugins >/dev/null 2>&1 || true
 # Handing the lock back swapped which plugin owns the `lock` IPC target, and a
 # rescan does not unload the loser: the running shell can still hand the screen
 # to the clone whose files this script just deleted. Only a restart settles
-# that (see restart_shell_for_lock in the CLI). The registry gets a moment to
-# stop moving first -- a plugin scan still in flight when the shell goes down
-# segfaults quickshell (quickshell-mirror/quickshell#972), and the removals
-# above are exactly the workload that walks into it.
+# that. restart_shell (in lib/pack.sh) lets the scan settle first -- a scan in
+# flight when the shell goes down segfaults quickshell (#972), and the removals
+# above are exactly that workload.
 if ((lock_removed)); then
-  previous="" steady=0 waited=0
-  sleep 0.3 # the watcher's own debounce: it waits 150ms past the last event
-  while ((waited < 40)); do
-    current=$(omarchy-plugin-list --json 2>/dev/null || echo "[]")
-    # `[]` is a shell that is not answering; three identical LIVE answers is the
-    # registry having settled.
-    if [[ $current != "[]" && $current == "$previous" ]]; then
-      steady=$((steady + 1))
-      ((steady < 3)) || break
-    else
-      steady=0
-    fi
-    previous="$current"
-    sleep 0.1
-    waited=$((waited + 1))
-  done
   echo "· restarting the shell so only Omarchy's lock is loaded"
-  omarchy-restart-shell >/dev/null 2>&1 || true
+  restart_shell || true
 fi
 
 # --- the theme itself ---------------------------------------------------------
@@ -185,7 +156,7 @@ if ((KEEP_THEME)); then
 Done. The theme was kept and works like any other Omarchy theme.
 
 To remove that too:
-  omarchy theme remove $THEME_SLUG
+  omarchy theme remove $SLUG
 DONE
   exit 0
 fi
@@ -215,7 +186,7 @@ step_off_target() {
     echo >&2
     echo "  This theme is about to go. Which one do you want instead?" >&2
     find "$HOME/.config/omarchy/themes" /usr/share/omarchy/themes -mindepth 1 -maxdepth 1 -type d \
-      -printf '%f\n' 2>/dev/null | grep -vx "$THEME_SLUG" | sort -u | column -c 74 | sed 's/^/  /' >&2
+      -printf '%f\n' 2>/dev/null | grep -vx "$SLUG" | sort -u | column -c 74 | sed 's/^/  /' >&2
     printf '  [%s] ' "$first" >&2
     read -r reply || true
     reply=${reply// /}
@@ -229,10 +200,10 @@ step_off_target() {
   echo "$first"
 }
 
-if [[ $(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null) == "$THEME_SLUG" ]]; then
+if [[ $(cat "$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null) == "$SLUG" ]]; then
   target=$(step_off_target)
   if [[ -n ${target:-} ]]; then
-    echo "· stepping off the $THEME_SLUG theme onto $target"
+    echo "· stepping off the $SLUG theme onto $target"
     omarchy-theme-set "$target" >/dev/null 2>&1 || true
   fi
 fi
@@ -240,8 +211,8 @@ fi
 echo "· removing the theme"
 rm -rf "$THEME_DIR"
 # Omarchy remembers a background per theme, and a hook of the user's may read it.
-rm -f "$HOME/.local/state/omarchy/backgrounds/$THEME_SLUG"
-rm -rf "$HOME/.config/omarchy/backgrounds/$THEME_SLUG"
+rm -f "$HOME/.local/state/omarchy/backgrounds/$SLUG"
+rm -rf "$HOME/.config/omarchy/backgrounds/$SLUG"
 
 cat <<'DONE'
 
